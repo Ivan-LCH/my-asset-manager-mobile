@@ -120,12 +120,12 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
         </div>
         <div>
           <label className={labelCls}>{(type === 'STOCK' || type === 'PHYSICAL') ? '취득단가' : '취득가'}</label>
-          <input type="number" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
+          <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
         </div>
         {(type === 'STOCK' || type === 'PHYSICAL') && (
           <div>
             <label className={labelCls}>수량</label>
-            <input type="number" className={inputCls} value={quantity} onChange={(e) => setQuantity(+e.target.value)} />
+            <input type="number" inputMode="decimal" className={inputCls} value={quantity} onChange={(e) => setQuantity(+e.target.value)} />
           </div>
         )}
       </div>
@@ -141,11 +141,11 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>대출금</label>
-              <input type="number" className={inputCls} value={loanAmount} onChange={(e) => setLoanAmount(+e.target.value)} />
+              <input type="number" inputMode="decimal" className={inputCls} value={loanAmount} onChange={(e) => setLoanAmount(+e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>보증금</label>
-              <input type="number" className={inputCls} value={tenantDeposit} onChange={(e) => setTenantDeposit(+e.target.value)} />
+              <input type="number" inputMode="decimal" className={inputCls} value={tenantDeposit} onChange={(e) => setTenantDeposit(+e.target.value)} />
             </div>
           </div>
           <div className="flex gap-5">
@@ -189,11 +189,11 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
             <div className="grid grid-cols-2 gap-3 pl-2">
               <div>
                 <label className={labelCls}>연금 개시 연도</label>
-                <input type="number" className={inputCls} value={pensionStartYearStock} onChange={(e) => setPensionStartYearStock(+e.target.value)} />
+                <input type="number" inputMode="decimal" className={inputCls} value={pensionStartYearStock} onChange={(e) => setPensionStartYearStock(+e.target.value)} />
               </div>
               <div>
                 <label className={labelCls}>월 수령액</label>
-                <input type="number" className={inputCls} value={pensionMonthlyStock} onChange={(e) => setPensionMonthlyStock(+e.target.value)} />
+                <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlyStock} onChange={(e) => setPensionMonthlyStock(+e.target.value)} />
               </div>
             </div>
           )}
@@ -211,19 +211,19 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>수령 시작 연도</label>
-              <input type="number" className={inputCls} value={expectedStartYear} onChange={(e) => setExpectedStartYear(+e.target.value)} />
+              <input type="number" inputMode="decimal" className={inputCls} value={expectedStartYear} onChange={(e) => setExpectedStartYear(+e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>수령 종료 연도</label>
-              <input type="number" className={inputCls} value={expectedEndYear} onChange={(e) => setExpectedEndYear(+e.target.value)} />
+              <input type="number" inputMode="decimal" className={inputCls} value={expectedEndYear} onChange={(e) => setExpectedEndYear(+e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>월 수령 예상액</label>
-              <input type="number" className={inputCls} value={expectedMonthlyPayout} onChange={(e) => setExpectedMonthlyPayout(+e.target.value)} />
+              <input type="number" inputMode="decimal" className={inputCls} value={expectedMonthlyPayout} onChange={(e) => setExpectedMonthlyPayout(+e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>연 증가율 (%)</label>
-              <input type="number" step="0.1" className={inputCls} value={annualGrowthRate} onChange={(e) => setAnnualGrowthRate(+e.target.value)} />
+              <input type="number" inputMode="decimal" step="0.1" className={inputCls} value={annualGrowthRate} onChange={(e) => setAnnualGrowthRate(+e.target.value)} />
             </div>
           </div>
         </div>
@@ -241,11 +241,11 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
             <div className="grid grid-cols-2 gap-3 pl-2">
               <div>
                 <label className={labelCls}>연금 개시 연도</label>
-                <input type="number" className={inputCls} value={pensionStartYearSav} onChange={(e) => setPensionStartYearSav(+e.target.value)} />
+                <input type="number" inputMode="decimal" className={inputCls} value={pensionStartYearSav} onChange={(e) => setPensionStartYearSav(+e.target.value)} />
               </div>
               <div>
                 <label className={labelCls}>월 수령액</label>
-                <input type="number" className={inputCls} value={pensionMonthlySav} onChange={(e) => setPensionMonthlySav(+e.target.value)} />
+                <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlySav} onChange={(e) => setPensionMonthlySav(+e.target.value)} />
               </div>
             </div>
           )}

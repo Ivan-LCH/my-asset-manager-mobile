@@ -144,7 +144,7 @@ export default function PensionPage() {
       )}
 
       {/* KPI */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <KpiCard
           label="은퇴 시 월 수령 (예상)"
           value={retirementRow ? formatMoney(retirementRow.total) : '-'}
@@ -178,10 +178,10 @@ export default function PensionPage() {
                 interval={4}
               />
               <YAxis
-                tick={{ fill: '#6b7280', fontSize: 11 }}
+                tick={{ fill: '#6b7280', fontSize: 10 }}
                 tickLine={false} axisLine={false}
                 tickFormatter={(v: number) => `${Math.round(v / 1000).toLocaleString()}천`}
-                width={52}
+                width={40}
               />
               <Tooltip content={<SimTooltip />} />
               {simSources.length > 1 && (
@@ -212,7 +212,7 @@ export default function PensionPage() {
             등록된 연금 자산이 없습니다.
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {active.map((a) => (
             <PensionTile key={a.id} asset={a} onClick={() => setModalId(a.id)} />
           ))}
@@ -223,7 +223,7 @@ export default function PensionPage() {
       {pensionLikeAssets.filter((a) => a.type !== 'PENSION').length > 0 && (
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-gray-400">연금형 포함 자산</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {pensionLikeAssets
               .filter((a) => a.type !== 'PENSION')
               .map((a) => (

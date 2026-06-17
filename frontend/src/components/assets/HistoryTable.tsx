@@ -96,14 +96,14 @@ export default function HistoryTable({ asset }: Props) {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">단가</label>
                   <input
-                    type="number" value={fPrice} onChange={(e) => setFPrice(+e.target.value)}
+                    type="number" inputMode="decimal" value={fPrice} onChange={(e) => setFPrice(+e.target.value)}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">수량</label>
                   <input
-                    type="number" value={fQty} onChange={(e) => setFQty(+e.target.value)}
+                    type="number" inputMode="decimal" value={fQty} onChange={(e) => setFQty(+e.target.value)}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -117,7 +117,7 @@ export default function HistoryTable({ asset }: Props) {
               <div className="col-span-2">
                 <label className="text-xs text-gray-400 mb-1 block">평가액</label>
                 <input
-                  type="number" value={fVal} onChange={(e) => setFVal(+e.target.value)}
+                  type="number" inputMode="decimal" value={fVal} onChange={(e) => setFVal(+e.target.value)}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -189,15 +189,15 @@ export default function HistoryTable({ asset }: Props) {
                   <div className="flex gap-1 justify-end">
                     <button
                       onClick={() => openEdit(h)}
-                      className="p-1 rounded text-gray-500 hover:text-blue-400 transition-colors"
+                      className="p-2 rounded text-gray-500 hover:text-blue-400 transition-colors"
                     >
-                      <Pencil className="w-3 h-3" />
+                      <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setDelDate(h.date)}
-                      className="p-1 rounded text-gray-500 hover:text-red-400 transition-colors"
+                      className="p-2 rounded text-gray-500 hover:text-red-400 transition-colors"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </td>

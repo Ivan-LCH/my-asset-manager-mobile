@@ -19,15 +19,15 @@ export default function KpiCard({ label, value, sub, color = 'default', classNam
   const c = COLOR_MAP[color]
   return (
     <div className={cn(
-      'relative bg-gray-800 border border-gray-700 rounded-xl px-4 py-4 overflow-hidden',
+      'relative bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 sm:px-4 sm:py-4 overflow-hidden',
       c.bg,
       className
     )}>
       {/* 상단 컬러 바 */}
       <div className={`absolute top-0 left-0 right-0 h-0.5 ${c.bar}`} />
-      <p className="text-xs text-gray-400 font-medium mb-2 truncate">{label}</p>
-      <p className={cn('text-lg font-bold tracking-tight leading-tight', c.text)}>{value}</p>
-      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+      <p className="text-[11px] sm:text-xs text-gray-400 font-medium mb-2 truncate">{label}</p>
+      <p className={cn('text-base sm:text-lg font-bold tracking-tight leading-tight break-words', c.text)}>{value}</p>
+      {sub && <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{sub}</p>}
     </div>
   )
 }

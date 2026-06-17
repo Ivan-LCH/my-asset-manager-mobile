@@ -1,22 +1,18 @@
+# My Asset Manager (Mobile PWA) — 프론트엔드 개발 환경
+# `docker compose up` → 컨테이너가 npm install 후 vite dev(5173) 실행.
+# 데이터는 브라우저 IndexedDB에 저장되므로 DB 볼륨/서버 불필요.
 services:
-  asset-manager:
+  frontend-dev:
     build:
       context: .
       dockerfile: Dockerfile
-    image: asset_manager_app
-    container_name: my-asset-manager
+    image: asset_manager_m_dev
+    container_name: my-asset-manager-m
+    working_dir: /app/frontend
     ports:
-      - "8090:8090"   # 웹 서비스
-      - "1040:22"     # SSH 접속 (유지보수용)
-    env_file:
-      - .env
+      - "5173:5173"            # vite dev (폰에서 접속하려면 호스트 IP:5173)
     volumes:
-      # 소스 코드 마운트 (유지보수/업데이트 즉시 반영)
-      - .:/app
-      # node_modules 보호 (호스트와 격리)
-      - /app/frontend/node_modules
-      # SQLite DB 영속화
-      - ./data:/app/data
-      # 로그 영속화
-      - ./logs:/app/logs
+      - ./frontend:/app/frontend       # 소스 마운트 (HMR 즉시 반영)
+      - /app/frontend/node_modules     # node_modules 호스트와 격리
+    command: sh -c "npm install --legacy-peer-deps && npm run dev"
     restart: unless-stopped

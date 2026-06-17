@@ -308,7 +308,7 @@ function AvgPriceCell({ asset, currency, editing, input, onInputChange, onEdit, 
         <div className="flex items-center gap-1">
           <span className="text-xs text-gray-400 shrink-0">{isFx ? '$' : '₩'}</span>
           <input
-            type="number"
+            type="number" inputMode="decimal"
             step={isFx ? '0.01' : '1'}
             placeholder={isFx ? '0.00' : '0'}
             className="w-full bg-gray-600 text-gray-100 text-sm rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400"
@@ -316,8 +316,8 @@ function AvgPriceCell({ asset, currency, editing, input, onInputChange, onEdit, 
             onChange={(e) => onInputChange(e.target.value)}
             autoFocus
           />
-          <button onClick={onSave}  className="text-emerald-400 hover:text-emerald-300"><Check className="w-3.5 h-3.5" /></button>
-          <button onClick={onCancel} className="text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={onSave}  className="p-2 text-emerald-400 hover:text-emerald-300"><Check className="w-3.5 h-3.5" /></button>
+          <button onClick={onCancel} className="p-2 text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
         </div>
       ) : (
         <button onClick={onEdit} className="flex items-center gap-1 group/avg">

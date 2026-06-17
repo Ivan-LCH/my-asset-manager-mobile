@@ -78,6 +78,8 @@ export interface Asset {
   type:             AssetType
   name:             string
   currentValue:     number
+  previousValue?:   number   // 직전 이력 시점 평가액 (전일 등락 계산용)
+  previousPrice?:   number   // 직전 이력 시점 주당 단가 (주식 전일 등락 계산용, 원래 통화)
   acquisitionDate:  string
   acquisitionPrice: number
   disposalDate?:    string

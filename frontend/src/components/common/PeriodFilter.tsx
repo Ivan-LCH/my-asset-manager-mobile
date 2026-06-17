@@ -23,21 +23,36 @@ export default function PeriodFilter({ value, onChange, options }: PeriodFilterP
     : OPTIONS
 
   return (
-    <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
-      {shown.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            'px-3 py-1 text-xs font-medium rounded-md transition-colors',
-            value === o.value
-              ? 'bg-blue-600 text-white'
-              : 'text-gray-400 hover:text-gray-200'
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <>
+      {/* 모바일: 드롭다운(한 줄 배치용) */}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as Period)}
+        aria-label="기간"
+        className="sm:hidden bg-gray-800 border border-gray-700 rounded-md px-2 py-1 text-[11px] text-gray-200 focus:outline-none focus:border-blue-500"
+      >
+        {shown.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+
+      {/* 데스크톱: 버튼 그룹 */}
+      <div className="hidden sm:flex gap-1 bg-gray-800 rounded-lg p-1">
+        {shown.map((o) => (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+              value === o.value
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-gray-200'
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }

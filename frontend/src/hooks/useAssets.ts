@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { assetApi } from '@/lib/api'
+import { getAllAssets, getChartData, createAsset, updateAsset, deleteAsset } from '@/lib/db'
 import type { Asset, AssetType, ChartParams } from '@/types'
 
 const ASSETS_KEY = ['assets'] as const
@@ -7,7 +7,7 @@ const ASSETS_KEY = ['assets'] as const
 export function useAssets() {
   return useQuery({
     queryKey: ASSETS_KEY,
-    queryFn: () => assetApi.getAll(),
+    queryFn: () => getAllAssets(),
     staleTime: 5 * 60 * 1000,
   })
 }
@@ -20,7 +20,7 @@ export function useAssetsByType(type: AssetType): Asset[] {
 export function useChart(params: ChartParams) {
   return useQuery({
     queryKey: ['chart', params],
-    queryFn: () => assetApi.getChart(params),
+    queryFn: () => getChartData(params),
     staleTime: 5 * 60 * 1000,
   })
 }
@@ -28,8 +28,11 @@ export function useChart(params: ChartParams) {
 export function useCreateAsset() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) => assetApi.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ASSETS_KEY }),
+    mutationFn: (data: Record<string, unknown>) => createAsset(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ASSETS_KEY })
+      qc.invalidateQueries({ queryKey: ['chart'] })
+    },
   })
 }
 
@@ -37,15 +40,21 @@ export function useUpdateAsset() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      assetApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ASSETS_KEY }),
+      updateAsset(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ASSETS_KEY })
+      qc.invalidateQueries({ queryKey: ['chart'] })
+    },
   })
 }
 
 export function useDeleteAsset() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => assetApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ASSETS_KEY }),
+    mutationFn: (id: string) => deleteAsset(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ASSETS_KEY })
+      qc.invalidateQueries({ queryKey: ['chart'] })
+    },
   })
 }

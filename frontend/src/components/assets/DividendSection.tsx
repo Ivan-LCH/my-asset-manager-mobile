@@ -79,7 +79,7 @@ export default function DividendSection({ asset }: Props) {
           <div>
             <p className="text-[10px] text-gray-500 mb-1">배당수익률 (%)</p>
             <input
-              type="number" step="0.01" min="0"
+              type="number" inputMode="decimal" step="0.01" min="0"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
                 focus:outline-none focus:border-blue-500"
               value={yld}
@@ -90,7 +90,7 @@ export default function DividendSection({ asset }: Props) {
           <div>
             <p className="text-[10px] text-gray-500 mb-1">주당 배당금 (KRW)</p>
             <input
-              type="number" min="0"
+              type="number" inputMode="decimal" min="0"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
                 focus:outline-none focus:border-blue-500"
               value={dps}
@@ -257,9 +257,9 @@ export default function DividendSection({ asset }: Props) {
                     <td className="py-2 px-3">
                       <button
                         onClick={() => deleteMut.mutate(h.id)}
-                        className="text-gray-600 hover:text-red-400 transition-colors"
+                        className="p-2 text-gray-600 hover:text-red-400 transition-colors"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>

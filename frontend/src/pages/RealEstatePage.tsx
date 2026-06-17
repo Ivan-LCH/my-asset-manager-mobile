@@ -47,7 +47,7 @@ export default function RealEstatePage() {
       )}
 
       {/* KPI */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <KpiCard label="시세 총액"       value={formatMoney(totalVal)}    color="default" />
         <KpiCard label="부채 총계"       value={formatMoney(totalLiab)}   color="red"     />
         <KpiCard label="순자산 (Equity)" value={formatMoney(netEquity)}   color="blue"    />
@@ -65,7 +65,7 @@ export default function RealEstatePage() {
       {active.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-400">보유 ({active.length})</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {active.map((a) => (
               <RealEstateTile key={a.id} asset={a} onClick={() => setSelectedId(a.id)} />
             ))}
@@ -77,7 +77,7 @@ export default function RealEstatePage() {
       {sold.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-400">매각 완료 ({sold.length})</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
             {sold.map((a) => (
               <RealEstateTile key={a.id} asset={a} onClick={() => setSelectedId(a.id)} />
             ))}

@@ -72,7 +72,9 @@ export default function Dashboard() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
+                  contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, color: '#f3f4f6' }}
+                  itemStyle={{ color: '#e5e7eb' }}
+                  labelStyle={{ color: '#9ca3af' }}
                   formatter={(v: number) => formatManwon(v)}
                 />
               </PieChart>
@@ -90,7 +92,7 @@ export default function Dashboard() {
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ background: TYPE_COLORS[entry.type] }}
                     />
-                    <span className="text-xs text-gray-400 w-28 truncate">{entry.name}</span>
+                    <span className="text-xs text-gray-400 w-20 sm:w-28 truncate">{entry.name}</span>
                     <div className="flex-1 bg-gray-700 rounded-full h-1.5 overflow-hidden">
                       <div
                         className="h-full rounded-full"

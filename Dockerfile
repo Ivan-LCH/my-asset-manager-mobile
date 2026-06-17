@@ -1,42 +1,10 @@
-# My Asset Manager - 개발/운영 이미지
-FROM python:3.11
+# My Asset Manager (Mobile PWA) — 프론트엔드 개발용 경량 이미지
+# 백엔드 없음(폰 단독 PWA). 의존성 설치는 컨테이너 시작 시 docker-compose의 command에서 수행.
+FROM node:22-slim
 
-# 1. 필수 패키지 및 Node.js 설치
-RUN apt-get update && apt-get install -y \
-    openssh-server \
-    curl \
-    git \
-    vim \
-    tmux \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app/frontend
 
-# 2. SSH 설정
-RUN mkdir -p /var/run/sshd
-RUN echo 'root:password' | chpasswd
-RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
-    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+EXPOSE 5173
 
-# 3. SSH 세션에서 컨테이너 환경변수 상속
-RUN printf '#!/bin/bash\nif [ -f /app/.env ]; then\n    set -a\n    source /app/.env\n    set +a\nfi\n' \
-    > /etc/profile.d/load-env.sh && chmod +x /etc/profile.d/load-env.sh
-
-# 4. 작업 디렉토리
-WORKDIR /app
-
-# 5. Python 의존성 설치
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 6. Frontend 의존성 설치 (폐쇄망 대비 레이어 캐싱)
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm install --legacy-peer-deps
-
-# 7. 엔트리포인트
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-EXPOSE 22 8090
-
-ENTRYPOINT ["/entrypoint.sh"]
+# 기본 실행: 의존성 설치 후 vite dev (docker-compose의 command가 이를 덮어씀)
+CMD ["sh", "-c", "npm install --legacy-peer-deps && npm run dev"]

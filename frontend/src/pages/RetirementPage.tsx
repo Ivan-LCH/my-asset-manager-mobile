@@ -263,7 +263,7 @@ function YearInput({
 }: { value: number; onChange: (v: number) => void }) {
   return (
     <input
-      type="number"
+      type="number" inputMode="decimal"
       className="w-24 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
         focus:outline-none focus:border-blue-500"
       value={value || ''}
@@ -297,7 +297,7 @@ function ExpensesSection({
             </div>
             <button
               onClick={() => onChange(items.filter((i) => i.id !== item.id))}
-              className="p-1.5 text-gray-600 hover:text-red-400 transition-colors shrink-0"
+              className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -332,7 +332,7 @@ function ExpensesSection({
 function TimesInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <input
-      type="number"
+      type="number" inputMode="decimal"
       min={0}
       className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100
         focus:outline-none focus:border-blue-500 text-center"
@@ -365,7 +365,7 @@ function TravelSection({
               </div>
               <button
                 onClick={() => onChange(items.filter((i) => i.id !== item.id))}
-                className="p-1.5 text-gray-600 hover:text-red-400 transition-colors shrink-0"
+                className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -419,7 +419,7 @@ function LumpsumSection({
               />
               <button
                 onClick={() => onChange(items.filter((i) => i.id !== item.id))}
-                className="p-1.5 text-gray-600 hover:text-red-400 transition-colors shrink-0"
+                className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -481,7 +481,7 @@ function EmergencySection({
             </div>
             <button
               onClick={() => onChange(items.filter((i) => i.id !== item.id))}
-              className="p-1.5 text-gray-600 hover:text-red-400 transition-colors shrink-0"
+              className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -654,7 +654,7 @@ function HealthInsuranceSection({
               } />
             </span>
             <input
-              type="number"
+              type="number" inputMode="decimal"
               step="0.1"
               className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
                 focus:outline-none focus:border-blue-500 text-right"
@@ -844,7 +844,7 @@ export default function RetirementPage() {
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400">은퇴 예상 연도</span>
             <input
-              type="number"
+              type="number" inputMode="decimal"
               className="w-24 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-blue-300
                 font-semibold focus:outline-none focus:border-blue-500 text-center"
               value={plan.retirementYear || ''}
@@ -865,7 +865,7 @@ export default function RetirementPage() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">월 예상 지출</p>
           <p className="text-lg font-bold text-gray-100">{formatManwon(totalExpenseMonthly)}</p>

@@ -52,7 +52,7 @@ export default function AssetPage({ type }: Props) {
       )}
 
       {/* KPI */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <KpiCard label="평가 총액" value={formatMoney(totalVal)} color="default" />
         <KpiCard label="투자 원금" value={formatMoney(totalCost)} color="default" />
         <KpiCard
@@ -77,7 +77,7 @@ export default function AssetPage({ type }: Props) {
             보유 ({active.length})
             <span className="ml-1.5 text-gray-600">· 클릭하면 상세 확인</span>
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             {active.map((a) => (
               <AssetTile key={a.id} asset={a} isQtyBased={isQtyBased} onClick={() => setModalId(a.id)} />
             ))}
@@ -89,7 +89,7 @@ export default function AssetPage({ type }: Props) {
       {sold.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-400">매각 완료 ({sold.length})</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
             {sold.map((a) => (
               <AssetTile key={a.id} asset={a} isQtyBased={isQtyBased} onClick={() => setModalId(a.id)} />
             ))}
