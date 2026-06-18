@@ -113,6 +113,16 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* 시세 자동 가져오기 */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-2">
+        <h3 className="text-sm font-semibold text-gray-300">📈 시세 자동 가져오기</h3>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          주식 페이지의 "시세 업데이트" 버튼으로 종목 단가를 자동 반영합니다.
+          배포(Vercel) 환경에서는 서버리스 함수가, 개발 중에는 로컬 서버가 Yahoo Finance 에서 가져옵니다.
+          자동 실패 시 수동 입력란으로 직접 채울 수 있습니다.
+        </p>
+      </div>
+
       {/* 데이터 백업 / 복원 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-4">
         <div>

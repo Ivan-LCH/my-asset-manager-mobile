@@ -7,13 +7,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** ₩1,234,567 */
+/** ₩1,234,567 (NaN/undefined → '—') */
 export const formatMoney = (val: number): string =>
-  `₩${Math.round(val).toLocaleString('ko-KR')}`
+  Number.isFinite(val) ? `₩${Math.round(val).toLocaleString('ko-KR')}` : '—'
 
-/** 12,340천원 */
+/** 12,340천원 (NaN/undefined → '—') */
 export const formatManwon = (val: number): string =>
-  `${Math.round(val / 1000).toLocaleString('ko-KR')}천원`
+  Number.isFinite(val) ? `${Math.round(val / 1000).toLocaleString('ko-KR')}천원` : '—'
 
 /** 수익/손실 색상 */
 export const getPnlColor = (pnl: number) =>

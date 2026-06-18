@@ -26,7 +26,7 @@ export default function KpiCard({ label, value, sub, color = 'default', classNam
       {/* 상단 컬러 바 */}
       <div className={`absolute top-0 left-0 right-0 h-0.5 ${c.bar}`} />
       <p className="text-[11px] sm:text-xs text-gray-400 font-medium mb-2 truncate">{label}</p>
-      <p className={cn('text-base sm:text-lg font-bold tracking-tight leading-tight break-words', c.text)}>{value}</p>
+      <p className={cn('text-[13px] sm:text-lg font-bold tracking-tight leading-tight break-words', c.text)}>{value}</p>
       {sub && <p className="text-[11px] sm:text-xs text-gray-500 mt-1">{sub}</p>}
     </div>
   )

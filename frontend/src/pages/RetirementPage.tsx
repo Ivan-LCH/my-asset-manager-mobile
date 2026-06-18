@@ -153,6 +153,14 @@ function numFmt(v: number | string) {
   return isNaN(n) ? '' : n.toLocaleString()
 }
 function parseNum(s: string) { return Number(s.replace(/,/g, '')) || 0 }
+/** 안전 숫자 변환 (undefined/문자열/NaN → 0). 가져온 plan 항목의 누락 필드 대비 */
+const num = (v: unknown): number => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+/** 천원 단위 숫자만(표 셀용 — '천원' 접미사 없음). 단위는 표 상단에 표시. */
+const fmtK = (v: number): string =>
+  Number.isFinite(v) ? Math.round(v / 1000).toLocaleString('ko-KR') : '—'
 
 function pnlColor(v: number) {
   if (v > 0) return 'text-emerald-400'
@@ -469,14 +477,16 @@ function EmergencySection({
       <p className="text-xs font-semibold text-gray-400">🚨 긴급자금 (일회성 지출)</p>
       <div className="space-y-1.5">
         {items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2">
-            <TextInput
-              value={item.name}
-              onChange={(v) => update(item.id, 'name', v)}
-              placeholder="항목명 (예: 아들 결혼)"
-            />
+          <div key={item.id} className="flex flex-wrap items-center gap-2">
+            <div className="w-full sm:flex-1 min-w-0">
+              <TextInput
+                value={item.name}
+                onChange={(v) => update(item.id, 'name', v)}
+                placeholder="항목명 (예: 아들 결혼)"
+              />
+            </div>
             <YearInput value={item.year} onChange={(v) => update(item.id, 'year', v)} />
-            <div className="w-36 shrink-0">
+            <div className="w-28 sm:w-36 shrink-0">
               <AmountInput value={item.amount} onChange={(v) => update(item.id, 'amount', v)} />
             </div>
             <button
@@ -727,7 +737,7 @@ function buildCashFlow(
   const endYear = currentYear + (100 - currentAge)
   const rows: CashFlowRow[] = []
 
-  const expenseMonthly = plan.expenses.reduce((s, e) => s + e.amount, 0)
+  const expenseMonthly = plan.expenses.reduce((s, e) => s + num(e.amount), 0)
 
   let cumulative = 0
 
@@ -736,22 +746,23 @@ function buildCashFlow(
 
     // 여행비: phase1Until 이하면 phase1Times, 이후면 phase2Times
     const travelMonthly = plan.travel.reduce((s, t) => {
-      const times = year <= t.phase1Until ? t.phase1Times : t.phase2Times
-      return s + (times * t.costPerTrip) / 12
+      const times = year <= num(t.phase1Until) ? num(t.phase1Times) : num(t.phase2Times)
+      return s + (times * num(t.costPerTrip)) / 12
     }, 0)
 
     const pensionMonthly = pensionMap.get(year) ?? 0
 
     const lumpsumMonthly = plan.lumpsum.reduce((s, l) => {
-      if (l.receiveYear > 0 && l.useEndYear >= l.receiveYear && year >= l.receiveYear && year <= l.useEndYear) {
-        return s + l.amount / ((l.useEndYear - l.receiveYear + 1) * 12)
+      const ry = num(l.receiveYear), ue = num(l.useEndYear), amt = num(l.amount)
+      if (ry > 0 && ue >= ry && year >= ry && year <= ue) {
+        return s + amt / ((ue - ry + 1) * 12)
       }
       return s
     }, 0)
 
-    const emergencyAnnual = plan.emergency.reduce((s, e) => (e.year === year ? s + e.amount : s), 0)
+    const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
 
-    const totalExpense = expenseMonthly + travelMonthly + plan.medicalMonthly + healthInsuranceMonthly
+    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly
     const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly
     const balance      = totalIncome - totalExpense
 
@@ -760,7 +771,7 @@ function buildCashFlow(
     rows.push({
       year, age,
       pensionMonthly, dividendMonthly, expenseMonthly, travelMonthly,
-      medicalMonthly: plan.medicalMonthly,
+      medicalMonthly: num(plan.medicalMonthly),
       healthInsuranceMonthly,
       totalExpense, lumpsumMonthly, totalIncome, balance,
       emergencyAnnual, cumulative,
@@ -830,9 +841,9 @@ export default function RetirementPage() {
 
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
-  const totalExpenseMonthly = (plan.expenses.reduce((s, e) => s + e.amount, 0))
-    + plan.travel.reduce((s, t) => s + (t.phase1Times * t.costPerTrip) / 12, 0)
-    + plan.medicalMonthly
+  const totalExpenseMonthly = (plan.expenses.reduce((s, e) => s + num(e.amount), 0))
+    + plan.travel.reduce((s, t) => s + (num(t.phase1Times) * num(t.costPerTrip)) / 12, 0)
+    + num(plan.medicalMonthly)
     + healthInsuranceMonthly
 
   return (
@@ -892,7 +903,7 @@ export default function RetirementPage() {
       {/* Expander 1: 생활비 / 여행 / 의료비 */}
       <Expander
         title="💰 생활비 / 여행 / 의료비 적립"
-        badge={`월 ${formatManwon(plan.expenses.reduce((s, e) => s + e.amount, 0) + plan.travel.reduce((s, t) => s + (t.phase1Times * t.costPerTrip) / 12, 0) + plan.medicalMonthly)}`}
+        badge={`월 ${formatManwon(plan.expenses.reduce((s, e) => s + num(e.amount), 0) + plan.travel.reduce((s, t) => s + (num(t.phase1Times) * num(t.costPerTrip)) / 12, 0) + num(plan.medicalMonthly))}`}
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ExpensesSection items={plan.expenses} onChange={(v) => update('expenses', v)} />
@@ -942,24 +953,25 @@ export default function RetirementPage() {
 
       {/* 연도별 현금흐름 테이블 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">📊 연도별 현금흐름</h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 천원)</span></h3>
         <div className="overflow-x-auto">
+          <p className="text-[11px] text-gray-500 mb-2 landscape:hidden">📌 세로 모드: 핵심 6열만 표시. 전체 내역은 가로로 돌려보세요.</p>
           <table className="w-full text-xs">
             <thead>
               <tr className="text-gray-500 border-b border-gray-700">
                 <th className="text-left py-2 pr-3 font-medium">연도</th>
                 <th className="text-right py-2 px-2 font-medium">나이</th>
-                <th className="text-right py-2 px-2 font-medium">연금/월</th>
-                <th className="text-right py-2 px-2 font-medium">배당/월</th>
-                <th className="text-right py-2 px-2 font-medium">목돈/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">연금/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">배당/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">목돈/월</th>
                 <th className="text-right py-2 px-2 font-medium">총수입/월</th>
-                <th className="text-right py-2 px-2 font-medium">생활비/월</th>
-                <th className="text-right py-2 px-2 font-medium">여행/월</th>
-                <th className="text-right py-2 px-2 font-medium">의료/월</th>
-                <th className="text-right py-2 px-2 font-medium">건보/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">생활비/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">여행/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">의료/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">건보/월</th>
                 <th className="text-right py-2 px-2 font-medium">총지출/월</th>
                 <th className="text-right py-2 px-2 font-medium">여유/부족</th>
-                <th className="text-right py-2 px-2 font-medium">긴급지출</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">긴급지출</th>
                 <th className="text-right py-2 pl-2 font-medium">누적자금</th>
               </tr>
             </thead>
@@ -979,39 +991,39 @@ export default function RetirementPage() {
                       {isRetirementYear && <span className="ml-1 text-[10px] text-blue-500">은퇴</span>}
                     </td>
                     <td className="text-right py-2 px-2 text-gray-400">{row.age}세</td>
-                    <td className="text-right py-2 px-2 text-gray-300">
-                      {row.pensionMonthly > 0 ? formatManwon(row.pensionMonthly) : '—'}
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-300">
+                      {row.pensionMonthly > 0 ? fmtK(row.pensionMonthly) : '—'}
                     </td>
-                    <td className="text-right py-2 px-2 text-emerald-400">
-                      {row.dividendMonthly > 0 ? formatManwon(row.dividendMonthly) : '—'}
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-emerald-400">
+                      {row.dividendMonthly > 0 ? fmtK(row.dividendMonthly) : '—'}
                     </td>
-                    <td className="text-right py-2 px-2 text-gray-300">
-                      {row.lumpsumMonthly > 0 ? formatManwon(row.lumpsumMonthly) : '—'}
-                    </td>
-                    <td className="text-right py-2 px-2 font-semibold text-gray-100">
-                      {formatManwon(row.totalIncome)}
-                    </td>
-                    <td className="text-right py-2 px-2 text-gray-400">{formatManwon(row.expenseMonthly)}</td>
-                    <td className="text-right py-2 px-2 text-gray-400">
-                      {row.travelMonthly > 0 ? formatManwon(row.travelMonthly) : '—'}
-                    </td>
-                    <td className="text-right py-2 px-2 text-gray-400">
-                      {row.medicalMonthly > 0 ? formatManwon(row.medicalMonthly) : '—'}
-                    </td>
-                    <td className="text-right py-2 px-2 text-gray-400">
-                      {row.healthInsuranceMonthly > 0 ? formatManwon(row.healthInsuranceMonthly) : '—'}
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-300">
+                      {row.lumpsumMonthly > 0 ? fmtK(row.lumpsumMonthly) : '—'}
                     </td>
                     <td className="text-right py-2 px-2 font-semibold text-gray-100">
-                      {formatManwon(row.totalExpense)}
+                      {fmtK(row.totalIncome)}
+                    </td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">{fmtK(row.expenseMonthly)}</td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">
+                      {row.travelMonthly > 0 ? fmtK(row.travelMonthly) : '—'}
+                    </td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">
+                      {row.medicalMonthly > 0 ? fmtK(row.medicalMonthly) : '—'}
+                    </td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">
+                      {row.healthInsuranceMonthly > 0 ? fmtK(row.healthInsuranceMonthly) : '—'}
+                    </td>
+                    <td className="text-right py-2 px-2 font-semibold text-gray-100">
+                      {fmtK(row.totalExpense)}
                     </td>
                     <td className={`text-right py-2 px-2 font-bold ${pnlColor(row.balance)}`}>
-                      {row.balance >= 0 ? '+' : ''}{formatManwon(row.balance)}
+                      {row.balance >= 0 ? '+' : ''}{fmtK(row.balance)}
                     </td>
-                    <td className={`text-right py-2 px-2 ${hasEmergency ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
-                      {hasEmergency ? formatManwon(row.emergencyAnnual) : '—'}
+                    <td className={`hidden landscape:table-cell text-right py-2 px-2 ${hasEmergency ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
+                      {hasEmergency ? fmtK(row.emergencyAnnual) : '—'}
                     </td>
                     <td className={`text-right py-2 pl-2 font-semibold ${pnlColor(row.cumulative)}`}>
-                      {row.cumulative >= 0 ? '+' : ''}{formatManwon(row.cumulative)}
+                      {row.cumulative >= 0 ? '+' : ''}{fmtK(row.cumulative)}
                     </td>
                   </tr>
                 )

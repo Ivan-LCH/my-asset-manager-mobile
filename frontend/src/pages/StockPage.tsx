@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { RefreshCw, Plus, TrendingUp, TrendingDown, Minus, ChevronRight } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAssets, useAssetsByType } from '@/hooks/useAssets'
 import { useDividendSummary } from '@/hooks/useDividends'
 import { useSettings } from '@/hooks/useSettings'
 import AssetCreateForm from '@/components/assets/AssetCreateForm'
-import StockPriceUpdateModal from '@/components/assets/StockPriceUpdateModal'
 import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
+import { updateHistory } from '@/lib/db'
+import { fetchPrices } from '@/lib/stockPrice'
 import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice } from '@/lib/utils'
 import type { Asset, Settings, StockDetail } from '@/types'
 
@@ -29,17 +31,49 @@ export default function StockPage() {
   const { isLoading } = useAssets()
   const { data: divSummary } = useDividendSummary()
   const { data: settings }   = useSettings()
+  const qc = useQueryClient()
 
   // 계좌별 뷰: null=계좌 목록, string=선택된 계좌명
   const [activeAccount, setActiveAccount] = useState<string | null>(null)
   const [modalId,       setModalId]       = useState<string | null>(null)
   const [showCreate,    setShowCreate]    = useState(false)
-  const [showPriceUpd,  setShowPriceUpd]  = useState(false)
+  const [updating,      setUpdating]      = useState(false)
+  const [updMsg,        setUpdMsg]        = useState('')
 
   const modalAsset = assets.find((a) => a.id === modalId) ?? null
 
   const active = assets.filter((a) => !a.disposalDate)
   const sold   = assets.filter((a) => !!a.disposalDate)
+
+  // 시세 자동 갱신: /api/price 로 단가 일괄 조회 → 오늘 이력에 반영 (모달 없이 1탭)
+  const runAutoUpdate = async () => {
+    const items = active
+      .map((s) => ({ id: s.id, ticker: (s.detail as StockDetail | undefined)?.ticker ?? '', qty: s.quantity ?? 0 }))
+      .filter((it) => it.ticker)
+    if (items.length === 0) {
+      setUpdMsg('ticker 가 없는 종목뿐입니다')
+      setTimeout(() => setUpdMsg(''), 3000)
+      return
+    }
+    setUpdating(true)
+    setUpdMsg('갱신 중...')
+    const today = new Date()
+    const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    const result = await fetchPrices(items.map(({ id, ticker }) => ({ id, ticker })))
+    let cnt = 0
+    await Promise.all(items.map(async (it) => {
+      const p = result[it.id]
+      if (p == null) return
+      await updateHistory(it.id, todayStr, { price: p, quantity: it.qty })
+      cnt++
+    }))
+    await qc.invalidateQueries({ queryKey: ['assets'] })
+    await qc.invalidateQueries({ queryKey: ['chart'] })
+    await qc.invalidateQueries({ queryKey: ['dividends', 'summary'] })
+    setUpdating(false)
+    setUpdMsg(cnt > 0 ? `갱신 완료 ${cnt}/${items.length}` : '갱신 실패')
+    setTimeout(() => setUpdMsg(''), 4000)
+  }
 
   const totalVal  = active.reduce((s, a) => s + a.currentValue, 0)
   const totalCost = active.reduce((s, a) => s + costKrw(a, settings), 0)
@@ -87,12 +121,14 @@ export default function StockPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowPriceUpd(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+            onClick={runAutoUpdate}
+            disabled={updating}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
-            <span className="hidden sm:inline">시세 업데이트</span>
+            <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{updating ? '갱신 중...' : '시세 업데이트'}</span>
           </button>
+          {updMsg && <span className="text-xs text-gray-400 hidden sm:inline">{updMsg}</span>}
           <button
             onClick={() => setShowCreate((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
@@ -218,12 +254,6 @@ export default function StockPage() {
 
       {/* 모달 */}
       <AssetModal asset={modalAsset} onClose={() => setModalId(null)} />
-      {showPriceUpd && (
-        <StockPriceUpdateModal
-          stocks={activeAccount ? currentStocks : active}
-          onClose={() => setShowPriceUpd(false)}
-        />
-      )}
     </div>
   )
 }

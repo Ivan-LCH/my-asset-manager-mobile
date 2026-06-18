@@ -44,22 +44,17 @@ secrets.toml
 # Streamlit
 .streamlit/
 
+# Python venv
+.venv/
+
+# Maintenance / 임시
+maintenance_scripts/
+
 # OS specific files
 .DS_Store
-Thumbs.dbmaintenance_scripts/
-.venv/lib64
-.venv/pyvenv.cfg
-.gitignore
-.venv/bin/activate
-.venv/bin/activate.csh
-.venv/bin/activate.fish
-.venv/bin/pip
-.gitignore
-.venv/bin/pip3
-.venv/bin/pip3.10
-.gitignore
-.venv/bin/Activate.ps1
-.gitignore
-.venv/bin/python
-.venv/bin/python3
-.venv/bin/python3.10
+Thumbs.db
+
+# 마이그레이션 산출물 (실제 금융 데이터 포함 — 절대 커밋 금지)
+frontend/public/migration-backup.json
+*_backup.json
+*-backup.json

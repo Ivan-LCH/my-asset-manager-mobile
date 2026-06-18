@@ -1,11 +1,40 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
+// dev 서버에서 /api/price 를 처리(Node가 Yahoo를 직접 fetch → CORS 없음).
+// prod(Vercel)에서는 api/price.ts 서버리스 함수가 같은 역할.
+function priceProxyDev(): PluginOption {
+  return {
+    name: 'price-proxy-dev',
+    configureServer(server) {
+      server.middlewares.use('/api/price', async (req, res) => {
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const ticker = url.searchParams.get('ticker')
+          if (!ticker) { res.statusCode = 400; res.end('missing ticker'); return }
+          const r = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1d&interval=1d`,
+            { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
+          )
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'public, max-age=60')
+          res.statusCode = r.ok ? 200 : 502
+          res.end(await r.text())
+        } catch {
+          res.statusCode = 502
+          res.end(JSON.stringify({ error: 'upstream error' }))
+        }
+      })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    priceProxyDev(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',

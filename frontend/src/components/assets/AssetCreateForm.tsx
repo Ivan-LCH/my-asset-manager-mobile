@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useCreateAsset } from '@/hooks/useAssets'
-import type { AssetType, Currency } from '@/types'
+import { useState, useEffect } from 'react'
+import { useCreateAsset, useAssetsByType } from '@/hooks/useAssets'
+import type { Asset, AssetType, Currency, StockDetail } from '@/types'
 import { TYPE_LABELS, ASSET_TYPES } from '@/lib/utils'
 
 interface Props {
@@ -12,6 +12,12 @@ const CURRENCIES: Currency[] = ['KRW', 'USD', 'JPY']
 
 export default function AssetCreateForm({ defaultType, onClose }: Props) {
   const createMut = useCreateAsset()
+  const existingStocks = useAssetsByType('STOCK')
+  const existingAccounts = Array.from(new Set(
+    existingStocks
+      .map((s) => (s.detail as StockDetail | undefined)?.accountName)
+      .filter((x): x is string => !!x),
+  ))
 
   const [type,             setType]             = useState<AssetType>(defaultType ?? 'STOCK')
   const [name,             setName]             = useState('')
@@ -45,6 +51,17 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
   const [isPensionLikeSav,    setIsPensionLikeSav]    = useState(false)
   const [pensionStartYearSav, setPensionStartYearSav] = useState(0)
   const [pensionMonthlySav,   setPensionMonthlySav]   = useState(0)
+
+  // 동일 이름의 기존 종목이 있으면 티커/통화/계좌 자동 채움
+  useEffect(() => {
+    if (type !== 'STOCK' || !name.trim()) return
+    const match = existingStocks.find((s) => s.name.trim() === name.trim())
+    if (!match) return
+    const d = (match as Asset).detail as StockDetail | undefined
+    if (d?.ticker) setTicker(d.ticker)
+    if (d?.currency) setCurrency(d.currency)
+    if (d?.accountName) setAccountName(d.accountName)
+  }, [name, type, existingStocks])
 
   const buildDetail = () => {
     if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant }
@@ -168,7 +185,16 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>계좌명</label>
-              <input className={inputCls} value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+              <input
+                className={inputCls}
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                list="stock-accounts"
+                placeholder="선택 또는 신규 입력"
+              />
+              <datalist id="stock-accounts">
+                {existingAccounts.map((a) => <option key={a} value={a} />)}
+              </datalist>
             </div>
             <div>
               <label className={labelCls}>통화</label>

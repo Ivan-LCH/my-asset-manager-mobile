@@ -183,7 +183,7 @@ export default function AssetChart({
       />
       <Tooltip content={<CustomTooltip />} cursor={isShortPeriod ? { fill: 'rgba(255,255,255,0.04)' } : undefined} />
       {labels.length > 1 && (
-        <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af', paddingTop: 8 }} />
+        <Legend wrapperStyle={{ fontSize: 10, color: '#9ca3af', paddingTop: 4, maxHeight: 56, overflowY: 'auto' }} />
       )}
     </>
   )
