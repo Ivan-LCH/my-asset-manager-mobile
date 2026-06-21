@@ -187,14 +187,14 @@ function Expander({
     <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-gray-750 transition-colors"
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 text-left hover:bg-gray-750 transition-colors"
       >
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-gray-200">{title}</span>
-          {badge && <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded-full">{badge}</span>}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <span className="text-sm font-semibold text-gray-200 truncate">{title}</span>
+          {badge && <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">{badge}</span>}
         </div>
         <ChevronDown
-          className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-gray-500 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (
@@ -849,49 +849,49 @@ export default function RetirementPage() {
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-xl mx-auto">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold text-gray-100">🌅 은퇴 생활비 계획</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-100">🌅 은퇴 생활비 계획</h2>
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">은퇴 예상 연도</span>
+            <span className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">은퇴 예상 연도</span>
             <input
               type="number" inputMode="decimal"
-              className="w-24 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-blue-300
+              className="w-20 sm:w-24 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-blue-300
                 font-semibold focus:outline-none focus:border-blue-500 text-center"
               value={plan.retirementYear || ''}
               onChange={(e) => { update('retirementYear', Number(e.target.value)); }}
             />
-            <span className="text-sm text-gray-500">년</span>
+            <span className="text-xs sm:text-sm text-gray-500">년</span>
           </div>
+          <button
+            onClick={handleSave}
+            disabled={!dirty || saveMut.isPending}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500
+              text-white transition-colors disabled:opacity-40"
+          >
+            <Save className="w-4 h-4" />
+            {saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
+          </button>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={!dirty || saveMut.isPending}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500
-            text-white transition-colors disabled:opacity-40"
-        >
-          <Save className="w-4 h-4" />
-          {saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
-        </button>
       </div>
 
       {/* KPI */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">월 예상 지출</p>
-          <p className="text-lg font-bold text-gray-100">{formatManwon(totalExpenseMonthly)}</p>
+          <p className="text-[13px] sm:text-lg font-bold text-gray-100">{formatManwon(totalExpenseMonthly)}</p>
           <p className="text-[11px] text-gray-600 mt-0.5">생활비 + 여행 + 의료</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">은퇴 시 연금 수령</p>
-          <p className="text-lg font-bold text-gray-100">
+          <p className="text-xs text-gray-500 mb-1">연금 수령</p>
+          <p className="text-[13px] sm:text-lg font-bold text-gray-100">
             {retirementRow ? formatManwon(retirementRow.pensionMonthly) : '-'}
           </p>
           <p className="text-[11px] text-gray-600 mt-0.5">{retirementYear}년 기준</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">은퇴 시 월 여유/부족</p>
-          <p className={`text-lg font-bold ${pnlColor(retirementRow?.balance ?? 0)}`}>
+          <p className="text-xs text-gray-500 mb-1">월 여유/부족</p>
+          <p className={`text-[13px] sm:text-lg font-bold ${pnlColor(retirementRow?.balance ?? 0)}`}>
             {retirementRow
               ? `${retirementRow.balance >= 0 ? '+' : ''}${formatManwon(retirementRow.balance)}`
               : '-'}
@@ -953,7 +953,7 @@ export default function RetirementPage() {
 
       {/* 연도별 현금흐름 테이블 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 천원)</span></h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 천원/월)</span></h3>
         <div className="overflow-x-auto">
           <p className="text-[11px] text-gray-500 mb-2 landscape:hidden">📌 세로 모드: 핵심 6열만 표시. 전체 내역은 가로로 돌려보세요.</p>
           <table className="w-full text-xs">
@@ -964,15 +964,15 @@ export default function RetirementPage() {
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">연금/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">배당/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">목돈/월</th>
-                <th className="text-right py-2 px-2 font-medium">총수입/월</th>
+                <th className="text-right py-2 px-2 font-medium">월수입</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">생활비/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">여행/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">의료/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">건보/월</th>
-                <th className="text-right py-2 px-2 font-medium">총지출/월</th>
-                <th className="text-right py-2 px-2 font-medium">여유/부족</th>
+                <th className="text-right py-2 px-2 font-medium">월지출</th>
+                <th className="text-right py-2 px-2 font-medium">+/-</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">긴급지출</th>
-                <th className="text-right py-2 pl-2 font-medium">누적자금</th>
+                <th className="text-right py-2 pl-2 font-medium">누적</th>
               </tr>
             </thead>
             <tbody>
