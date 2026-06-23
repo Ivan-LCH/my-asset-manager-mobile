@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
-import { exportBackup, importBackup, type BackupData } from '@/lib/db'
+import { exportBackup, importBackup, clearAllData, seedSampleData, type BackupData } from '@/lib/db'
 
 export default function Settings() {
   const { data: settings, isLoading } = useSettings()
@@ -65,6 +65,29 @@ export default function Settings() {
       setBackupMsg({ ok: false, text: err instanceof Error ? err.message : '가져오기 실패' })
     }
     setTimeout(() => setBackupMsg(null), 4000)
+  }
+
+  // ── 샘플 데이터 / 전체 삭제 ──
+  const handleLoadSample = async () => {
+    try {
+      await seedSampleData()   // 내부에서 clearAllData 후 시드
+      await qc.invalidateQueries()
+      setBackupMsg({ ok: true, text: '샘플 데이터를 불러왔습니다' })
+    } catch {
+      setBackupMsg({ ok: false, text: '샘플 불러오기 실패' })
+    }
+    setTimeout(() => setBackupMsg(null), 3000)
+  }
+
+  const handleClearAll = async () => {
+    try {
+      await clearAllData()
+      await qc.invalidateQueries()
+      setBackupMsg({ ok: true, text: '모든 데이터를 삭제했습니다' })
+    } catch {
+      setBackupMsg({ ok: false, text: '삭제 실패' })
+    }
+    setTimeout(() => setBackupMsg(null), 3000)
   }
 
   if (isLoading) {
@@ -157,7 +180,21 @@ export default function Settings() {
         {backupMsg && (
           <p className={`text-xs ${backupMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{backupMsg.text}</p>
         )}
-        <p className="text-[11px] text-gray-600">가져오기는 기존 데이터를 모두 덮어씁니다.</p>
+        <p className="text-[11px] text-gray-600">가져오기·샘플 불러오기는 기존 데이터를 모두 덮어씁니다.</p>
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-700">
+          <button
+            onClick={handleLoadSample}
+            className="px-4 py-2 text-sm rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white transition-colors"
+          >
+            샘플 데이터 불러오기
+          </button>
+          <button
+            onClick={handleClearAll}
+            className="px-4 py-2 text-sm rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
+          >
+            모든 데이터 삭제
+          </button>
+        </div>
       </div>
     </div>
   )
