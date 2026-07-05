@@ -13,10 +13,10 @@ import { fetchPrices } from '@/lib/stockPrice'
 import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice } from '@/lib/utils'
 import type { Asset, Settings, StockDetail } from '@/types'
 
-// exchange_rate_USD → deepCamel → "exchangeRate_USD"
+// settings KV 키는 snake_case (exchange_rate_USD). db.getExchangeRate 와 동일.
 function getRate(settings: Settings | undefined, currency?: string): number {
   if (!currency || currency === 'KRW') return 1
-  return (settings?.[`exchangeRate_${currency}`] as number) ?? 1
+  return (settings?.[`exchange_rate_${currency}`] as number) ?? 1
 }
 
 // acquisitionPrice = 주식 네이티브 통화 기준 (USD 주식 → USD, KRW 주식 → KRW)

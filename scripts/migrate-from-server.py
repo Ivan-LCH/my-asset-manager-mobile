@@ -25,6 +25,16 @@ def snake_to_camel(s: str) -> str:
     return parts[0] + "".join(p.title() for p in parts[1:])
 
 
+def camel_keys_deep(obj):
+    """dict/list 재귀 순회하며 모든 키를 snake_case → camelCase 로 변환.
+    retirement_plan JSON (원본 snake) 을 모바일 RetirementPlan(camel) 에 맞추는 데 사용."""
+    if isinstance(obj, dict):
+        return {snake_to_camel(k): camel_keys_deep(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [camel_keys_deep(v) for v in obj]
+    return obj
+
+
 def to_bool(v):
     return bool(v) if v is not None else None
 
@@ -82,6 +92,23 @@ def main():
         tables[dst_t] = rows
         print(f"  {src_t:<22} → {dst_t:<18} {len(rows)}행")
     con.close()
+
+    # settings.retirement_plan 값은 JSON 문자열인데 원본이 snake_case.
+    # 모바일 RetirementPlan(camelCase) 에 맞게 키 재귀 변환.
+    # settings KV 키 중 current_age/retirement_age 도 모바일 camel(currentAge/retirementAge) 로 변환.
+    # (exchange_rate_* 는 db.getExchangeRate 가 snake 로 읽으므로 그대로 둔다)
+    SETTINGS_KEY_RENAME = {"current_age": "currentAge", "retirement_age": "retirementAge"}
+    for row in tables.get("settings", []):
+        k = row.get("key")
+        if k in SETTINGS_KEY_RENAME:
+            row["key"] = SETTINGS_KEY_RENAME[k]
+        elif k == "retirement_plan":
+            try:
+                plan = json.loads(row["value"])
+                row["value"] = json.dumps(camel_keys_deep(plan), ensure_ascii=False)
+                print("  retirement_plan: snake→camel 변환 적용")
+            except (ValueError, TypeError):
+                pass
 
     backup = {
         "app": "asset_manager_m",

@@ -143,3 +143,33 @@ export interface RetirementPlan {
   retirementYear:  number
   healthInsurance: HealthInsuranceInputs
 }
+
+// ── 투자법인 시뮬레이터 ────────────────────────────────────
+export interface CorpTaxParams {
+  corpTaxRateLow:        number   // 0.09  (과세표준 2억 이하)
+  corpTaxRateMid:        number   // 0.19  (2억 초과)
+  corpTaxThreshold:      number   // 200_000_000
+  dividendTaxRate:       number   // 0.154 (배당소득세)
+  finIncomeCombinedThr:  number   // 20_000_000 (금융소득종합과세 기준, 연)
+  combinedMarginalRate:  number   // 0.35  (개인 초과분 한계세율 추정)
+  giftTaxRate:           number   // 0.30  (자녀 승계 비교용 증여/상속세율 추정)
+}
+
+export interface CorpSimPlan {
+  investAmount:          number   // 법인 운용 총자금(자본금+가수금)
+  dividendYield:         number   // 예상 배당수익률(%)
+  targetDividendTotal:   number   // 연 배당총액(0 = 수익률 자동)
+  shareHusband:          number   // 지분 %(부)
+  shareWife:             number   // 지분 %(모)
+  shareSon:              number   // 지분 %(자)
+  repSalaryMonthly:      number   // 대표(아내) 월급
+  sonEmployed:           boolean  // 아들 취업 토글(건보 마진 기준)
+  annualMaintCost:       number   // 법인 연 유지비
+  monthlyReturn:         number   // 가수금 월 반환(비과세 생활비)
+  employeeHealthMonthly: number   // 직장건보 월(최저구간)
+  personalHealthAnnual:  number   // 개인명의 시 지역건보(연, 비교용)
+  giftTaxBase:           number   // 자녀 승계 비교용 재산액
+  setupCost:             number   // 법인 설립비(초기)
+  tax:                   CorpTaxParams
+}
+

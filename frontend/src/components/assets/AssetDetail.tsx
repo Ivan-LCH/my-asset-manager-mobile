@@ -15,7 +15,7 @@ import {
 
 function getRate(settings: Settings | undefined, currency?: string): number {
   if (!currency || currency === 'KRW') return 1
-  return (settings?.[`exchangeRate_${currency}`] as number) ?? 1
+  return (settings?.[`exchange_rate_${currency}`] as number) ?? 1
 }
 
 interface Props {
