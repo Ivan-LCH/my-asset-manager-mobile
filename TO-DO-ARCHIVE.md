@@ -111,3 +111,34 @@
 - [C] 6-4. `start_server.sh` 작성
 - [C] 6-5. 기존 DB 데이터 이관 확인 (자산 36개 정상 조회)
 - [C] 6-6. Docker 빌드 & 배포 검증
+
+---
+
+## 2026-07-08 — 모바일 PWA 컨버전 (Phase M) 전체 완료
+> 원본 `asset_manager`(웹+서버) → 폰 단독 실행 PWA 컨버전 완료. 운영 배포: https://my-asset-manager-mobile-ivansproject.vercel.app
+
+### 코어 (백엔드 제거 + 로컬 DB)
+- [C] **M-1. 백엔드 제거 / IndexedDB 전환**
+  - ✓ 데이터 레이어: `lib/db.ts`(Dexie) + 훅 db 연결 + `lib/api.ts` 제거
+  - 클라이언트 ffill 차트: `lib/chartData.ts` + 테스트 (**date-fns**)
+  - 백엔드 잔여물 정리: `backend/`, `requirements.txt`, `entrypoint.sh`, `service_account.json`, `start_server.sh`, `server.pid`, `.streamlit/`, `.env` + vite `/api` 프록시 제거
+  - 보존: `docker-compose.yml`, `Dockerfile` (프론트 dev 워크플로)
+- [C] **M-2. 시세 업데이트** — 자동(서버리스 `/api/price` Yahoo 연동) + 1탭 자동 저장 (모달 제거)
+- [C] **M-3. 데이터 백업/복원** — `exportBackup`/`importBackup` + Settings 내보내기/가져오기 + 마이그레이션 도구 `scripts/migrate-from-server.py`
+
+### 모바일 UI/UX (네비게이션 = 햄버거 드로어, 분기점 `lg:` 1024px)
+- [C] **M-4. 반응형 레이아웃 & 네비게이션** — `Sidebar`/`AppLayout` 듀얼 렌더, 모바일 상단 헤더 + 슬라이드인 드로어
+- [C] **M-5a. KPI 그리드 & 카드** — `KpiCard` 모바일 축소 + 그리드 간격 반응형
+- [C] **M-5b. 차트 & 컨트롤** — `AssetChart` 높이/YAxis/툴바 축소, `PeriodFilter` 모바일 드롭다운
+- [C] **M-6. 테이블 터치 친화화** — 행 버튼 히트영역 확대·항상 노출
+- [C] **M-7. 모달 모바일 풀스크린** — `AssetModal` outer `p-0 sm:p-4`, inner 풀스크린
+- [C] **M-8. 입력 폼 / 숫자 키패드** — 숫자 input `inputMode="decimal"` 일괄 적용
+
+### 배포
+- [C] **M-9. PWA 적용** — vite-plugin-pwa(manifest+SW+아이콘), iOS 메타
+- [C] **M-10. 정적 호스팅 배포 (Vercel)** — `frontend/vercel.json` SPA rewrite, Vercel import(Root Directory=`frontend`), HTTPS 배포 완료
+
+### 추가 (Phase M 완료 후 신규)
+- [C] **투자법인 시뮬레이터** (새 메뉴 `/corp-sim`) — `lib/corpSim.ts` 순수 계산 + Before/After 대조표 + 자녀 자금출처 시뮬 + 현금흐름 지속가능성(고갈 시점 경고) + 세제 파라미터 편집, settings KV 저장
+- [C] **샘플 데이터 시드** — `seedSampleData`(8개 자산) + 최초 실행 자동 시드 + Settings 샘플/전체삭제 버튼
+- [C] **마이그레이션 정확도** — `retirement_plan` snake→camel 변환, settings 키 camel 변환, `getRate` snake 통일 (USD 주식 손익 정상화)
