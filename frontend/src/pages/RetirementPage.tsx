@@ -902,7 +902,7 @@ export default function RetirementPage() {
 
       {/* Expander 1: 생활비 / 여행 / 의료비 */}
       <Expander
-        title="💰 생활비 / 여행 / 의료비 적립"
+        title="✏️ 💰 생활비 / 여행 / 의료비 적립"
         badge={`월 ${formatManwon(plan.expenses.reduce((s, e) => s + num(e.amount), 0) + plan.travel.reduce((s, t) => s + (num(t.phase1Times) * num(t.costPerTrip)) / 12, 0) + num(plan.medicalMonthly))}`}
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -928,7 +928,7 @@ export default function RetirementPage() {
 
       {/* Expander 2: 목돈 수입 / 긴급자금 */}
       <Expander
-        title="💎 목돈 수입 / 긴급자금"
+        title="✏️ 💎 목돈 수입 / 긴급자금"
         badge={`${plan.lumpsum.length + plan.emergency.length}건`}
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -939,7 +939,7 @@ export default function RetirementPage() {
 
       {/* Expander 3: 건강보험료 */}
       <Expander
-        title="🏥 건강보험료 계산 (지역가입자)"
+        title="✏️ 🏥 건강보험료 계산 (지역가입자)"
         badge={`월 ${formatManwon(healthInsuranceMonthly)}`}
       >
         <HealthInsuranceSection

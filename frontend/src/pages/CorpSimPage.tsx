@@ -176,7 +176,7 @@ export default function CorpSimPage() {
       </div>
 
       {/* 입력① 자산·운용 */}
-      <Expander title="입력 ① 자산 · 운용" badge={`원금 ${formatManwon(plan.investAmount)}`} defaultOpen>
+      <Expander title="✏️ 입력 ① 자산 · 운용" badge={`원금 ${formatManwon(plan.investAmount)}`} defaultOpen>
         <Section>
           <Row label="법인 운용 총자금"><AmountInput value={plan.investAmount} onChange={(v) => update('investAmount', v)} /></Row>
           <Row label="예상 배당수익률"><NumInput value={plan.dividendYield} onChange={(v) => update('dividendYield', v)} suffix="%" /></Row>
@@ -187,7 +187,7 @@ export default function CorpSimPage() {
       </Expander>
 
       {/* 입력② 지분·운영 */}
-      <Expander title="입력 ② 지분 · 운영" badge={shareOk ? `지분 ${shareSum(plan)}%` : `⚠ 합 ${shareSum(plan)}%`}>
+      <Expander title="✏️ 입력 ② 지분 · 운영" badge={shareOk ? `지분 ${shareSum(plan)}%` : `⚠ 합 ${shareSum(plan)}%`}>
         <Section>
           <div className="grid grid-cols-3 gap-2">
             <Field label="부 지분(%)"><NumInput value={plan.shareHusband} onChange={(v) => update('shareHusband', v)} /></Field>
@@ -200,17 +200,14 @@ export default function CorpSimPage() {
             <input type="checkbox" checked={plan.sonEmployed} onChange={(e) => update('sonEmployed', e.target.checked)} className="accent-blue-500" />
             아들 취업 상태 (건보 마진 한계 2천만 / 미취업 1천만)
           </label>
-          <div className="pt-2 border-t border-gray-700">
-            <p className="text-xs text-gray-500 mb-2">Before(개인 명의) 비교용</p>
-            <Row label="개인명의 지역건보(연)"><AmountInput value={plan.personalHealthAnnual} onChange={(v) => update('personalHealthAnnual', v)} /></Row>
-            <Row label="승계 비교 재산액"><AmountInput value={plan.giftTaxBase} onChange={(v) => update('giftTaxBase', v)} /></Row>
-            <Row label="법인 설립비(초기)"><AmountInput value={plan.setupCost} onChange={(v) => update('setupCost', v)} /></Row>
-          </div>
+          <p className="text-[11px] text-gray-600 pt-2 border-t border-gray-700">
+            비교용 가정(개인명의 건보·승계재산·설립비)는 입력하지 않아도 됨 — 기본값으로 표시. 변경은 아래 <b>'세제 · 비교 파라미터'</b>에서.
+          </p>
         </Section>
       </Expander>
 
       {/* 결과 상세 */}
-      <Expander title="결과 — 법인 시나리오 상세" badge={`법인세 ${formatManwon(corp.corpTax)}`}>
+      <Expander title="📊 결과 — 법인 시나리오 상세" badge={`법인세 ${formatManwon(corp.corpTax)}`}>
         <Section>
           <Row label="배당총액(세전)"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(corp.grossDividend)}</span></Row>
           <Row label="법인세"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.corpTax)}</span></Row>
@@ -243,7 +240,7 @@ export default function CorpSimPage() {
 
       {/* 현금흐름 / 지속가능성 */}
       <Expander
-        title="현금흐름 / 지속가능성"
+        title="📊 현금흐름 / 지속가능성"
         badge={runway.sustainable ? '지속가능' : '초과인출'}
         defaultOpen
       >
@@ -302,7 +299,7 @@ export default function CorpSimPage() {
       </Expander>
 
       {/* Before vs After */}
-      <Expander title="Before vs After 대조" badge={`연간 차이 ${formatManwon((beforeTax + personal.personalHealthAnnual) - (afterTax + corp.corpHealthAnnual + corp.maintAnnual))}`}>
+      <Expander title="📊 Before vs After 대조" badge={`연간 차이 ${formatManwon((beforeTax + personal.personalHealthAnnual) - (afterTax + corp.corpHealthAnnual + corp.maintAnnual))}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr className="text-gray-500 border-b border-gray-700">
@@ -340,10 +337,17 @@ export default function CorpSimPage() {
           </table>
         </div>
         <p className="text-[11px] text-gray-600 mt-2">* 지분 증여(자본금 출자분)는 별도 증여세 공제 한도 적용. 승계는 대표직 승계·가업상속공제 등 사례별로 크게 달라짐.</p>
+        <div className="mt-2 pt-2 border-t border-gray-700 text-[11px] text-gray-500 leading-relaxed">
+          <span className="text-gray-400">비교 가정(자동 표시):</span>{' '}
+          개인명의 지역건보 {formatManwon(plan.personalHealthAnnual)}/년 ·
+          승계 비교 재산액 {formatManwon(plan.giftTaxBase)} ·
+          법인 설립비 {formatManwon(plan.setupCost)}
+          <span className="text-gray-600"> (변경은 '세제 · 비교 파라미터'에서)</span>
+        </div>
       </Expander>
 
       {/* 자녀 자금출처 */}
-      <Expander title="자녀 자금출처 시뮬(배당 누적)" badge={`권고 배당총액 ${formatManwon(recommend)}`}>
+      <Expander title="📊 자녀 자금출처 시뮬" badge={`권고 배당총액 ${formatManwon(recommend)}`}>
         <Section>
           <Row label="시뮬 연수"><NumInput value={sonYears} onChange={setSonYears} suffix="년" /></Row>
           <p className="text-[11px] text-blue-400/90">
@@ -371,9 +375,19 @@ export default function CorpSimPage() {
         </Section>
       </Expander>
 
-      {/* 세제 파라미터 */}
-      <Expander title="세제 파라미터 (편집 가능)">
+      {/* 세제 · 비교 파라미터 (고급) */}
+      <Expander title="⚙️ 세제 · 비교 파라미터 (고급)">
         <Section>
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            기본값이 들어있으니 그대로 써도 됨. 본인 상황에 맞추려면 여기서 편집. 모든 수치는 추정치.
+          </p>
+          <p className="text-xs text-gray-400 pt-2">비교 가정 (Before)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="개인명의 지역건보(연)"><AmountInput value={plan.personalHealthAnnual} onChange={(v) => update('personalHealthAnnual', v)} /></Field>
+            <Field label="승계 비교 재산액"><AmountInput value={plan.giftTaxBase} onChange={(v) => update('giftTaxBase', v)} /></Field>
+            <Field label="법인 설립비(초기)"><AmountInput value={plan.setupCost} onChange={(v) => update('setupCost', v)} /></Field>
+          </div>
+          <p className="text-xs text-gray-400 pt-3">세율·공식</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="법인세율(2억 이하)"><NumInput value={plan.tax.corpTaxRateLow * 100} onChange={(v) => updateTax('corpTaxRateLow', v / 100)} suffix="%" /></Field>
             <Field label="법인세율(2억 초과)"><NumInput value={plan.tax.corpTaxRateMid * 100} onChange={(v) => updateTax('corpTaxRateMid', v / 100)} suffix="%" /></Field>
