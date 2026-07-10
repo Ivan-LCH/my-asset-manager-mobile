@@ -153,24 +153,36 @@ export interface CorpTaxParams {
   finIncomeCombinedThr:  number   // 20_000_000 (금융소득종합과세 기준, 연)
   combinedMarginalRate:  number   // 0.35  (개인 초과분 한계세율 추정)
   giftTaxRate:           number   // 0.30  (자녀 승계 비교용 증여/상속세율 추정)
+  salaryTaxRate:         number   // 0.03  (급여 소득세 추정률)
+}
+
+export interface PortfolioHolding {
+  ticker: string
+  weight: number                 // 비중(정규화 전, 예: 1:1:1 → 각 1)
+}
+export interface PortfolioYield {
+  ticker: string
+  yield: number                  // 3년평균 배당수익률(%)
 }
 
 export interface CorpSimPlan {
-  capitalContribution:   number   // 출자금(자본금) 총액 — 3인 지분율로 분할
-  loanAmount:            number   // 가수금(주주 대여금) 총액 — 부부 50/50
-  dividendYield:         number   // 예상 배당수익률(%)
-  targetDividendTotal:   number   // 연 배당총액(0 = 수익률 자동)
-  shareHusband:          number   // 지분 %(부)
-  shareWife:             number   // 지분 %(모)
-  shareSon:              number   // 지분 %(자)
-  repSalaryMonthly:      number   // 대표(아내) 월급
-  sonEmployed:           boolean  // 아들 취업 토글(건보 마진 기준)
-  annualMaintCost:       number   // 법인 연 유지비
-  monthlyReturn:         number   // 가수금 월 반환(비과세 생활비)
-  employeeHealthMonthly: number   // 직장건보 월(최저구간)
-  personalHealthAnnual:  number   // 개인명의 시 지역건보(연, 비교용)
-  giftTaxBase:           number   // 자녀 승계 비교용 재산액
-  setupCost:             number   // 법인 설립비(초기)
-  tax:                   CorpTaxParams
+  capitalContribution:     number             // 출자금(자본금) 총액 — 3인 지분율로 분할
+  loanAmount:              number             // 가수금(주주 대여금) 총액 — 부부 50/50
+  dividendYield:           number             // 예상 배당수익률(%)
+  targetDividendTotal:     number             // 연 배당총액(0 = 수익률 자동)
+  shareHusband:            number             // 지분 %(부)
+  shareWife:               number             // 지분 %(모)
+  shareSon:                number             // 지분 %(자)
+  repSalaryMonthly:        number             // 대표(아내) 월급
+  repSalaryHusbandMonthly: number             // 남편 월급(직장가입자 본인)
+  sonEmployed:             boolean            // 아들 취업 토글(건보 마진 기준)
+  annualMaintCost:         number             // 법인 연 유지비
+  monthlyReturn:           number             // 가수금 월 반환(비과세 생활비)
+  employeeHealthMonthly:   number             // 직장건보 월(1인분, 최저구간)
+  personalHealthAnnual:    number             // 개인명의 시 지역건보(연, 비교용)
+  giftTaxBase:             number             // 자녀 승계 비교용 재산액
+  setupCost:               number             // 법인 설립비(초기)
+  portfolio:               PortfolioHolding[] // 배당주 포트폴리오(자동 수익률용)
+  tax:                     CorpTaxParams
 }
 

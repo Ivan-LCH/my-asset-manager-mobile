@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   EMPTY_CORP_PLAN, grossDividend, corpTaxOn, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway,
+  salariedCount, computeTwoPhase, blendedYield,
 } from '@/lib/corpSim'
 import type { CorpSimPlan } from '@/types'
 
@@ -74,11 +75,44 @@ describe('corpSim 계산', () => {
   })
 
   it('runway: 인출을 줄이면 지속가능(원금 보존, 고갈년 null)', () => {
-    // 급여 0, 가수금월반환 200만 → 연 2400만. 수입 4800만 - 세 432만 = 4368만 > 2400만 → 잉여
-    const r = simulateRunway(plan({ repSalaryMonthly: 0, monthlyReturn: 2_000_000 }))
+    // 부부 급여 모두 0, 가수금월반환 200만 → 연 2400만. 수입 4800만 - 세 432만 = 4368만 > 2400만 → 잉여
+    const r = simulateRunway(plan({ repSalaryMonthly: 0, repSalaryHusbandMonthly: 0, monthlyReturn: 2_000_000 }))
     expect(r.sustainable).toBe(true)
     expect(r.annualShortfall).toBe(0)
     expect(r.depletedYear).toBeNull()
     expect(r.rows[0].net).toBeGreaterThan(0)
+  })
+
+  // ── CS 신규: 남편 급여·2인 건보 · 2상 비교 · 포트폴리오 ──
+  it('salariedCount: 부부 모두 급여면 2, 한쪽만이면 1', () => {
+    expect(salariedCount(plan())).toBe(2)
+    expect(salariedCount(plan({ repSalaryHusbandMonthly: 0 }))).toBe(1)
+  })
+
+  it('computeCorp: 건보는 급여받는 인원수 × 직장건보', () => {
+    expect(computeCorp(plan()).corpHealthAnnual).toBe(2 * 70_000 * 12)
+    expect(computeCorp(plan({ repSalaryHusbandMonthly: 0 })).corpHealthAnnual).toBe(1 * 70_000 * 12)
+  })
+
+  it('computeTwoPhase: Phase2 비용이 Phase1보다 크다 (배당세 추가)', () => {
+    const r = computeTwoPhase(plan())
+    expect(r.cost2).toBeGreaterThan(r.cost1)
+    expect(r.diff).toBeGreaterThan(0)
+    // Phase2 배당 인출 = 가수금 월반환 × 12
+    expect(r.dividendDist).toBe(plan().monthlyReturn * 12)
+  })
+
+  it('computeTwoPhase: 배당인출이 2천만 초과 시 종합과세 추가', () => {
+    // monthlyReturn 200만 → 연 2400만 > 2000만 → combinedExtra > 0
+    const r = computeTwoPhase(plan({ monthlyReturn: 2_000_000 }))
+    expect(r.combinedExtra).toBeGreaterThan(0)
+  })
+
+  it('blendedYield: 비중 가중평균', () => {
+    const yields = [{ ticker: 'A', yield: 4 }, { ticker: 'B', yield: 8 }]
+    const portfolio = [{ ticker: 'A', weight: 1 }, { ticker: 'B', weight: 1 }]
+    expect(blendedYield(yields, portfolio)).toBeCloseTo(6) // (4+8)/2
+    // 비중 1:3
+    expect(blendedYield(yields, [{ ticker: 'A', weight: 1 }, { ticker: 'B', weight: 3 }])).toBeCloseTo(7)
   })
 })

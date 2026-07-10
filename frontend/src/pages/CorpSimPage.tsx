@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Save, ChevronDown, AlertTriangle } from 'lucide-react'
+import { Save, ChevronDown, AlertTriangle, Trash2, RefreshCw } from 'lucide-react'
 import { useCorpSim, useSaveCorpSim } from '@/hooks/useCorpSim'
 import {
   EMPTY_CORP_PLAN, DEFAULT_CORP_TAX, grossDividend, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway, totalInvest,
+  computeTwoPhase, blendedYield, salariedCount,
 } from '@/lib/corpSim'
 import { formatManwon } from '@/lib/utils'
-import type { CorpSimPlan, CorpTaxParams } from '@/types'
+import type { CorpSimPlan, CorpTaxParams, PortfolioHolding, PortfolioYield } from '@/types'
 
 // ── 헬퍼 ───────────────────────────────────────────────────
 function numFmt(v: number) { return v > 0 ? Math.round(v).toLocaleString() : '' }
@@ -105,6 +106,8 @@ export default function CorpSimPage() {
   const [plan, setPlan] = useState<CorpSimPlan>(EMPTY_CORP_PLAN)
   const [dirty, setDirty] = useState(false)
   const [sonYears, setSonYears] = useState(10)
+  const [yields, setYields] = useState<PortfolioYield[]>([])
+  const [loadingYields, setLoadingYields] = useState(false)
 
   useEffect(() => {
     if (saved) {
@@ -129,6 +132,28 @@ export default function CorpSimPage() {
   }, [])
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
+  // 배당주 포트폴리오 수익률 자동 산정
+  const fetchYields = async () => {
+    setLoadingYields(true)
+    const tickers = plan.portfolio.map((h) => h.ticker).filter(Boolean)
+    const results: PortfolioYield[] = await Promise.all(
+      tickers.map(async (t) => {
+        try {
+          const r = await fetch(`/api/yield?ticker=${encodeURIComponent(t)}`)
+          if (!r.ok) return { ticker: t, yield: 0 }
+          const d = await r.json()
+          return { ticker: t, yield: d.avg3yYield ?? 0 }
+        } catch {
+          return { ticker: t, yield: 0 }
+        }
+      }),
+    )
+    setYields(results)
+    const blended = blendedYield(results, plan.portfolio)
+    update('dividendYield', Math.round(blended * 100) / 100)
+    setLoadingYields(false)
+  }
+
   const corp = computeCorp(plan)
   const personal = computePersonal(plan)
   const accum = sonAccumulation(plan, sonYears)
@@ -137,6 +162,7 @@ export default function CorpSimPage() {
   const shareOk = shareSum(plan) === 100
   const runway = simulateRunway(plan)
   const firstNet = runway.rows[0]?.net ?? 0
+  const twoPhase = computeTwoPhase(plan)
 
   // After 소득세 = 법인세 + 주주 배당세 총합(distributable × 15.4%)
   const afterTax = corp.corpTax + corp.distributable * plan.tax.dividendTaxRate
@@ -199,7 +225,8 @@ export default function CorpSimPage() {
             <Field label="자 지분(%)"><NumInput value={plan.shareSon} onChange={(v) => update('shareSon', v)} /></Field>
           </div>
           <Row label="대표(아내) 월급"><AmountInput value={plan.repSalaryMonthly} onChange={(v) => update('repSalaryMonthly', v)} /></Row>
-          <Row label="직장건보(월·최저구간)"><AmountInput value={plan.employeeHealthMonthly} onChange={(v) => update('employeeHealthMonthly', v)} /></Row>
+          <Row label="남편(본인) 월급"><AmountInput value={plan.repSalaryHusbandMonthly} onChange={(v) => update('repSalaryHusbandMonthly', v)} /></Row>
+          <Row label="직장건보(월·1인분)"><AmountInput value={plan.employeeHealthMonthly} onChange={(v) => update('employeeHealthMonthly', v)} /></Row>
           <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer py-1">
             <input type="checkbox" checked={plan.sonEmployed} onChange={(e) => update('sonEmployed', e.target.checked)} className="accent-blue-500" />
             아들 취업 상태 (건보 마진 한계 2천만 / 미취업 1천만)
@@ -207,6 +234,59 @@ export default function CorpSimPage() {
           <p className="text-[11px] text-gray-600 pt-2 border-t border-gray-700">
             비교용 가정(개인명의 건보·승계재산·설립비)는 입력하지 않아도 됨 — 기본값으로 표시. 변경은 아래 <b>'세제 · 비교 파라미터'</b>에서.
           </p>
+        </Section>
+      </Expander>
+
+      {/* 배당주 포트폴리오 */}
+      <Expander title="📊 배당주 포트폴리오 (수익률 자동 산정)" badge={`현재 ${plan.dividendYield}%`}>
+        <Section>
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            종목과 비중을 입력하고 "자동 산정"을 누르면 Yahoo에서 3년 평균 배당률을 가져와 가중평균 → 시뮬 수익률 자동 반영.
+          </p>
+          {plan.portfolio.map((h, i) => {
+            const y = yields.find((v) => v.ticker === h.ticker)?.yield
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  className="w-28 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                  value={h.ticker}
+                  onChange={(e) => { const p = [...plan.portfolio]; p[i] = { ...p[i], ticker: e.target.value.toUpperCase() }; update('portfolio', p) }}
+                  placeholder="TICKER"
+                />
+                <input
+                  type="number" inputMode="decimal"
+                  className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
+                  value={h.weight || ''}
+                  onChange={(e) => { const p = [...plan.portfolio]; p[i] = { ...p[i], weight: Number(e.target.value) }; update('portfolio', p) }}
+                />
+                <span className="text-xs text-gray-500">비중</span>
+                {typeof y === 'number' && y > 0 && <span className="text-xs text-emerald-400 shrink-0 ml-auto">{y.toFixed(2)}%</span>}
+                <button
+                  onClick={() => update('portfolio', plan.portfolio.filter((_, j) => j !== i))}
+                  className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )
+          })}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              onClick={() => update('portfolio', [...plan.portfolio, { ticker: '', weight: 1 }])}
+              className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+            >
+              ＋ 종목 추가
+            </button>
+            <button
+              onClick={() => void fetchYields()}
+              disabled={loadingYields}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingYields ? 'animate-spin' : ''}`} />
+              {loadingYields ? '조회 중...' : '배당률 자동 산정'}
+            </button>
+          </div>
         </Section>
       </Expander>
 
@@ -354,6 +434,61 @@ export default function CorpSimPage() {
           법인 설립비 {formatManwon(plan.setupCost)}
           <span className="text-gray-600"> (변경은 '세제 · 비교 파라미터'에서)</span>
         </div>
+      </Expander>
+
+      {/* 2상 비용 비교 */}
+      <Expander title="📊 2상 비용 비교 (가수금 중 vs 후)" badge={`증가 ${formatManwon(twoPhase.diff)}/연`}>
+        <Section>
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            같은 생활비 인출 기준. Phase1(가수금 회수=비과세) → Phase2(가수금 소진 후, 배당=과세) 전환 시 세금 증가분.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-gray-500 border-b border-gray-700">
+                <th className="text-left py-2 pr-3">구분</th>
+                <th className="text-right py-2 px-2">Phase1(가수금 중)</th>
+                <th className="text-right py-2 pl-2">Phase2(가수금 후)</th>
+              </tr></thead>
+              <tbody>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 pr-3 text-gray-300">법인세(연)</td>
+                  <td className="text-right py-2 px-2 text-gray-200">{formatManwon(twoPhase.corpTax)}</td>
+                  <td className="text-right py-2 pl-2 text-gray-200">{formatManwon(twoPhase.corpTax)}</td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 pr-3 text-gray-300">건보(연·{salariedCount(plan)}인)</td>
+                  <td className="text-right py-2 px-2 text-gray-200">{formatManwon(twoPhase.corpHealth)}</td>
+                  <td className="text-right py-2 pl-2 text-gray-200">{formatManwon(twoPhase.corpHealth)}</td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 pr-3 text-gray-300">급여소득세(연)</td>
+                  <td className="text-right py-2 px-2 text-gray-200">{formatManwon(twoPhase.salaryTax)}</td>
+                  <td className="text-right py-2 pl-2 text-gray-200">{formatManwon(twoPhase.salaryTax)}</td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 pr-3 text-gray-300">배당소득세(15.4%)</td>
+                  <td className="text-right py-2 px-2 text-gray-500">—</td>
+                  <td className="text-right py-2 pl-2 text-red-400">{formatManwon(twoPhase.dividendTax)}</td>
+                </tr>
+                {twoPhase.combinedExtra > 0 && (
+                  <tr className="border-b border-gray-700/50">
+                    <td className="py-2 pr-3 text-gray-300">종합과세(초과분)</td>
+                    <td className="text-right py-2 px-2 text-gray-500">—</td>
+                    <td className="text-right py-2 pl-2 text-red-400">{formatManwon(twoPhase.combinedExtra)}</td>
+                  </tr>
+                )}
+                <tr className="border-t-2 border-gray-600">
+                  <td className="py-2 pr-3 text-gray-100 font-bold">총비용(연)</td>
+                  <td className="text-right py-2 px-2 text-gray-100 font-bold">{formatManwon(twoPhase.cost1)}</td>
+                  <td className="text-right py-2 pl-2 text-red-400 font-bold">{formatManwon(twoPhase.cost2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-gray-600 mt-2">
+            Phase2 배당 인출(연 {formatManwon(twoPhase.dividendDist)})에 배당세+종합과세({plan.tax.finIncomeCombinedThr > 0 ? formatManwon(plan.tax.finIncomeCombinedThr) : '2천만'} 초과 시) 추가. 급여소득세·종합 한계는 규정 복잡·연도별 → 세무사 확인.
+          </p>
+        </Section>
       </Expander>
 
       {/* 자녀 자금출처 */}

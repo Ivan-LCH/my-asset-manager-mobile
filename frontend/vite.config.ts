@@ -31,10 +31,57 @@ function priceProxyDev(): PluginOption {
   }
 }
 
+// dev 서버에서 /api/yield 처리(3년 배당이력 → 수익률). prod는 api/yield.ts 서버리스.
+function yieldProxyDev(): PluginOption {
+  return {
+    name: 'yield-proxy-dev',
+    configureServer(server) {
+      server.middlewares.use('/api/yield', async (req, res) => {
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const ticker = url.searchParams.get('ticker')
+          if (!ticker) { res.statusCode = 400; res.end('missing ticker'); return }
+          const r = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3y&interval=1d&events=div`,
+            { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
+          )
+          const data = await r.json()
+          const result = data?.chart?.result?.[0]
+          const price = result?.meta?.regularMarketPrice ?? result?.meta?.previousClose
+          const divs = result?.events?.dividends ?? {}
+          const entries = Object.entries(divs) as [string, { amount: number }][]
+          const amounts = entries.map(([, v]) => v.amount).filter((a) => typeof a === 'number' && a > 0)
+          const total3y = amounts.reduce((s, a) => s + a, 0)
+          const avg3y = total3y / 3
+          const ts = entries.map(([t]) => Number(t))
+          const latest = ts.length > 0 ? Math.max(...ts) : 0
+          const ttm = entries.filter(([t]) => Number(t) > latest - 365 * 24 * 3600).reduce((s, [, v]) => s + (v.amount || 0), 0)
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'public, max-age=3600')
+          res.statusCode = 200
+          res.end(JSON.stringify({
+            ticker,
+            price: Math.round(price * 100) / 100,
+            ttmDividend: Math.round(ttm * 100) / 100,
+            ttmYield: price > 0 ? Math.round((ttm / price) * 10000) / 100 : null,
+            avg3yDividend: Math.round(avg3y * 100) / 100,
+            avg3yYield: price > 0 ? Math.round((avg3y / price) * 10000) / 100 : null,
+            count3y: amounts.length,
+          }))
+        } catch {
+          res.statusCode = 502
+          res.end(JSON.stringify({ error: 'upstream error' }))
+        }
+      })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
     priceProxyDev(),
+    yieldProxyDev(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',

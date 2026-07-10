@@ -11,26 +11,53 @@ export const DEFAULT_CORP_TAX: CorpTaxParams = {
   finIncomeCombinedThr: 20_000_000, // 금융소득종합과세 기준(연, 부부합산)
   combinedMarginalRate: 0.35,    // 종합소득 한계세율 추정
   giftTaxRate:          0.30,    // 자녀 승계 비교용 증여/상속 세율 추정
+  salaryTaxRate:        0.03,    // 급여 소득세 추정률
 }
 
 /** 입력 기본값 (보고서 기준 샘플) */
 export const EMPTY_CORP_PLAN: CorpSimPlan = {
-  capitalContribution:   1_000_000,
-  loanAmount:            600_000_000,
-  dividendYield:         8,
-  targetDividendTotal:   0,
-  shareHusband:          40,
-  shareWife:             40,
-  shareSon:              20,
-  repSalaryMonthly:      1_000_000,
-  sonEmployed:           false,
-  annualMaintCost:       1_200_000,
-  monthlyReturn:         3_500_000,
-  employeeHealthMonthly: 70_000,
-  personalHealthAnnual:  7_800_000,
-  giftTaxBase:           600_000_000,
-  setupCost:             2_000_000,
-  tax:                   { ...DEFAULT_CORP_TAX },
+  capitalContribution:     1_000_000,
+  loanAmount:              600_000_000,
+  dividendYield:           8,
+  targetDividendTotal:     0,
+  shareHusband:            40,
+  shareWife:               40,
+  shareSon:                20,
+  repSalaryMonthly:        1_000_000,
+  repSalaryHusbandMonthly: 1_000_000,
+  sonEmployed:             false,
+  annualMaintCost:         1_200_000,
+  monthlyReturn:           3_500_000,
+  employeeHealthMonthly:   70_000,
+  personalHealthAnnual:    7_800_000,
+  giftTaxBase:             600_000_000,
+  setupCost:               2_000_000,
+  portfolio:               [
+    { ticker: 'SCHD', weight: 1 },
+    { ticker: 'GPIQ', weight: 1 },
+    { ticker: 'JEPQ', weight: 1 },
+  ],
+  tax:                     { ...DEFAULT_CORP_TAX },
+}
+
+/** 급여 받는 임원 수(직장건보 대상). 부부 모두 월급이면 2. */
+export const salariedCount = (plan: CorpSimPlan): number =>
+  (plan.repSalaryMonthly > 0 ? 1 : 0) + (plan.repSalaryHusbandMonthly > 0 ? 1 : 0)
+
+/** 배당주 포트폴리오 가중평균 수익률(%). yields: 각 ticker의 3년평균 수익률 */
+export function blendedYield(
+  yields: { ticker: string; yield: number }[],
+  portfolio: { ticker: string; weight: number }[],
+): number {
+  const totalW = portfolio.reduce((s, h) => s + (h.weight > 0 ? h.weight : 0), 0)
+  if (totalW <= 0) return 0
+  let blended = 0
+  for (const h of portfolio) {
+    if (h.weight <= 0) continue
+    const y = yields.find((v) => v.ticker === h.ticker)?.yield
+    if (typeof y === 'number') blended += y * (h.weight / totalW)
+  }
+  return blended
 }
 
 /** 지분 합(100 이어야 함) */
@@ -74,7 +101,7 @@ export function computeCorp(plan: CorpSimPlan): CorpResult {
     const g = distributable * (pct / 100)
     return { gross: g, net: g * (1 - plan.tax.dividendTaxRate) }
   }
-  const corpHealthAnnual = plan.employeeHealthMonthly * 12
+  const corpHealthAnnual = salariedCount(plan) * plan.employeeHealthMonthly * 12
   const maintAnnual = plan.annualMaintCost
   return {
     grossDividend: gross,
@@ -167,7 +194,7 @@ export interface RunwayResult {
 
 /** 연도별 현금흐름 시뮬레이션 → 지속가능성/고갈 시점 산출 */
 export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
-  const salaryAnnual = plan.repSalaryMonthly * 12
+  const salaryAnnual = (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
   const returnAnnual = plan.monthlyReturn * 12
   const familyDraw = salaryAnnual + returnAnnual
   const baseYear = new Date().getFullYear()
@@ -197,4 +224,45 @@ export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
   const sustainable = first ? first.net >= 0 : false
   const annualShortfall = first && first.net < 0 ? -first.net : 0
   return { rows, sustainable, annualShortfall, depletedYear }
+}
+
+// ── 2상 비용 비교 (가수금 회수 중 vs 완료 후) ─────────────────
+// 같은 생활비를 인출한다고 가정. Phase1은 가수금(비과세)+급여, Phase2는 가수금 소진 후
+// 동일 액을 배당(과세)으로 채운다. 법인세·건보·급여소득세는 양상 공통, 배당세·종합과세가 차이.
+export interface TwoPhaseResult {
+  salariesAnnual:   number
+  corpTaxable:      number
+  corpTax:          number
+  corpHealth:       number
+  salaryTax:        number
+  dividendDist:     number // Phase2 에서 배당으로 인출(= monthlyReturn×12)
+  dividendTax:      number
+  combinedExtra:    number
+  cost1:            number // Phase1: 법인세+건보+급여세 (가수금 비과세)
+  cost2:            number // Phase2: + 배당세 + 종합
+  diff:             number // cost2 - cost1
+}
+
+export function computeTwoPhase(plan: CorpSimPlan): TwoPhaseResult {
+  const salariesAnnual = (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
+  const gross = grossDividend(plan)
+  const corpTaxable = Math.max(0, gross - salariesAnnual)   // 급여는 법인 비용(공제)
+  const corpTax = corpTaxOn(corpTaxable, plan.tax)
+  const corpHealth = salariedCount(plan) * plan.employeeHealthMonthly * 12
+  const salaryTax = salariesAnnual * plan.tax.salaryTaxRate
+
+  // Phase2: 가수금 몫(monthlyReturn×12)을 배당으로 인출
+  const dividendDist = plan.monthlyReturn * 12
+  const dividendTax = dividendDist * plan.tax.dividendTaxRate
+  const combinedExtra =
+    dividendDist > plan.tax.finIncomeCombinedThr
+      ? (dividendDist - plan.tax.finIncomeCombinedThr) * plan.tax.combinedMarginalRate
+      : 0
+
+  const cost1 = corpTax + corpHealth + salaryTax
+  const cost2 = cost1 + dividendTax + combinedExtra
+  return {
+    salariesAnnual, corpTaxable, corpTax, corpHealth, salaryTax,
+    dividendDist, dividendTax, combinedExtra, cost1, cost2, diff: cost2 - cost1,
+  }
 }
