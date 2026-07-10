@@ -3,7 +3,7 @@ import { Save, ChevronDown, AlertTriangle } from 'lucide-react'
 import { useCorpSim, useSaveCorpSim } from '@/hooks/useCorpSim'
 import {
   EMPTY_CORP_PLAN, DEFAULT_CORP_TAX, grossDividend, computeCorp, computePersonal,
-  sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway,
+  sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway, totalInvest,
 } from '@/lib/corpSim'
 import { formatManwon } from '@/lib/utils'
 import type { CorpSimPlan, CorpTaxParams } from '@/types'
@@ -108,9 +108,12 @@ export default function CorpSimPage() {
 
   useEffect(() => {
     if (saved) {
+      const oldInvest = (saved as unknown as Record<string, unknown>).investAmount as number | undefined
       setPlan({
         ...EMPTY_CORP_PLAN,
         ...saved,
+        // 구버전(investAmount) → 가수금으로 마이그레이션
+        loanAmount: saved.loanAmount ?? (oldInvest ?? EMPTY_CORP_PLAN.loanAmount),
         tax: { ...DEFAULT_CORP_TAX, ...(saved.tax ?? {}) },
       })
     }
@@ -176,9 +179,10 @@ export default function CorpSimPage() {
       </div>
 
       {/* 입력① 자산·운용 */}
-      <Expander title="✏️ 입력 ① 자산 · 운용" badge={`원금 ${formatManwon(plan.investAmount)}`} defaultOpen>
+      <Expander title="✏️ 입력 ① 자산 · 운용" badge={`총운용 ${formatManwon(totalInvest(plan))}`} defaultOpen>
         <Section>
-          <Row label="법인 운용 총자금"><AmountInput value={plan.investAmount} onChange={(v) => update('investAmount', v)} /></Row>
+          <Row label="출자금(자본금)"><AmountInput value={plan.capitalContribution} onChange={(v) => update('capitalContribution', v)} /></Row>
+          <Row label="가수금(대여금)"><AmountInput value={plan.loanAmount} onChange={(v) => update('loanAmount', v)} /></Row>
           <Row label="예상 배당수익률"><NumInput value={plan.dividendYield} onChange={(v) => update('dividendYield', v)} suffix="%" /></Row>
           <Row label="연 배당총액(0=자동)"><AmountInput value={plan.targetDividendTotal} onChange={(v) => update('targetDividendTotal', v)} placeholder="0" /></Row>
           <Row label="가수금 월 반환(생활비)"><AmountInput value={plan.monthlyReturn} onChange={(v) => update('monthlyReturn', v)} /></Row>
@@ -261,6 +265,12 @@ export default function CorpSimPage() {
               </>
             )
           })()}
+
+          <Row label={`가수금(${formatManwon(plan.loanAmount)}) 전액 회수`}>
+            <span className="text-sm text-gray-300 text-right w-full block">
+              {months > 0 ? `${Math.floor(months / 12)}년 ${months % 12}개월` : '—'} <span className="text-gray-500">(월 {formatManwon(plan.monthlyReturn)})</span>
+            </span>
+          </Row>
 
           {runway.sustainable ? (
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-xs text-emerald-300">

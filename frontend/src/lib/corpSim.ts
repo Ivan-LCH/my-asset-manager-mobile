@@ -15,7 +15,8 @@ export const DEFAULT_CORP_TAX: CorpTaxParams = {
 
 /** 입력 기본값 (보고서 기준 샘플) */
 export const EMPTY_CORP_PLAN: CorpSimPlan = {
-  investAmount:          600_000_000,
+  capitalContribution:   1_000_000,
+  loanAmount:            600_000_000,
   dividendYield:         8,
   targetDividendTotal:   0,
   shareHusband:          40,
@@ -36,11 +37,15 @@ export const EMPTY_CORP_PLAN: CorpSimPlan = {
 export const shareSum = (plan: CorpSimPlan): number =>
   plan.shareHusband + plan.shareWife + plan.shareSon
 
+/** 법인 운용 총자금 = 출자금(자본금) + 가수금(대여금) — 배당을 버는 ETF 원금 */
+export const totalInvest = (plan: CorpSimPlan): number =>
+  plan.capitalContribution + plan.loanAmount
+
 /** 연간 법인 배당총액(=법인 과세소득). target>0 이면 target, 아니면 원금×수익률 */
 export function grossDividend(plan: CorpSimPlan): number {
   return plan.targetDividendTotal > 0
     ? plan.targetDividendTotal
-    : plan.investAmount * (plan.dividendYield / 100)
+    : totalInvest(plan) * (plan.dividendYield / 100)
 }
 
 /** 초과누진 법인세 */
@@ -124,9 +129,9 @@ export function sonAccumulation(plan: CorpSimPlan, years: number): SonAccumRow[]
   return rows
 }
 
-/** 가수금 월 반환 시 세금/건보 부담 없이 유지되는 개월 수 */
+/** 가수금(빌려준 원금) 월 반환 시 전액 회수까지 걸리는 개월 수 */
 export function returnMonths(plan: CorpSimPlan): number {
-  return plan.monthlyReturn > 0 ? Math.floor(plan.investAmount / plan.monthlyReturn) : 0
+  return plan.monthlyReturn > 0 ? Math.floor(plan.loanAmount / plan.monthlyReturn) : 0
 }
 
 /**
@@ -167,7 +172,7 @@ export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
   const familyDraw = salaryAnnual + returnAnnual
   const baseYear = new Date().getFullYear()
 
-  let principal = plan.investAmount
+  let principal = totalInvest(plan)
   const rows: RunwayRow[] = []
   let depletedYear: number | null = null
 

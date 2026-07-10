@@ -156,7 +156,8 @@ export interface CorpTaxParams {
 }
 
 export interface CorpSimPlan {
-  investAmount:          number   // 법인 운용 총자금(자본금+가수금)
+  capitalContribution:   number   // 출자금(자본금) 총액 — 3인 지분율로 분할
+  loanAmount:            number   // 가수금(주주 대여금) 총액 — 부부 50/50
   dividendYield:         number   // 예상 배당수익률(%)
   targetDividendTotal:   number   // 연 배당총액(0 = 수익률 자동)
   shareHusband:          number   // 지분 %(부)

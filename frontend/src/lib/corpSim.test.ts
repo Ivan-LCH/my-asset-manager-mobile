@@ -8,8 +8,8 @@ import type { CorpSimPlan } from '@/types'
 const plan = (over: Partial<CorpSimPlan> = {}): CorpSimPlan => ({ ...EMPTY_CORP_PLAN, ...over })
 
 describe('corpSim 계산', () => {
-  it('배당총액: target=0 이면 원금×수익률', () => {
-    expect(grossDividend(plan({ investAmount: 600_000_000, dividendYield: 8 }))).toBe(48_000_000)
+  it('배당총액: target=0 이면 (출자+가수금)×수익률', () => {
+    expect(grossDividend(plan({ capitalContribution: 0, loanAmount: 600_000_000, dividendYield: 8 }))).toBe(48_000_000)
   })
   it('배당총액: target>0 이면 target 우선', () => {
     expect(grossDividend(plan({ targetDividendTotal: 50_000_000 }))).toBe(50_000_000)
@@ -53,8 +53,8 @@ describe('corpSim 계산', () => {
     expect(rows[2].cumulative).toBeCloseTo(annual * 3)
   })
 
-  it('가수금 반환 개월 = 원금 / 월반환', () => {
-    expect(returnMonths(plan({ investAmount: 600_000_000, monthlyReturn: 3_500_000 }))).toBe(171)
+  it('가수금 반환 개월 = 가수금 / 월반환 (출자금 제외)', () => {
+    expect(returnMonths(plan({ capitalContribution: 1_000_000, loanAmount: 600_000_000, monthlyReturn: 3_500_000 }))).toBe(171)
   })
 
   it('권고 배당: 미취업 아들 한계 1천만 역산', () => {
