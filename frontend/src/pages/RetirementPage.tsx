@@ -771,11 +771,15 @@ function buildCashFlow(
     const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
       + (year === SIM_START_YEAR ? corpLoanOutflow : 0)  // 법인 가수금 최초 유출(1회)
 
+    // 목돈수입: 수령 연도에 전액 일회성 유입(긴급자금의 역방향).
+    // totalIncome 의 월 분할(lumpsumMonthly)은 표시용 → 누적에서는 빼고 수령액으로 대체.
+    const lumpsumReceived = plan.lumpsum.reduce((s, l) => (num(l.receiveYear) === year ? s + num(l.amount) : s), 0)
+
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly
     const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     const balance      = totalIncome - totalExpense
 
-    cumulative += balance * 12 - emergencyAnnual
+    cumulative += balance * 12 - emergencyAnnual - lumpsumMonthly * 12 + lumpsumReceived
 
     rows.push({
       year, age,
