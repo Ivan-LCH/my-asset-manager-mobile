@@ -6,41 +6,13 @@ import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, salariedCount } from '@/lib/corpSim'
+import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
-  Asset, PensionDetail, StockDetail, SavingsDetail,
+  Asset, StockDetail, SavingsDetail,
   RetirementPlan, ExpenseItem, TravelItem, LumpsumItem, EmergencyItem,
   HealthInsuranceInputs,
 } from '@/types'
-
-// ── 연금 시뮬레이션 (PensionPage와 동일 로직) ──────────────
-const SIM_START_YEAR = 2029
-
-function calcPensionByYear(assets: Asset[], currentAge: number): Map<number, number> {
-  const currentYear = new Date().getFullYear()
-  const endYear = currentYear + (100 - currentAge)
-  const map = new Map<number, number>()
-  for (let year = SIM_START_YEAR; year <= endYear; year++) {
-    let monthly = 0
-    for (const a of assets) {
-      if (a.type === 'PENSION') {
-        const d = a.detail as PensionDetail | undefined
-        if (!d) continue
-        if (year >= d.expectedStartYear && year <= d.expectedEndYear) {
-          const elapsed = year - d.expectedStartYear
-          monthly += d.expectedMonthlyPayout * Math.pow(1 + (d.annualGrowthRate ?? 0) / 100, elapsed)
-        }
-      }
-      if (a.type === 'STOCK' || a.type === 'SAVINGS') {
-        const d = a.detail as (StockDetail & SavingsDetail) | undefined
-        if (!d?.isPensionLike) continue
-        if (d.pensionStartYear && year >= d.pensionStartYear) monthly += d.pensionMonthly ?? 0
-      }
-    }
-    map.set(year, monthly)
-  }
-  return map
-}
 
 // ── 건강보험료 계산 (2025년 지역가입자 기준) ───────────────
 // 재산 점수표: 재산세 과세표준 5,000만원 공제 후 구간별 점수 (단위: 만원)

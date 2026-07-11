@@ -9,7 +9,6 @@ export const DEFAULT_CORP_TAX: CorpTaxParams = {
   corpTaxThreshold:     200_000_000,
   dividendTaxRate:      0.154,   // 배당소득세 15.4%
   finIncomeCombinedThr: 20_000_000, // 금융소득종합과세 기준(연, 부부합산)
-  combinedMarginalRate: 0.35,    // 종합소득 한계세율 추정
   giftTaxRate:          0.30,    // 자녀 승계 비교용 증여/상속 세율 추정
   salaryTaxRate:        0.03,    // 급여 소득세 추정률
 }
@@ -32,6 +31,8 @@ export const EMPTY_CORP_PLAN: CorpSimPlan = {
   personalHealthAnnual:    7_800_000,
   giftTaxBase:             600_000_000,
   setupCost:               2_000_000,
+  linkPension:             true,
+  pensionIncomeAnnual:     0,
   portfolio:               [
     { ticker: 'SCHD', weight: 1 },
     { ticker: 'GPIQ', weight: 1 },
@@ -81,6 +82,19 @@ export function corpTaxOn(income: number, tax: CorpTaxParams): number {
   return tax.corpTaxThreshold * tax.corpTaxRateLow + (income - tax.corpTaxThreshold) * tax.corpTaxRateMid
 }
 
+/**
+ * 한국 종합소득세 누진과세 (과세표준 기준, 2024년).
+ * 종합과세 대상 소득(연금+급여+금융초과분 등)의 세액 산출.
+ */
+export function comprehensiveTax(taxable: number): number {
+  if (taxable <= 0) return 0
+  if (taxable <= 14_000_000) return taxable * 0.06
+  if (taxable <= 50_000_000) return taxable * 0.15 - 1_260_000
+  if (taxable <= 88_000_000) return taxable * 0.24 - 5_760_000
+  if (taxable <= 150_000_000) return taxable * 0.35 - 15_440_000
+  return taxable * 0.38 - 19_940_000
+}
+
 export interface PerShare { gross: number; net: number }
 export interface CorpResult {
   grossDividend:   number
@@ -116,27 +130,31 @@ export function computeCorp(plan: CorpSimPlan): CorpResult {
 
 export interface PersonalResult {
   dividendTax:        number // 배당소득세 15.4% (연)
-  combinedExtra:      number // 금융소득종합과세 초과분 추가세 (연)
+  combinedExtra:      number // 금융소득종합과세 초과분 추가세 (연, 누진)
+  marginalRate:       number // 적용 한계세율 (%)
   personalHealthAnnual: number
   giftTax:            number // 자녀 승계 비교용 (일회/미래)
   annualLeak:         number // 배당세+종합과세+건보 (연간)
 }
 
-/** 개인 명의 직접 투자(Before) 시나리오 계산 */
+/** 개인 명의 직접 투자(Before) 시나리오 — 누진 종합과세 */
 export function computePersonal(plan: CorpSimPlan): PersonalResult {
   const gross = grossDividend(plan)
   const dividendTax = gross * plan.tax.dividendTaxRate
-  const combinedExtra =
-    gross > plan.tax.finIncomeCombinedThr
-      ? (gross - plan.tax.finIncomeCombinedThr) * plan.tax.combinedMarginalRate
-      : 0
+  const pension = plan.pensionIncomeAnnual
+  let combinedExtra = 0, marginalRate = 0
+  if (gross > plan.tax.finIncomeCombinedThr) {
+    const excess = gross - plan.tax.finIncomeCombinedThr
+    const taxWithExcess = comprehensiveTax(pension + excess)
+    const taxWithout = comprehensiveTax(pension)
+    combinedExtra = Math.max(0, taxWithExcess - taxWithout)
+    marginalRate = excess > 0 ? combinedExtra / excess : 0
+  }
   const giftTax = plan.giftTaxBase * plan.tax.giftTaxRate
   const personalHealthAnnual = plan.personalHealthAnnual
   return {
-    dividendTax,
-    combinedExtra,
-    personalHealthAnnual,
-    giftTax,
+    dividendTax, combinedExtra, marginalRate,
+    personalHealthAnnual, giftTax,
     annualLeak: dividendTax + combinedExtra + personalHealthAnnual,
   }
 }
@@ -238,6 +256,7 @@ export interface TwoPhaseResult {
   dividendDist:     number // Phase2 에서 배당으로 인출(= monthlyReturn×12)
   dividendTax:      number
   combinedExtra:    number
+  marginalRate:     number // Phase2 적용 한계세율 (%)
   cost1:            number // Phase1: 법인세+건보+급여세 (가수금 비과세)
   cost2:            number // Phase2: + 배당세 + 종합
   diff:             number // cost2 - cost1
@@ -246,7 +265,7 @@ export interface TwoPhaseResult {
 export function computeTwoPhase(plan: CorpSimPlan): TwoPhaseResult {
   const salariesAnnual = (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
   const gross = grossDividend(plan)
-  const corpTaxable = Math.max(0, gross - salariesAnnual)   // 급여는 법인 비용(공제)
+  const corpTaxable = Math.max(0, gross - salariesAnnual)
   const corpTax = corpTaxOn(corpTaxable, plan.tax)
   const corpHealth = salariedCount(plan) * plan.employeeHealthMonthly * 12
   const salaryTax = salariesAnnual * plan.tax.salaryTaxRate
@@ -254,15 +273,22 @@ export function computeTwoPhase(plan: CorpSimPlan): TwoPhaseResult {
   // Phase2: 가수금 몫(monthlyReturn×12)을 배당으로 인출
   const dividendDist = plan.monthlyReturn * 12
   const dividendTax = dividendDist * plan.tax.dividendTaxRate
-  const combinedExtra =
-    dividendDist > plan.tax.finIncomeCombinedThr
-      ? (dividendDist - plan.tax.finIncomeCombinedThr) * plan.tax.combinedMarginalRate
-      : 0
+  const pension = plan.pensionIncomeAnnual
+  let combinedExtra = 0, marginalRate = 0
+  if (dividendDist > plan.tax.finIncomeCombinedThr) {
+    const excess = dividendDist - plan.tax.finIncomeCombinedThr
+    const base = pension + salariesAnnual  // 연금 + 급여
+    const taxWithExcess = comprehensiveTax(base + excess)
+    const taxWithout = comprehensiveTax(base)
+    combinedExtra = Math.max(0, taxWithExcess - taxWithout)
+    marginalRate = excess > 0 ? combinedExtra / excess : 0
+  }
 
   const cost1 = corpTax + corpHealth + salaryTax
   const cost2 = cost1 + dividendTax + combinedExtra
   return {
     salariesAnnual, corpTaxable, corpTax, corpHealth, salaryTax,
-    dividendDist, dividendTax, combinedExtra, cost1, cost2, diff: cost2 - cost1,
+    dividendDist, dividendTax, combinedExtra, marginalRate,
+    cost1, cost2, diff: cost2 - cost1,
   }
 }

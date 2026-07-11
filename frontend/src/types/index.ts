@@ -152,7 +152,6 @@ export interface CorpTaxParams {
   corpTaxThreshold:      number   // 200_000_000
   dividendTaxRate:       number   // 0.154 (배당소득세)
   finIncomeCombinedThr:  number   // 20_000_000 (금융소득종합과세 기준, 연)
-  combinedMarginalRate:  number   // 0.35  (개인 초과분 한계세율 추정)
   giftTaxRate:           number   // 0.30  (자녀 승계 비교용 증여/상속세율 추정)
   salaryTaxRate:         number   // 0.03  (급여 소득세 추정률)
 }
@@ -184,6 +183,8 @@ export interface CorpSimPlan {
   giftTaxBase:             number             // 자녀 승계 비교용 재산액
   setupCost:               number             // 법인 설립비(초기)
   portfolio:               PortfolioHolding[] // 배당주 포트폴리오(자동 수익률용)
+  linkPension:             boolean            // 연금 자동 연동(은퇴 계획에서)
+  pensionIncomeAnnual:     number             // 연금소득(연) — linkPension 시 자동 산출
   tax:                     CorpTaxParams
 }
 

@@ -45,4 +45,13 @@
 - [O] **LK-2. RetirementPage**: useCorpSim 읽기, buildCashFlow linked 분기(법인 배당·급여·가수금+직장건보), 토글 UI, 표 신규 열
 - [O] **LK-3. 검증 + 커밋&push**
 
+### 🔵 누진세율 + 연금 자동 연동 (2026-07-11)
+- [ ] **TX-1. lib/pensionCalc.ts**: calcPensionByYear + SIM_START_YEAR 추출 (RetirementPage → 공유 모듈)
+- [ ] **TX-2. types/index.ts**: CorpTaxParams.combinedMarginalRate 제거, CorpSimPlan(linkPension, pensionIncomeAnnual), PersonalResult/TwoPhaseResult(marginalRate)
+- [ ] **TX-3. lib/corpSim.ts**: comprehensiveTax(누진구간) + computePersonal/computeTwoPhase(flat→누진) + DEFAULT/EMPTY 업데이트
+- [ ] **TX-4. RetirementPage.tsx**: calcPensionByYear import 변경 (사이드이펙 점검)
+- [ ] **TX-5. CorpSimPage.tsx**: 연금 자동 연동 토글 + 세율 표시 + 파라미터 UI
+- [ ] **TX-6. corpSim.test.ts**: 누진세 기댓값 수정 + comprehensiveTax 테스트
+- [ ] **TX-7. 검증(tsc+vitest) + 커밋&push**
+
 <!-- 완료 항목은 TO-DO-ARCHIVE.md 로 이동 -->

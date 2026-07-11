@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   EMPTY_CORP_PLAN, grossDividend, corpTaxOn, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway,
-  salariedCount, computeTwoPhase, blendedYield,
+  salariedCount, computeTwoPhase, blendedYield, comprehensiveTax,
 } from '@/lib/corpSim'
 import type { CorpSimPlan } from '@/types'
 
@@ -39,12 +39,22 @@ describe('corpSim 계산', () => {
     expect(shareSum(plan())).toBe(100)
   })
 
-  it('개인 시나리오: 금융소득 2천만 초과 시 종합과세 추가', () => {
+  it('개인 시나리오: 금융소득 2천만 초과 시 종합과세(누진) 추가', () => {
     const p = plan({ targetDividendTotal: 48_000_000 })
     const r = computePersonal(p)
     expect(r.dividendTax).toBeCloseTo(48_000_000 * 0.154)
-    // 4800만 > 2000만 → 초과분 2800만 × 0.35
-    expect(r.combinedExtra).toBeCloseTo(28_000_000 * 0.35)
+    // 4800만 > 2000만 → 초과분 2800만, 종합소득 2800만(연금 0) → 15% 구간
+    // comprehensiveTax(2800만) = 2800만×0.15 - 126만 = 294만
+    expect(r.combinedExtra).toBeCloseTo(28_000_000 * 0.15 - 1_260_000)
+    expect(r.marginalRate).toBeGreaterThan(0)
+  })
+
+  it('comprehensiveTax: 누진구간 경계', () => {
+    expect(comprehensiveTax(10_000_000)).toBeCloseTo(10_000_000 * 0.06)       // 6%
+    expect(comprehensiveTax(14_000_000)).toBeCloseTo(14_000_000 * 0.06)        // 6% 경계
+    expect(comprehensiveTax(20_000_000)).toBeCloseTo(20_000_000 * 0.15 - 1_260_000) // 15%
+    expect(comprehensiveTax(60_000_000)).toBeCloseTo(60_000_000 * 0.24 - 5_760_000) // 24%
+    expect(comprehensiveTax(100_000_000)).toBeCloseTo(100_000_000 * 0.35 - 15_440_000) // 35%
   })
 
   it('자녀 누적: 매년 동액 누적', () => {

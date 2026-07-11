@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Save, ChevronDown, AlertTriangle, Trash2, RefreshCw } from 'lucide-react'
 import { useCorpSim, useSaveCorpSim } from '@/hooks/useCorpSim'
+import { useAssets } from '@/hooks/useAssets'
+import { useSettings } from '@/hooks/useSettings'
+import { useRetirement } from '@/hooks/useRetirement'
 import {
   EMPTY_CORP_PLAN, DEFAULT_CORP_TAX, grossDividend, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway, totalInvest,
-  computeTwoPhase, blendedYield, salariedCount,
+  computeTwoPhase, blendedYield, salariedCount, comprehensiveTax,
 } from '@/lib/corpSim'
+import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatManwon } from '@/lib/utils'
 import type { CorpSimPlan, CorpTaxParams, PortfolioHolding, PortfolioYield } from '@/types'
 
@@ -102,6 +106,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export default function CorpSimPage() {
   const { data: saved } = useCorpSim()
   const saveMut = useSaveCorpSim()
+  const { data: allAssets = [] } = useAssets()
+  const { data: settings } = useSettings()
+  const { data: retirementPlan } = useRetirement()
 
   const [plan, setPlan] = useState<CorpSimPlan>(EMPTY_CORP_PLAN)
   const [dirty, setDirty] = useState(false)
@@ -154,15 +161,25 @@ export default function CorpSimPage() {
     setLoadingYields(false)
   }
 
-  const corp = computeCorp(plan)
-  const personal = computePersonal(plan)
-  const accum = sonAccumulation(plan, sonYears)
-  const months = returnMonths(plan)
-  const recommend = recommendDividendForSon(plan)
-  const shareOk = shareSum(plan) === 100
-  const runway = simulateRunway(plan)
+  // ── 연금 자동 연동 ──
+  const currentAge = settings?.currentAge ?? 40
+  const retirementYear = retirementPlan?.retirementYear ?? new Date().getFullYear() + 10
+  let pensionAnnual = plan.pensionIncomeAnnual
+  if (plan.linkPension) {
+    const pensionMap = calcPensionByYear(allAssets, currentAge)
+    pensionAnnual = (pensionMap.get(retirementYear) ?? 0) * 12
+  }
+  const effectivePlan: CorpSimPlan = { ...plan, pensionIncomeAnnual: pensionAnnual }
+
+  const corp = computeCorp(effectivePlan)
+  const personal = computePersonal(effectivePlan)
+  const accum = sonAccumulation(effectivePlan, sonYears)
+  const months = returnMonths(effectivePlan)
+  const recommend = recommendDividendForSon(effectivePlan)
+  const shareOk = shareSum(effectivePlan) === 100
+  const runway = simulateRunway(effectivePlan)
   const firstNet = runway.rows[0]?.net ?? 0
-  const twoPhase = computeTwoPhase(plan)
+  const twoPhase = computeTwoPhase(effectivePlan)
 
   // After 소득세 = 법인세 + 주주 배당세 총합(distributable × 15.4%)
   const afterTax = corp.corpTax + corp.distributable * plan.tax.dividendTaxRate
@@ -231,6 +248,17 @@ export default function CorpSimPage() {
             <input type="checkbox" checked={plan.sonEmployed} onChange={(e) => update('sonEmployed', e.target.checked)} className="accent-blue-500" />
             아들 취업 상태 (건보 마진 한계 2천만 / 미취업 1천만)
           </label>
+          <div className="pt-2 border-t border-gray-700">
+            <label className={`flex items-center gap-2 text-sm cursor-pointer py-1 ${plan.linkPension ? 'text-blue-400' : 'text-gray-400'}`}>
+              <input type="checkbox" checked={plan.linkPension} onChange={(e) => update('linkPension', e.target.checked)} className="accent-blue-500" />
+              🏛️ 연금 자동 연동 (은퇴 계획에서)
+            </label>
+            {plan.linkPension ? (
+              <Row label="연금소득(연·자동)"><span className="text-sm text-blue-400 text-right w-full block">{formatManwon(pensionAnnual)} <span className="text-gray-500">({retirementYear}년 기준)</span></span></Row>
+            ) : (
+              <Row label="연금소득(연·수동)"><AmountInput value={plan.pensionIncomeAnnual} onChange={(v) => update('pensionIncomeAnnual', v)} /></Row>
+            )}
+          </div>
           <p className="text-[11px] text-gray-600 pt-2 border-t border-gray-700">
             비교용 가정(개인명의 건보·승계재산·설립비)는 입력하지 않아도 됨 — 기본값으로 표시. 변경은 아래 <b>'세제 · 비교 파라미터'</b>에서.
           </p>
@@ -404,7 +432,7 @@ export default function CorpSimPage() {
                 <td className="text-right py-2 pl-2 text-emerald-400">{formatManwon(corp.corpHealthAnnual)}</td>
               </tr>
               <tr className="border-b border-gray-700/50">
-                <td className="py-2 pr-3 text-gray-300">소득세(연·배당관련)</td>
+                <td className="py-2 pr-3 text-gray-300">소득세(연·배당관련){personal.marginalRate > 0 && <span className="text-[10px] text-gray-600 block">한계 {(personal.marginalRate * 100).toFixed(0)}%</span>}</td>
                 <td className="text-right py-2 px-2 text-red-400">{formatManwon(beforeTax)}</td>
                 <td className="text-right py-2 pl-2 text-emerald-400">{formatManwon(afterTax)}</td>
               </tr>
@@ -472,7 +500,7 @@ export default function CorpSimPage() {
                 </tr>
                 {twoPhase.combinedExtra > 0 && (
                   <tr className="border-b border-gray-700/50">
-                    <td className="py-2 pr-3 text-gray-300">종합과세(초과분)</td>
+                    <td className="py-2 pr-3 text-gray-300">종합과세(초과분) <span className="text-[10px] text-gray-600">한계 {(twoPhase.marginalRate * 100).toFixed(0)}%</span></td>
                     <td className="text-right py-2 px-2 text-gray-500">—</td>
                     <td className="text-right py-2 pl-2 text-red-400">{formatManwon(twoPhase.combinedExtra)}</td>
                   </tr>
@@ -539,8 +567,12 @@ export default function CorpSimPage() {
             <Field label="법인세 구분 기준"><AmountInput value={plan.tax.corpTaxThreshold} onChange={(v) => updateTax('corpTaxThreshold', v)} /></Field>
             <Field label="배당소득세율"><NumInput value={plan.tax.dividendTaxRate * 100} onChange={(v) => updateTax('dividendTaxRate', v / 100)} suffix="%" /></Field>
             <Field label="금융소득종합과세 기준(연)"><AmountInput value={plan.tax.finIncomeCombinedThr} onChange={(v) => updateTax('finIncomeCombinedThr', v)} /></Field>
-            <Field label="종합한계세율(추정)"><NumInput value={plan.tax.combinedMarginalRate * 100} onChange={(v) => updateTax('combinedMarginalRate', v / 100)} suffix="%" /></Field>
             <Field label="자녀 승계 세율(추정)"><NumInput value={plan.tax.giftTaxRate * 100} onChange={(v) => updateTax('giftTaxRate', v / 100)} suffix="%" /></Field>
+          </div>
+          <p className="text-xs text-gray-400 pt-3">종합소득세 누진구간 (자동 적용)</p>
+          <div className="text-[11px] text-gray-500 space-y-0.5 bg-gray-900/50 rounded-lg p-3">
+            <p>~1,400만: 6% / ~5,000만: 15% / ~8,800만: 24%</p>
+            <p>~1.5억: 35% / 1.5억~: 38% (한국 종합소득세)</p>
           </div>
         </Section>
       </Expander>
