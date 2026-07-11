@@ -142,6 +142,7 @@ export interface RetirementPlan {
   emergency:       EmergencyItem[]
   retirementYear:  number
   healthInsurance: HealthInsuranceInputs
+  linkCorpSim:     boolean
 }
 
 // ── 투자법인 시뮬레이터 ────────────────────────────────────

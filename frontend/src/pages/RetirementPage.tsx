@@ -4,6 +4,8 @@ import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { useDividendSummary } from '@/hooks/useDividends'
+import { useCorpSim } from '@/hooks/useCorpSim'
+import { computeCorp, salariedCount } from '@/lib/corpSim'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
   Asset, PensionDetail, StockDetail, SavingsDetail,
@@ -145,6 +147,7 @@ const EMPTY_PLAN: RetirementPlan = {
   emergency:       [],
   retirementYear:  new Date().getFullYear() + 10,
   healthInsurance: DEFAULT_HI,
+  linkCorpSim:     false,
 }
 
 // ── 유틸 ───────────────────────────────────────────────────
@@ -714,6 +717,8 @@ interface CashFlowRow {
   age:                     number
   pensionMonthly:          number
   dividendMonthly:         number
+  corpSalaryMonthly:       number
+  corpReturnMonthly:       number
   expenseMonthly:          number
   travelMonthly:           number
   medicalMonthly:          number
@@ -732,6 +737,8 @@ function buildCashFlow(
   currentAge: number,
   dividendMonthly: number,
   healthInsuranceMonthly: number,
+  corpSalaryMonthly: number = 0,
+  corpReturnMonthly: number = 0,
 ): CashFlowRow[] {
   const currentYear = new Date().getFullYear()
   const endYear = currentYear + (100 - currentAge)
@@ -763,14 +770,15 @@ function buildCashFlow(
     const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
 
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly
-    const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly
+    const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     const balance      = totalIncome - totalExpense
 
     cumulative += balance * 12 - emergencyAnnual
 
     rows.push({
       year, age,
-      pensionMonthly, dividendMonthly, expenseMonthly, travelMonthly,
+      pensionMonthly, dividendMonthly, corpSalaryMonthly, corpReturnMonthly,
+      expenseMonthly, travelMonthly,
       medicalMonthly: num(plan.medicalMonthly),
       healthInsuranceMonthly,
       totalExpense, lumpsumMonthly, totalIncome, balance,
@@ -803,6 +811,7 @@ export default function RetirementPage() {
         emergency:      saved.emergency      ?? [],
         retirementYear:  saved.retirementYear  ?? new Date().getFullYear() + 10,
         healthInsurance: saved.healthInsurance  ? { ...DEFAULT_HI, ...saved.healthInsurance } : DEFAULT_HI,
+        linkCorpSim:     saved.linkCorpSim ?? false,
       })
     }
   }, [saved])
@@ -823,21 +832,32 @@ export default function RetirementPage() {
     return false
   })
   const { data: divSummary } = useDividendSummary()
-  const dividendMonthly = divSummary?.totalMonthly ?? 0
+  const stockDivMonthly = divSummary?.totalMonthly ?? 0
+
+  // ── 투자법인 연동 ──
+  const { data: corpPlan } = useCorpSim()
+  const linked = plan.linkCorpSim && !!corpPlan
+  const corp = linked ? computeCorp(corpPlan!) : null
+  const corpDivMonthly = corp ? (corp.perShare.husband.net + corp.perShare.wife.net) / 12 : 0
+  const corpSalaryMonthly = linked ? corpPlan!.repSalaryMonthly + corpPlan!.repSalaryHusbandMonthly : 0
+  const corpReturnMonthly = linked ? corpPlan!.monthlyReturn : 0
+  const totalDivMonthly = stockDivMonthly + corpDivMonthly
 
   const pensionMap = calcPensionByYear(pensionLikeAssets, currentAge)
 
-  // 건강보험료 계산 (은퇴 시점 기준 연금 수입 기준)
+  // 건강보험료: 연동 시 직장건보(급여 기준), 미연동 시 지역건보(재산+소득 점수)
   const retirementYear    = plan.retirementYear
   const retirementPensionMonthly = pensionMap.get(retirementYear) ?? 0
   const hiResult = calcHealthInsurance(
     plan.healthInsurance,
     retirementPensionMonthly,
-    dividendMonthly,
+    stockDivMonthly,
   )
-  const healthInsuranceMonthly = hiResult.grandTotal
+  const healthInsuranceMonthly = linked
+    ? salariedCount(corpPlan!) * corpPlan!.employeeHealthMonthly
+    : hiResult.grandTotal
 
-  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, dividendMonthly, healthInsuranceMonthly)
+  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, totalDivMonthly, healthInsuranceMonthly, corpSalaryMonthly, corpReturnMonthly)
 
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
@@ -863,6 +883,10 @@ export default function RetirementPage() {
             />
             <span className="text-xs sm:text-sm text-gray-500">년</span>
           </div>
+          <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${linked ? 'text-blue-400' : 'text-gray-500'}`}>
+            <input type="checkbox" checked={plan.linkCorpSim} onChange={(e) => update('linkCorpSim', e.target.checked)} className="accent-blue-500" />
+            🏛️ 법인 연동
+          </label>
           <button
             onClick={handleSave}
             disabled={!dirty || saveMut.isPending}
@@ -947,7 +971,7 @@ export default function RetirementPage() {
           onChange={(v) => update('healthInsurance', v)}
           result={hiResult}
           pensionAutoMonthly={retirementPensionMonthly}
-          dividendAutoMonthly={dividendMonthly}
+          dividendAutoMonthly={stockDivMonthly}
         />
       </Expander>
 
@@ -963,6 +987,8 @@ export default function RetirementPage() {
                 <th className="text-right py-2 px-2 font-medium">나이</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">연금/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">배당/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">급여/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">가수금/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">목돈/월</th>
                 <th className="text-right py-2 px-2 font-medium">월수입</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">생활비/월</th>
@@ -996,6 +1022,12 @@ export default function RetirementPage() {
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-2 text-emerald-400">
                       {row.dividendMonthly > 0 ? fmtK(row.dividendMonthly) : '—'}
+                    </td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-blue-400">
+                      {row.corpSalaryMonthly > 0 ? fmtK(row.corpSalaryMonthly) : '—'}
+                    </td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-cyan-400">
+                      {row.corpReturnMonthly > 0 ? fmtK(row.corpReturnMonthly) : '—'}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-300">
                       {row.lumpsumMonthly > 0 ? fmtK(row.lumpsumMonthly) : '—'}
