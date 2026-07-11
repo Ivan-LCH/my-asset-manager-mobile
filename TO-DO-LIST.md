@@ -41,8 +41,8 @@
   - tsc + vitest(전체) + dev `/api/yield` curl + 화면 확인 → push → 운영 해시 일치/`/api/yield` 동작 확인
 
 ### 🔵 은퇴 ↔ CorpSim 연동 1단계 (2026-07-11)
-- [ ] **LK-1. types**: RetirementPlan.linkCorpSim + CashFlowRow(corpSalaryMonthly, corpReturnMonthly)
-- [ ] **LK-2. RetirementPage**: useCorpSim 읽기, buildCashFlow linked 분기(법인 배당·급여·가수금+직장건보), 토글 UI, 표 신규 열
-- [ ] **LK-3. 검증 + 커밋&push**
+- [O] **LK-1. types**: RetirementPlan.linkCorpSim + CashFlowRow(corpSalaryMonthly, corpReturnMonthly)
+- [O] **LK-2. RetirementPage**: useCorpSim 읽기, buildCashFlow linked 분기(법인 배당·급여·가수금+직장건보), 토글 UI, 표 신규 열
+- [O] **LK-3. 검증 + 커밋&push**
 
 <!-- 완료 항목은 TO-DO-ARCHIVE.md 로 이동 -->

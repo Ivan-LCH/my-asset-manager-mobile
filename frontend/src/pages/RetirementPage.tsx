@@ -739,6 +739,7 @@ function buildCashFlow(
   healthInsuranceMonthly: number,
   corpSalaryMonthly: number = 0,
   corpReturnMonthly: number = 0,
+  corpLoanOutflow: number = 0,
 ): CashFlowRow[] {
   const currentYear = new Date().getFullYear()
   const endYear = currentYear + (100 - currentAge)
@@ -768,6 +769,7 @@ function buildCashFlow(
     }, 0)
 
     const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
+      + (year === SIM_START_YEAR ? corpLoanOutflow : 0)  // 법인 가수금 최초 유출(1회)
 
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly
     const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
@@ -857,7 +859,7 @@ export default function RetirementPage() {
     ? salariedCount(corpPlan!) * corpPlan!.employeeHealthMonthly
     : hiResult.grandTotal
 
-  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, totalDivMonthly, healthInsuranceMonthly, corpSalaryMonthly, corpReturnMonthly)
+  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, totalDivMonthly, healthInsuranceMonthly, corpSalaryMonthly, corpReturnMonthly, linked ? corpPlan!.loanAmount : 0)
 
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
