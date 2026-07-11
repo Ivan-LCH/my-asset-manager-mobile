@@ -725,6 +725,7 @@ interface CashFlowRow {
   healthInsuranceMonthly:  number
   totalExpense:            number
   lumpsumMonthly:          number
+  lumpsumReceived:         number
   totalIncome:             number
   balance:                 number
   emergencyAnnual:         number
@@ -787,7 +788,7 @@ function buildCashFlow(
       expenseMonthly, travelMonthly,
       medicalMonthly: num(plan.medicalMonthly),
       healthInsuranceMonthly,
-      totalExpense, lumpsumMonthly, totalIncome, balance,
+      totalExpense, lumpsumMonthly, lumpsumReceived, totalIncome, balance,
       emergencyAnnual, cumulative,
     })
   }
@@ -989,22 +990,21 @@ export default function RetirementPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="text-gray-500 border-b border-gray-700">
-                <th className="text-left py-2 pr-3 font-medium">연도</th>
-                <th className="text-right py-2 px-2 font-medium">나이</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">연금/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">배당/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">급여/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">가수금/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">목돈/월</th>
-                <th className="text-right py-2 px-2 font-medium">월수입</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">생활비/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">여행/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">의료/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">건보/월</th>
-                <th className="text-right py-2 px-2 font-medium">월지출</th>
-                <th className="text-right py-2 px-2 font-medium">+/-</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-2 font-medium">긴급지출</th>
-                <th className="text-right py-2 pl-2 font-medium">누적</th>
+                <th className="text-left py-2 pr-2 font-medium whitespace-nowrap">연도(나이)</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">연금/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">배당/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">급여/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">가수금/월</th>
+                <th className="text-right py-2 px-1 font-medium">월수입</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">생활비/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">여행/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">의료/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">건보/월</th>
+                <th className="text-right py-2 px-1 font-medium">월지출</th>
+                <th className="text-right py-2 px-1 font-medium">+/-</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">목돈</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">긴급지출</th>
+                <th className="text-right py-2 pl-1 font-medium">누적</th>
               </tr>
             </thead>
             <tbody>
@@ -1018,49 +1018,48 @@ export default function RetirementPage() {
                       isRetirementYear ? 'bg-blue-500/10' : 'hover:bg-gray-700/30'
                     }`}
                   >
-                    <td className={`py-2 pr-3 font-medium ${isRetirementYear ? 'text-blue-400' : 'text-gray-300'}`}>
-                      {row.year}
+                    <td className={`py-2 pr-2 font-medium whitespace-nowrap ${isRetirementYear ? 'text-blue-400' : 'text-gray-300'}`}>
+                      {row.year}<span className="text-gray-500">({row.age})</span>
                       {isRetirementYear && <span className="ml-1 text-[10px] text-blue-500">은퇴</span>}
                     </td>
-                    <td className="text-right py-2 px-2 text-gray-400">{row.age}세</td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-300">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-300">
                       {row.pensionMonthly > 0 ? fmtK(row.pensionMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-emerald-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-emerald-400">
                       {row.dividendMonthly > 0 ? fmtK(row.dividendMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-blue-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-400">
                       {row.corpSalaryMonthly > 0 ? fmtK(row.corpSalaryMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-cyan-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-cyan-400">
                       {row.corpReturnMonthly > 0 ? fmtK(row.corpReturnMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-300">
-                      {row.lumpsumMonthly > 0 ? fmtK(row.lumpsumMonthly) : '—'}
-                    </td>
-                    <td className="text-right py-2 px-2 font-semibold text-gray-100">
+                    <td className="text-right py-2 px-1 font-semibold text-gray-100">
                       {fmtK(row.totalIncome)}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">{fmtK(row.expenseMonthly)}</td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">{fmtK(row.expenseMonthly)}</td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
                       {row.travelMonthly > 0 ? fmtK(row.travelMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
                       {row.medicalMonthly > 0 ? fmtK(row.medicalMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-2 text-gray-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
                       {row.healthInsuranceMonthly > 0 ? fmtK(row.healthInsuranceMonthly) : '—'}
                     </td>
-                    <td className="text-right py-2 px-2 font-semibold text-gray-100">
+                    <td className="text-right py-2 px-1 font-semibold text-gray-100">
                       {fmtK(row.totalExpense)}
                     </td>
-                    <td className={`text-right py-2 px-2 font-bold ${pnlColor(row.balance)}`}>
+                    <td className={`text-right py-2 px-1 font-bold ${pnlColor(row.balance)}`}>
                       {row.balance >= 0 ? '+' : ''}{fmtK(row.balance)}
                     </td>
-                    <td className={`hidden landscape:table-cell text-right py-2 px-2 ${hasEmergency ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
+                    <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.lumpsumReceived > 0 ? 'text-emerald-400 font-semibold' : 'text-gray-600'}`}>
+                      {row.lumpsumReceived > 0 ? '+' : ''}{row.lumpsumReceived > 0 ? fmtK(row.lumpsumReceived) : '—'}
+                    </td>
+                    <td className={`hidden landscape:table-cell text-right py-2 px-1 ${hasEmergency ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
                       {hasEmergency ? fmtK(row.emergencyAnnual) : '—'}
                     </td>
-                    <td className={`text-right py-2 pl-2 font-semibold ${pnlColor(row.cumulative)}`}>
+                    <td className={`text-right py-2 pl-1 font-semibold ${pnlColor(row.cumulative)}`}>
                       {row.cumulative >= 0 ? '+' : ''}{fmtK(row.cumulative)}
                     </td>
                   </tr>
