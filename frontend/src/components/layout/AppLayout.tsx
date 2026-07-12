@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import Sidebar, { DrawerNav } from './Sidebar'
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
 
   // 라우트 변경 시 드로어 닫기
@@ -14,8 +15,20 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
-      {/* 데스크톱 사이드바 (md 이상에서만) */}
-      <Sidebar />
+      {/* 데스크톱 사이드바 (lg 이상, 접기 가능) */}
+      {!sidebarCollapsed && <Sidebar />}
+      {/* 사이드바 토글 버튼 (데스크톱만) */}
+      <button
+        onClick={() => setSidebarCollapsed((v) => !v)}
+        aria-label={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 숨기기'}
+        className={`hidden lg:flex items-center justify-center w-6 bg-gray-900 border-r border-gray-800 hover:bg-gray-800 transition-colors shrink-0 ${
+          sidebarCollapsed ? 'h-14' : 'h-full'
+        }`}
+      >
+        {sidebarCollapsed
+          ? <PanelLeftOpen className="w-4 h-4 text-gray-400" />
+          : <PanelLeftClose className="w-4 h-4 text-gray-400" />}
+      </button>
 
       {/* 모바일 상단 헤더 + 본문 컬럼 */}
       <div className="flex-1 flex flex-col min-w-0">
