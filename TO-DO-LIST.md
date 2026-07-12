@@ -55,8 +55,18 @@
 - [O] **TX-7. 검증(tsc+vitest) + 커밋&push**
 
 ### 🔵 Phase 1/2 연도별 전환 (중복 계산 수정)
-- [ ] **P2-1. RetirementPage buildCashFlow: CorpCashFlow 인터페이스 + 시그니처 변경 + 루프내 Phase 분기**
-- [ ] **P2-2. 컴포넌트: CorpCashFlow 계산 + buildCashFlow 호출부 수정**
-- [ ] **P2-3. 검증(tsc+vitest) + 커밋&push**
+- [O] **P2-1. RetirementPage buildCashFlow: CorpCashFlow 인터페이스 + 시그니처 변경 + 루프내 Phase 분기**
+- [O] **P2-2. 컴포넌트: CorpCashFlow 계산 + buildCashFlow 호출부 수정**
+- [O] **P2-3. 검증(tsc+vitest) + 커밋&push**
+
+### 🔵 전면 수정: 중복계산/건보/표시 개선 (RF-1~RF-8)
+- [ ] **RF-1. 법인 배당 share%+tax 수정 (P0 버그)**: corpCF divP1/P2에 coupleShare×(1-divTaxRate) 적용
+- [ ] **RF-2. 법인세 기준 통일 (P0)**: computeCorp + simulateRunway에 급여 공제 적용
+- [ ] **RF-3. 건보 자동 산정 (P1)**: employeeHealthMonthly 제거 → salary×rate×0.5, healthInsRate 파라미터화
+- [ ] **RF-4. 미사용 pensionAnnual 블록 제거 (P2)**: RetirementPage 중복 계산 정리
+- [ ] **RF-5. 건보 표시 개선 (P2)**: "건보/월(직장)" 헤더 + per-person 표시
+- [ ] **RF-6. Phase 1/2 전환 표시 (P2)**: 가수금 소진 연도 행에 배지
+- [ ] **RF-7. 배당 열 출처 표시 (P2)**: "(개인+법인)" 힌트
+- [ ] **RF-8. 검증(tsc+vitest) + 커밋&push**
 
 <!-- 완료 항목은 TO-DO-ARCHIVE.md 로 이동 -->

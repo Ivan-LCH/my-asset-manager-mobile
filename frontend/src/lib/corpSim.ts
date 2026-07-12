@@ -4,13 +4,14 @@ import type { CorpSimPlan, CorpTaxParams } from '@/types'
 
 /** 세제 파라미터 기본값 (2024년 경 기준 추정치 — 실제는 세무사 확인) */
 export const DEFAULT_CORP_TAX: CorpTaxParams = {
-  corpTaxRateLow:       0.09,    // 법인세 과세표준 2억 이하
-  corpTaxRateMid:       0.19,    // 2억 초과
+  corpTaxRateLow:       0.09,
+  corpTaxRateMid:       0.19,
   corpTaxThreshold:     200_000_000,
-  dividendTaxRate:      0.154,   // 배당소득세 15.4%
-  finIncomeCombinedThr: 20_000_000, // 금융소득종합과세 기준(연, 부부합산)
-  giftTaxRate:          0.30,    // 자녀 승계 비교용 증여/상속 세율 추정
-  salaryTaxRate:        0.03,    // 급여 소득세 추정률
+  dividendTaxRate:      0.154,
+  finIncomeCombinedThr: 20_000_000,
+  giftTaxRate:          0.30,
+  salaryTaxRate:        0.03,
+  healthInsRate:        0.0709,  // 건강보험료율 (본인부담 50% 별도 적용)
 }
 
 /** 입력 기본값 (보고서 기준 샘플) */
@@ -27,7 +28,6 @@ export const EMPTY_CORP_PLAN: CorpSimPlan = {
   sonEmployed:             false,
   annualMaintCost:         1_200_000,
   monthlyReturn:           3_500_000,
-  employeeHealthMonthly:   70_000,
   personalHealthAnnual:    7_800_000,
   giftTaxBase:             600_000_000,
   setupCost:               2_000_000,
@@ -44,6 +44,19 @@ export const EMPTY_CORP_PLAN: CorpSimPlan = {
 /** 급여 받는 임원 수(직장건보 대상). 부부 모두 월급이면 2. */
 export const salariedCount = (plan: CorpSimPlan): number =>
   (plan.repSalaryMonthly > 0 ? 1 : 0) + (plan.repSalaryHusbandMonthly > 0 ? 1 : 0)
+
+/** 직장건보 월 합계 = 각 급여자별 salary × healthInsRate × 50%(본인부담) 의 합 */
+export function corpHealthMonthly(plan: CorpSimPlan): number {
+  const rate = plan.tax.healthInsRate * 0.5
+  let sum = 0
+  if (plan.repSalaryMonthly > 0) sum += plan.repSalaryMonthly * rate
+  if (plan.repSalaryHusbandMonthly > 0) sum += plan.repSalaryHusbandMonthly * rate
+  return Math.round(sum)
+}
+
+/** 부부 합산 연간 급여 */
+export const salariesAnnual = (plan: CorpSimPlan): number =>
+  (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
 
 /** 배당주 포트폴리오 가중평균 수익률(%). yields: 각 ticker의 3년평균 수익률 */
 export function blendedYield(
@@ -109,13 +122,15 @@ export interface CorpResult {
 /** 법인 시나리오 계산 */
 export function computeCorp(plan: CorpSimPlan): CorpResult {
   const gross = grossDividend(plan)
-  const tax = corpTaxOn(gross, plan.tax)
-  const distributable = gross - tax
+  const salAnnual = salariesAnnual(plan)
+  const taxable = Math.max(0, gross - salAnnual)  // 급여는 법인 비용(공제)
+  const tax = corpTaxOn(taxable, plan.tax)
+  const distributable = gross - tax - salAnnual   // 급여·법인세 지급 후 잔여 = 배당가능액
   const split = (pct: number): PerShare => {
     const g = distributable * (pct / 100)
     return { gross: g, net: g * (1 - plan.tax.dividendTaxRate) }
   }
-  const corpHealthAnnual = salariedCount(plan) * plan.employeeHealthMonthly * 12
+  const corpHealthAnnual = corpHealthMonthly(plan) * 12
   const maintAnnual = plan.annualMaintCost
   return {
     grossDividend: gross,
@@ -223,7 +238,8 @@ export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
 
   for (let i = 1; i <= maxYears; i++) {
     const cashIn = principal * (plan.dividendYield / 100)
-    const tax = corpTaxOn(cashIn, plan.tax)
+    const corpTaxable = Math.max(0, cashIn - salaryAnnual)  // 급여는 법인 비용(공제)
+    const tax = corpTaxOn(corpTaxable, plan.tax)
     const net = cashIn - tax - familyDraw
     rows.push({
       year: baseYear + i,
@@ -267,7 +283,7 @@ export function computeTwoPhase(plan: CorpSimPlan): TwoPhaseResult {
   const gross = grossDividend(plan)
   const corpTaxable = Math.max(0, gross - salariesAnnual)
   const corpTax = corpTaxOn(corpTaxable, plan.tax)
-  const corpHealth = salariedCount(plan) * plan.employeeHealthMonthly * 12
+  const corpHealth = corpHealthMonthly(plan) * 12
   const salaryTax = salariesAnnual * plan.tax.salaryTaxRate
 
   // Phase2: 가수금 몫(monthlyReturn×12)을 배당으로 인출

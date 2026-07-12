@@ -7,7 +7,7 @@ import { useRetirement } from '@/hooks/useRetirement'
 import {
   EMPTY_CORP_PLAN, DEFAULT_CORP_TAX, grossDividend, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway, totalInvest,
-  computeTwoPhase, blendedYield, salariedCount, comprehensiveTax,
+  computeTwoPhase, blendedYield, salariedCount, comprehensiveTax, corpHealthMonthly,
 } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatManwon } from '@/lib/utils'
@@ -243,7 +243,11 @@ export default function CorpSimPage() {
           </div>
           <Row label="대표(아내) 월급"><AmountInput value={plan.repSalaryMonthly} onChange={(v) => update('repSalaryMonthly', v)} /></Row>
           <Row label="남편(본인) 월급"><AmountInput value={plan.repSalaryHusbandMonthly} onChange={(v) => update('repSalaryHusbandMonthly', v)} /></Row>
-          <Row label="직장건보(월·1인분)"><AmountInput value={plan.employeeHealthMonthly} onChange={(v) => update('employeeHealthMonthly', v)} /></Row>
+          <Row label="직장건보(월·자동)">
+            <span className="text-sm text-blue-400 text-right w-full block">
+              {formatManwon(corpHealthMonthly(effectivePlan))} <span className="text-gray-500 text-[11px]">(급여×{(plan.tax.healthInsRate * 100).toFixed(2)}%×50%)</span>
+            </span>
+          </Row>
           <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer py-1">
             <input type="checkbox" checked={plan.sonEmployed} onChange={(e) => update('sonEmployed', e.target.checked)} className="accent-blue-500" />
             아들 취업 상태 (건보 마진 한계 2천만 / 미취업 1천만)

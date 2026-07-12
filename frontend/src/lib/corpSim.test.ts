@@ -99,9 +99,13 @@ describe('corpSim 계산', () => {
     expect(salariedCount(plan({ repSalaryHusbandMonthly: 0 }))).toBe(1)
   })
 
-  it('computeCorp: 건보는 급여받는 인원수 × 직장건보', () => {
-    expect(computeCorp(plan()).corpHealthAnnual).toBe(2 * 70_000 * 12)
-    expect(computeCorp(plan({ repSalaryHusbandMonthly: 0 })).corpHealthAnnual).toBe(1 * 70_000 * 12)
+  it('computeCorp: 건보는 급여 × healthInsRate × 50% (자동 산정)', () => {
+    // 기본값: 급여 100만 × 2명 × 7.09% × 50% × 12
+    const expected = Math.round(1_000_000 * 0.0709 * 0.5) * 2 * 12
+    expect(computeCorp(plan()).corpHealthAnnual).toBe(expected)
+    // 남편 급여 0 → 1명분
+    const one = Math.round(1_000_000 * 0.0709 * 0.5) * 1 * 12
+    expect(computeCorp(plan({ repSalaryHusbandMonthly: 0 })).corpHealthAnnual).toBe(one)
   })
 
   it('computeTwoPhase: Phase2 비용이 Phase1보다 크다 (배당세 추가)', () => {
