@@ -5,7 +5,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
-import { computeCorp, corpTaxOn, corpHealthMonthly } from '@/lib/corpSim'
+import { computeCorp, corpTaxOn, corpHealthMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
@@ -827,7 +827,11 @@ export default function RetirementPage() {
   const stockDivMonthly = divSummary?.totalMonthly ?? 0
 
   // ── 투자법인 연동 ──
-  const { data: corpPlan } = useCorpSim()
+  const { data: rawCorpPlan } = useCorpSim()
+  // 구버전 저장 데이터 방어: EMPTY_CORP_PLAN + DEFAULT_CORP_TAX 로 머지
+  const corpPlan = rawCorpPlan
+    ? { ...EMPTY_CORP_PLAN, ...rawCorpPlan, tax: { ...DEFAULT_CORP_TAX, ...(rawCorpPlan.tax ?? {}) } }
+    : null
   const linked = plan.linkCorpSim && !!corpPlan
 
   // 법인 현금흐름 Phase 1/2 계산

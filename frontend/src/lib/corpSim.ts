@@ -47,7 +47,7 @@ export const salariedCount = (plan: CorpSimPlan): number =>
 
 /** 직장건보 월 합계 = 각 급여자별 salary × healthInsRate × 50%(본인부담) 의 합 */
 export function corpHealthMonthly(plan: CorpSimPlan): number {
-  const rate = plan.tax.healthInsRate * 0.5
+  const rate = (plan.tax.healthInsRate ?? 0.0709) * 0.5
   let sum = 0
   if (plan.repSalaryMonthly > 0) sum += plan.repSalaryMonthly * rate
   if (plan.repSalaryHusbandMonthly > 0) sum += plan.repSalaryHusbandMonthly * rate
