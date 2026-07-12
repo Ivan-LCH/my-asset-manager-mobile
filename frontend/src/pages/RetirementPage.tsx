@@ -920,7 +920,7 @@ export default function RetirementPage() {
           <p className="text-[13px] sm:text-lg font-bold text-red-400">
             {retirementRow ? formatManwon(retirementRow.totalExpense) : '-'}
           </p>
-          <p className="text-[11px] text-gray-600 mt-0.5">생활비+여행+의료+건보</p>
+          <p className="text-[11px] text-gray-600 mt-0.5">생활비+여행+의료+건보 · {retirementYear}년</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">월 수입</p>
