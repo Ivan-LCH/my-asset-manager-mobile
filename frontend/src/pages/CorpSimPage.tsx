@@ -333,16 +333,18 @@ export default function CorpSimPage() {
       {/* 결과 상세 */}
       <Expander title="📊 결과 — 법인 시나리오 상세" badge={`법인세 ${formatManwon(corp.corpTax)}`}>
         <Section>
-          <Row label="배당총액(세전)"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(corp.grossDividend)}</span></Row>
-          <Row label="법인세"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.corpTax)}</span></Row>
-          <Row label="배당가능(세후)"><span className="text-sm text-emerald-400 text-right w-full block">{formatManwon(corp.distributable)}</span></Row>
+          <Row label="ETF 배당 수입(연)"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(corp.grossDividend)}</span></Row>
+          <Row label="− 법인세"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.corpTax)}</span></Row>
+          <Row label="− 급여(부부, 법인 비용)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon((plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12)}</span></Row>
+          <Row label="= 배당가능(잔여)"><span className="text-sm text-emerald-400 text-right w-full block">{formatManwon(corp.distributable)}</span></Row>
+          <p className="text-[11px] text-gray-600 pt-2">배당가능 잔여를 주주 지분율로 분배. 주주 수령 시 <b>개인 배당소득세 15.4%</b> 원천징수 (법인세와 별개).</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs mt-2">
               <thead><tr className="text-gray-500 border-b border-gray-700">
                 <th className="text-left py-2 pr-3">주주</th>
                 <th className="text-right py-2 px-2">지분</th>
                 <th className="text-right py-2 px-2">배당(세전)</th>
-                <th className="text-right py-2 px-2">배당소득세(15.4%)</th>
+                <th className="text-right py-2 px-2">개인 배당세 15.4%</th>
                 <th className="text-right py-2 pl-2">수령(세후)</th>
               </tr></thead>
               <tbody>
