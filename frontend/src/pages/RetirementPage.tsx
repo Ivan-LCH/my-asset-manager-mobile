@@ -5,7 +5,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
-import { computeCorp, salariedCount } from '@/lib/corpSim'
+import { computeCorp, salariedCount, corpTaxOn } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
@@ -704,14 +704,22 @@ interface CashFlowRow {
   cumulative:              number
 }
 
+/** 법인 연동 현금흐름 설정 (Phase 1/2 분기용) */
+interface CorpCashFlow {
+  salaryMonthly:      number
+  phaseBoundaryYear:  number
+  returnP1Monthly:    number
+  divP1Monthly:       number
+  divP2Monthly:       number
+}
+
 function buildCashFlow(
   plan: RetirementPlan,
   pensionMap: Map<number, number>,
   currentAge: number,
-  dividendMonthly: number,
+  stockDivMonthly: number,
   healthInsuranceMonthly: number,
-  corpSalaryMonthly: number = 0,
-  corpReturnMonthly: number = 0,
+  corpCF?: CorpCashFlow,
   corpLoanOutflow: number = 0,
 ): CashFlowRow[] {
   const currentYear = new Date().getFullYear()
@@ -742,11 +750,16 @@ function buildCashFlow(
     }, 0)
 
     const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
-      + (year === SIM_START_YEAR ? corpLoanOutflow : 0)  // 법인 가수금 최초 유출(1회)
+      + (year === SIM_START_YEAR ? corpLoanOutflow : 0)
 
-    // 목돈수입: 수령 연도에 전액 일회성 유입(긴급자금의 역방향).
-    // totalIncome 의 월 분할(lumpsumMonthly)은 표시용 → 누적에서는 빼고 수령액으로 대체.
     const lumpsumReceived = plan.lumpsum.reduce((s, l) => (num(l.receiveYear) === year ? s + num(l.amount) : s), 0)
+
+    // 법인 Phase 분기: 가수금 소진 연도 기준
+    const isPhase2 = corpCF ? year > corpCF.phaseBoundaryYear : false
+    const corpSalaryMonthly = corpCF?.salaryMonthly ?? 0
+    const corpReturnMonthly = corpCF ? (isPhase2 ? 0 : corpCF.returnP1Monthly) : 0
+    const corpDiv = corpCF ? (isPhase2 ? corpCF.divP2Monthly : corpCF.divP1Monthly) : 0
+    const dividendMonthly = stockDivMonthly + corpDiv
 
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly
     const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
@@ -816,11 +829,39 @@ export default function RetirementPage() {
   // ── 투자법인 연동 ──
   const { data: corpPlan } = useCorpSim()
   const linked = plan.linkCorpSim && !!corpPlan
-  const corp = linked ? computeCorp(corpPlan!) : null
-  const corpDivMonthly = corp ? (corp.perShare.husband.net + corp.perShare.wife.net) / 12 : 0
-  const corpSalaryMonthly = linked ? corpPlan!.repSalaryMonthly + corpPlan!.repSalaryHusbandMonthly : 0
-  const corpReturnMonthly = linked ? corpPlan!.monthlyReturn : 0
-  const totalDivMonthly = stockDivMonthly + corpDivMonthly
+
+  // 연금 자동 연동 (CorpSim 에서)
+  const corpPlanData = corpPlan ?? null
+  const currentAgeForPension = settings?.currentAge ?? 40
+  let pensionIncomeAnnual = 0
+  if (corpPlanData?.linkPension) {
+    const pMap = calcPensionByYear(allAssets, currentAgeForPension)
+    const rYear = corpPlanData ? (plan.retirementYear || new Date().getFullYear() + 10) : new Date().getFullYear() + 10
+    pensionIncomeAnnual = (pMap.get(rYear) ?? 0) * 12
+  } else if (corpPlanData) {
+    pensionIncomeAnnual = corpPlanData.pensionIncomeAnnual
+  }
+  const effectiveCorpPlan = corpPlanData ? { ...corpPlanData, pensionIncomeAnnual } : null
+
+  // 법인 현금흐름 Phase 1/2 계산
+  let corpCF: CorpCashFlow | undefined
+  if (linked && effectiveCorpPlan) {
+    const ep = effectiveCorpPlan
+    const gross = ep.targetDividendTotal > 0 ? ep.targetDividendTotal : (ep.capitalContribution + ep.loanAmount) * (ep.dividendYield / 100)
+    const salariesAnnual = (ep.repSalaryMonthly + ep.repSalaryHusbandMonthly) * 12
+    const corpTax = corpTaxOn(Math.max(0, gross - salariesAnnual), ep.tax)
+    const cashAfterTax = gross - corpTax - salariesAnnual
+    const returnAnnual = ep.monthlyReturn * 12
+    const rMonths = ep.monthlyReturn > 0 ? Math.floor(ep.loanAmount / ep.monthlyReturn) : 0
+
+    corpCF = {
+      salaryMonthly: ep.repSalaryMonthly + ep.repSalaryHusbandMonthly,
+      phaseBoundaryYear: SIM_START_YEAR + Math.ceil(rMonths / 12),
+      returnP1Monthly: ep.monthlyReturn,
+      divP1Monthly: Math.max(0, cashAfterTax - returnAnnual) / 12,
+      divP2Monthly: Math.max(0, cashAfterTax) / 12,
+    }
+  }
 
   const pensionMap = calcPensionByYear(pensionLikeAssets, currentAge)
 
@@ -832,11 +873,11 @@ export default function RetirementPage() {
     retirementPensionMonthly,
     stockDivMonthly,
   )
-  const healthInsuranceMonthly = linked
-    ? salariedCount(corpPlan!) * corpPlan!.employeeHealthMonthly
+  const healthInsuranceMonthly = linked && effectiveCorpPlan
+    ? salariedCount(effectiveCorpPlan) * effectiveCorpPlan.employeeHealthMonthly
     : hiResult.grandTotal
 
-  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, totalDivMonthly, healthInsuranceMonthly, corpSalaryMonthly, corpReturnMonthly, linked ? corpPlan!.loanAmount : 0)
+  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, stockDivMonthly, healthInsuranceMonthly, corpCF, linked && effectiveCorpPlan ? effectiveCorpPlan.loanAmount : 0)
 
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
