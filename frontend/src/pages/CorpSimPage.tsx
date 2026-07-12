@@ -226,7 +226,15 @@ export default function CorpSimPage() {
         <Section>
           <Row label="출자금(자본금)"><AmountInput value={plan.capitalContribution} onChange={(v) => update('capitalContribution', v)} /></Row>
           <Row label="가수금(대여금)"><AmountInput value={plan.loanAmount} onChange={(v) => update('loanAmount', v)} /></Row>
-          <Row label="예상 배당수익률"><NumInput value={plan.dividendYield} onChange={(v) => update('dividendYield', v)} suffix="%" /></Row>
+          {plan.portfolio.length > 0 ? (
+            <Row label="배당수익률(자동)">
+              <span className="text-sm text-blue-400 text-right w-full block">
+                {plan.dividendYield}% <span className="text-gray-500 text-[11px]">(포트폴리오 산정)</span>
+              </span>
+            </Row>
+          ) : (
+            <Row label="예상 배당수익률"><NumInput value={plan.dividendYield} onChange={(v) => update('dividendYield', v)} suffix="%" /></Row>
+          )}
           <Row label="연 배당총액(0=자동)"><AmountInput value={plan.targetDividendTotal} onChange={(v) => update('targetDividendTotal', v)} placeholder="0" /></Row>
           <Row label="가수금 월 반환(생활비)"><AmountInput value={plan.monthlyReturn} onChange={(v) => update('monthlyReturn', v)} /></Row>
           <Row label="법인 연 유지비"><AmountInput value={plan.annualMaintCost} onChange={(v) => update('annualMaintCost', v)} /></Row>
