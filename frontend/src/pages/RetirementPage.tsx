@@ -1021,8 +1021,7 @@ export default function RetirementPage() {
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">가수금/월</th>
                 <th className="text-right py-2 px-1 font-medium">월수입</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">생활비/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">여행/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">의료/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">여행+의료/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">건보/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">세금/월</th>
                 <th className="text-right py-2 px-1 font-medium">월지출</th>
@@ -1064,10 +1063,7 @@ export default function RetirementPage() {
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">{fmtK(row.expenseMonthly)}</td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
-                      {row.travelMonthly > 0 ? fmtK(row.travelMonthly) : '—'}
-                    </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
-                      {row.medicalMonthly > 0 ? fmtK(row.medicalMonthly) : '—'}
+                      {(row.travelMonthly + row.medicalMonthly) > 0 ? fmtK(row.travelMonthly + row.medicalMonthly) : '—'}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
                       {row.healthInsuranceMonthly > 0 ? fmtK(row.healthInsuranceMonthly) : '—'}

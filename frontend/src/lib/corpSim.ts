@@ -11,7 +11,7 @@ export const DEFAULT_CORP_TAX: CorpTaxParams = {
   finIncomeCombinedThr: 20_000_000,
   giftTaxRate:          0.30,
   salaryTaxRate:        0.03,
-  healthInsRate:        0.0709,  // 건강보험료율 (본인부담 50% 별도 적용)
+  healthInsRate:        0.0801,  // 건강보험(7.09%)+장기요양(건보×12.95%) ≈ 8.01% (본인부담 50% 별도)
 }
 
 /** 입력 기본값 (보고서 기준 샘플) */
@@ -47,7 +47,7 @@ export const salariedCount = (plan: CorpSimPlan): number =>
 
 /** 직장건보 월 합계 = 각 급여자별 salary × healthInsRate × 50%(본인부담) 의 합 */
 export function corpHealthMonthly(plan: CorpSimPlan): number {
-  const rate = (plan.tax.healthInsRate ?? 0.0709) * 0.5
+  const rate = (plan.tax.healthInsRate ?? 0.0801) * 0.5
   let sum = 0
   if (plan.repSalaryMonthly > 0) sum += plan.repSalaryMonthly * rate
   if (plan.repSalaryHusbandMonthly > 0) sum += plan.repSalaryHusbandMonthly * rate

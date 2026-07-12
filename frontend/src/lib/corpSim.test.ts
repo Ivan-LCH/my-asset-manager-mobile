@@ -100,11 +100,11 @@ describe('corpSim 계산', () => {
   })
 
   it('computeCorp: 건보는 급여 × healthInsRate × 50% (자동 산정)', () => {
-    // 기본값: 급여 100만 × 2명 × 7.09% × 50% × 12
-    const expected = Math.round(1_000_000 * 0.0709 * 0.5) * 2 * 12
+    // 기본값: 급여 100만 × 2명 × 8.01% × 50% × 12
+    const expected = Math.round(1_000_000 * 0.0801 * 0.5) * 2 * 12
     expect(computeCorp(plan()).corpHealthAnnual).toBe(expected)
     // 남편 급여 0 → 1명분
-    const one = Math.round(1_000_000 * 0.0709 * 0.5) * 1 * 12
+    const one = Math.round(1_000_000 * 0.0801 * 0.5) * 1 * 12
     expect(computeCorp(plan({ repSalaryHusbandMonthly: 0 })).corpHealthAnnual).toBe(one)
   })
 
