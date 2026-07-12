@@ -916,16 +916,26 @@ export default function RetirementPage() {
       {/* KPI */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">월 예상 지출</p>
-          <p className="text-[13px] sm:text-lg font-bold text-gray-100">{formatManwon(totalExpenseMonthly)}</p>
-          <p className="text-[11px] text-gray-600 mt-0.5">생활비 + 여행 + 의료</p>
+          <p className="text-xs text-gray-500 mb-1">월 지출</p>
+          <p className="text-[13px] sm:text-lg font-bold text-red-400">
+            {retirementRow ? formatManwon(retirementRow.totalExpense) : '-'}
+          </p>
+          <p className="text-[11px] text-gray-600 mt-0.5">생활비+여행+의료+건보</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">연금 수령</p>
-          <p className="text-[13px] sm:text-lg font-bold text-gray-100">
-            {retirementRow ? formatManwon(retirementRow.pensionMonthly) : '-'}
+          <p className="text-xs text-gray-500 mb-1">월 수입</p>
+          <p className="text-[13px] sm:text-lg font-bold text-emerald-400">
+            {retirementRow ? formatManwon(retirementRow.totalIncome) : '-'}
           </p>
-          <p className="text-[11px] text-gray-600 mt-0.5">{retirementYear}년 기준</p>
+          <p className="text-[11px] text-gray-600 mt-0.5 leading-tight">
+            {retirementRow ? [
+              retirementRow.pensionMonthly > 0 ? `연금 ${fmtK(retirementRow.pensionMonthly)}` : null,
+              retirementRow.dividendMonthly > 0 ? `배당 ${fmtK(retirementRow.dividendMonthly)}` : null,
+              retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtK(retirementRow.corpSalaryMonthly)}` : null,
+              retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtK(retirementRow.corpReturnMonthly)}` : null,
+              retirementRow.lumpsumMonthly > 0 ? `목돈 ${fmtK(retirementRow.lumpsumMonthly)}` : null,
+            ].filter(Boolean).join(' + ') : `${retirementYear}년 기준`}
+          </p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1">월 여유/부족</p>
