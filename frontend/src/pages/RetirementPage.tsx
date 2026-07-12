@@ -691,6 +691,7 @@ interface CashFlowRow {
   dividendMonthly:         number
   corpSalaryMonthly:       number
   corpReturnMonthly:       number
+  taxMonthly:              number  // 배당소득세 + 급여소득세 (월)
   expenseMonthly:          number
   travelMonthly:           number
   medicalMonthly:          number
@@ -761,7 +762,12 @@ function buildCashFlow(
     const corpDiv = corpCF ? (isPhase2 ? corpCF.divP2Monthly : corpCF.divP1Monthly) : 0
     const dividendMonthly = stockDivMonthly + corpDiv
 
-    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly
+    // 세금 (월 추정): 배당소득세 15.4% 원천징수 + 급여소득세 3%
+    const divTaxMonthly = dividendMonthly * 0.154
+    const salaryTaxMonthly = corpSalaryMonthly * 0.03
+    const taxMonthly = divTaxMonthly + salaryTaxMonthly
+
+    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly + taxMonthly
     const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     const balance      = totalIncome - totalExpense
 
@@ -770,6 +776,7 @@ function buildCashFlow(
     rows.push({
       year, age,
       pensionMonthly, dividendMonthly, corpSalaryMonthly, corpReturnMonthly,
+      taxMonthly,
       expenseMonthly, travelMonthly,
       medicalMonthly: num(plan.medicalMonthly),
       healthInsuranceMonthly,
@@ -1017,6 +1024,7 @@ export default function RetirementPage() {
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">여행/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">의료/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">건보/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">세금/월</th>
                 <th className="text-right py-2 px-1 font-medium">월지출</th>
                 <th className="text-right py-2 px-1 font-medium">+/-</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">목돈</th>
@@ -1063,6 +1071,9 @@ export default function RetirementPage() {
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
                       {row.healthInsuranceMonthly > 0 ? fmtK(row.healthInsuranceMonthly) : '—'}
+                    </td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-orange-400">
+                      {row.taxMonthly > 0 ? fmtK(row.taxMonthly) : '—'}
                     </td>
                     <td className="text-right py-2 px-1 font-semibold text-gray-100">
                       {fmtK(row.totalExpense)}
