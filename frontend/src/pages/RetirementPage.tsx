@@ -1015,16 +1015,19 @@ export default function RetirementPage() {
             <thead>
               <tr className="text-gray-500 border-b border-gray-700">
                 <th className="text-left py-2 pr-2 font-medium whitespace-nowrap">연도(나이)</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">연금/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">배당/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">급여/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">가수금/월</th>
-                <th className="text-right py-2 px-1 font-medium">월수입</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">생활비/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">여행+의료/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">건보/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">세금/월</th>
-                <th className="text-right py-2 px-1 font-medium">월지출</th>
+                {/* 수입 그룹 (연한 초록 배경) */}
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">연금/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">배당/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">급여/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">가수금/월</th>
+                <th className="text-right py-2 px-1 font-medium bg-emerald-950/30">월수입</th>
+                {/* 지출 그룹 (연한 빨강 배경) */}
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">생활비/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">여행+의료/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">건보/월</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">세금/월</th>
+                <th className="text-right py-2 px-1 font-medium bg-red-950/20">월지출</th>
+                {/* 결과 그룹 */}
                 <th className="text-right py-2 px-1 font-medium">+/-</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">목돈</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">긴급지출</th>
@@ -1046,32 +1049,32 @@ export default function RetirementPage() {
                       {row.year}<span className="text-gray-500">({row.age})</span>
                       {isRetirementYear && <span className="ml-1 text-[10px] text-blue-500">은퇴</span>}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-300">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-300 bg-emerald-950/30">
                       {row.pensionMonthly > 0 ? fmtK(row.pensionMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-emerald-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-emerald-400 bg-emerald-950/30">
                       {row.dividendMonthly > 0 ? fmtK(row.dividendMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-400 bg-emerald-950/30">
                       {row.corpSalaryMonthly > 0 ? fmtK(row.corpSalaryMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-cyan-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-cyan-400 bg-emerald-950/30">
                       {row.corpReturnMonthly > 0 ? fmtK(row.corpReturnMonthly) : '—'}
                     </td>
-                    <td className="text-right py-2 px-1 font-semibold text-gray-100">
+                    <td className="text-right py-2 px-1 font-semibold text-gray-100 bg-emerald-950/30">
                       {fmtK(row.totalIncome)}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">{fmtK(row.expenseMonthly)}</td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">{fmtK(row.expenseMonthly)}</td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">
                       {(row.travelMonthly + row.medicalMonthly) > 0 ? fmtK(row.travelMonthly + row.medicalMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">
                       {row.healthInsuranceMonthly > 0 ? fmtK(row.healthInsuranceMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-orange-400">
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-orange-400 bg-red-950/20">
                       {row.taxMonthly > 0 ? fmtK(row.taxMonthly) : '—'}
                     </td>
-                    <td className="text-right py-2 px-1 font-semibold text-gray-100">
+                    <td className="text-right py-2 px-1 font-semibold text-gray-100 bg-red-950/20">
                       {fmtK(row.totalExpense)}
                     </td>
                     <td className={`text-right py-2 px-1 font-bold ${pnlColor(row.balance)}`}>
