@@ -333,7 +333,12 @@ export default function CorpSimPage() {
       <Expander title="📊 결과 — 법인 시나리오 상세" badge={`법인세 ${formatManwon(corp.corpTax)}`}>
         <Section>
           <Row label="ETF 배당 수입(연)"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(corp.grossDividend)}</span></Row>
-          <Row label="− 법인세"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.corpTax)}</span></Row>
+          <Row label="− 법인세">
+            <span className="text-sm text-red-400 text-right w-full block">
+              − {formatManwon(corp.corpTax)}
+              <span className="text-gray-600 text-[10px] ml-1">(과세표준 {formatManwon(corp.grossDividend - (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12 - corp.employerInsAnnual.total)} × 9%)</span>
+            </span>
+          </Row>
           <Row label="− 급여(부부, 법인 비용)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon((plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12)}</span></Row>
           <Row label="− 4대보험 사업주분(연)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.total)}</span></Row>
           <Row label="− 법인 유지비(연)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.maintAnnual)}</span></Row>
