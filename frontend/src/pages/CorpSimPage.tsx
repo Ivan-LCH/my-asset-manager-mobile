@@ -393,12 +393,21 @@ export default function CorpSimPage() {
           {(() => {
             const r0 = runway.rows[0]
             if (!r0) return null
+            const salaries = (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
+            const empIns = corp.employerInsAnnual.total
+            const maint = corp.maintAnnual
+            const distributable = r0.cashIn - r0.tax - salaries - empIns - maint
+            const returnAnnual = plan.monthlyReturn * 12
             return (
               <>
-                <Row label="현금 유입(배당수입)"><span className="text-sm text-emerald-400 text-right w-full block">{formatManwon(r0.cashIn)}</span></Row>
+                <Row label="현금 유입(ETF 배당)"><span className="text-sm text-emerald-400 text-right w-full block">{formatManwon(r0.cashIn)}</span></Row>
                 <Row label="− 법인세"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(r0.tax)}</span></Row>
-                <Row label="− 가족 인출(급여+가수금)"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(r0.familyDraw)}</span></Row>
-                <Row label="= 연간 잔여"><span className={`text-sm font-bold text-right w-full block ${r0.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r0.net >= 0 ? '+' : ''}{formatManwon(r0.net)}</span></Row>
+                <Row label="− 급여(부부)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(salaries)}</span></Row>
+                <Row label="− 4대보험 사업주분"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(empIns)}</span></Row>
+                <Row label="− 법인 유지비"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(maint)}</span></Row>
+                <Row label="= 배당 분배 가능"><span className="text-sm text-blue-400 text-right w-full block">{formatManwon(distributable)}</span></Row>
+                <Row label="− 가수금 회수(연)"><span className="text-sm text-cyan-400 text-right w-full block">− {formatManwon(returnAnnual)}</span></Row>
+                <Row label="= 연간 잔여(원금 매도)"><span className={`text-sm font-bold text-right w-full block ${r0.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r0.net >= 0 ? '+' : ''}{formatManwon(r0.net)}</span></Row>
               </>
             )
           })()}

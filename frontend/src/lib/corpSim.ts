@@ -262,7 +262,9 @@ export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
   const salaryAnnual = (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
   const returnAnnual = plan.monthlyReturn * 12
   const empInsAnnual = employerInsuranceMonthly(plan).total * 12
-  const familyDraw = salaryAnnual + returnAnnual + empInsAnnual  // 급여 + 가수금 + 4대보험 사업주분
+  const maintAnnual = plan.annualMaintCost
+  // 법인 경비(급여+4대보험+유지비) → 법인세 공제 후 배당분배 가능 → 가수금 회수
+  const familyDraw = salaryAnnual + returnAnnual + empInsAnnual + maintAnnual
   const baseYear = new Date().getFullYear()
 
   let principal = totalInvest(plan)
@@ -271,8 +273,8 @@ export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
 
   for (let i = 1; i <= maxYears; i++) {
     const cashIn = principal * (plan.dividendYield / 100)
-    // 급여 + 4대보험 사업주분 모두 법인 비용(공제)
-    const corpTaxable = Math.max(0, cashIn - salaryAnnual - empInsAnnual)
+    // 급여 + 4대보험 + 유지비 모두 법인 비용(공제)
+    const corpTaxable = Math.max(0, cashIn - salaryAnnual - empInsAnnual - maintAnnual)
     const tax = corpTaxOn(corpTaxable, plan.tax)
     const net = cashIn - tax - familyDraw
     rows.push({
