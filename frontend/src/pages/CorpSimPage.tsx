@@ -335,6 +335,8 @@ export default function CorpSimPage() {
           <Row label="ETF 배당 수입(연)"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(corp.grossDividend)}</span></Row>
           <Row label="− 법인세"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.corpTax)}</span></Row>
           <Row label="− 급여(부부, 법인 비용)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon((plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12)}</span></Row>
+          <Row label="− 4대보험 사업주분(연)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.total)}</span></Row>
+          <Row label="− 법인 유지비(연)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.maintAnnual)}</span></Row>
           <Row label="= 배당가능(잔여)"><span className="text-sm text-emerald-400 text-right w-full block">{formatManwon(corp.distributable)}</span></Row>
           <p className="text-[11px] text-gray-600 pt-2">배당가능 잔여를 주주 지분율로 분배. 주주 수령 시 <b>개인 배당소득세 15.4%</b> 원천징수 (법인세와 별개).</p>
           <div className="overflow-x-auto">
