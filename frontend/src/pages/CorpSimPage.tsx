@@ -329,45 +329,7 @@ export default function CorpSimPage() {
         </Section>
       </Expander>
 
-      {/* 결과 상세 — 배당 분배 + 4대보험 상세 (waterfall은 현금흐름에 통합) */}
-      <Expander title="📊 결과 — 배당 분배 + 4대보험 상세" badge={`배당가능 ${formatManwon(corp.distributable)}`}>
-        <Section>
-          <Row label="배당가능(잔여)"><span className="text-sm text-emerald-400 text-right w-full block">{formatManwon(corp.distributable)}</span></Row>
-          <p className="text-[11px] text-gray-600 pt-1">법인 경비(법인세·급여·4대보험·유지비) 낸 후 잔여. 주주 지분율로 분배.</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs mt-2">
-              <thead><tr className="text-gray-500 border-b border-gray-700">
-                <th className="text-left py-2 pr-3">주주</th>
-                <th className="text-right py-2 px-2">지분</th>
-                <th className="text-right py-2 px-2">배당(세전)</th>
-                <th className="text-right py-2 px-2">개인 배당세 15.4%</th>
-                <th className="text-right py-2 pl-2">수령(세후)</th>
-              </tr></thead>
-              <tbody>
-                {([['부', plan.shareHusband, corp.perShare.husband], ['모', plan.shareWife, corp.perShare.wife], ['자', plan.shareSon, corp.perShare.son]] as const).map(([n, sh, ps]) => (
-                  <tr key={n} className="border-b border-gray-700/50">
-                    <td className="py-2 pr-3 text-gray-300">{n}</td>
-                    <td className="text-right py-2 px-2 text-gray-400">{sh}%</td>
-                    <td className="text-right py-2 px-2 text-gray-200">{formatManwon(ps.gross)}</td>
-                    <td className="text-right py-2 px-2 text-red-400">− {formatManwon(ps.gross * plan.tax.dividendTaxRate)}</td>
-                    <td className="text-right py-2 pl-2 text-emerald-400 font-semibold">{formatManwon(ps.net)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="pt-3 border-t border-gray-700">
-            <p className="text-xs text-gray-500 mb-1">4대보험 사업주 부담(연) — 보험별 상세</p>
-            <Row label="　건보 사업주 50%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.health)}</span></Row>
-            <Row label="　국민연금 사업주 4.5%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.pension)}</span></Row>
-            <Row label="　고용보험 사업주 0.9%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.employment)}</span></Row>
-            <Row label="　산재보험 사업주 0.7%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.accident)}</span></Row>
-            <Row label="　소계"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.total)}</span></Row>
-          </div>
-        </Section>
-      </Expander>
-
-      {/* 현금흐름 / 지속가능성 */}
+      {/* 현금흐름 / 지속가능성 (순서 상향 — 전체 그림 먼저) */}
       <Expander
         title="📊 현금흐름 / 지속가능성"
         badge={runway.sustainable ? '지속가능' : '초과인출'}
@@ -393,7 +355,7 @@ export default function CorpSimPage() {
                 <Row label="− 급여(부부)"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(salaries)}</span></Row>
                 <Row label="− 4대보험 사업주분"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(empIns)}</span></Row>
                 <Row label="− 법인 유지비"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(maint)}</span></Row>
-                <Row label="= 배당 분배 가능"><span className="text-sm text-blue-400 text-right w-full block">{formatManwon(distributable)}</span></Row>
+                <Row label="= 법인 잔여 현금(가수금·배당 원천)"><span className="text-sm text-blue-400 text-right w-full block">{formatManwon(distributable)}</span></Row>
                 <Row label="− 가수금 회수(연)"><span className="text-sm text-cyan-400 text-right w-full block">− {formatManwon(returnAnnual)}</span></Row>
                 <Row label="= 연간 잔여(원금 매도)"><span className={`text-sm font-bold text-right w-full block ${r0.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r0.net >= 0 ? '+' : ''}{formatManwon(r0.net)}</span></Row>
               </>
@@ -438,6 +400,68 @@ export default function CorpSimPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </Section>
+      </Expander>
+
+      {/* Phase별 배당 + 4대보험 상세 (현금흐름 다음 — 실제 배당이 얼마인지) */}
+      <Expander title="📊 Phase별 배당 분배 + 4대보험 상세" badge={`잔여현금 ${formatManwon(corp.distributable)}`}>
+        <Section>
+          <p className="text-[11px] text-gray-600">
+            법인 잔여 현금(법인 경비 후)을 가수금 회수와 배당으로 나눠 쓴다.
+            <b> Phase 1</b>(가수금 회수 중): 잔여 − 가수금 = 실제 배당. <b>Phase 2</b>(가수금 소진 후): 잔여 전액이 배당.
+          </p>
+          {(() => {
+            const returnAnnual = plan.monthlyReturn * 12
+            const phase1Dividend = Math.max(0, corp.distributable - returnAnnual)
+            return (
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="bg-gray-900/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-1">Phase 1 (가수금 회수 중)</p>
+                  <Row label="잔여 현금"><span className="text-sm text-blue-400 text-right w-full block">{formatManwon(corp.distributable)}</span></Row>
+                  <Row label="− 가수금 회수"><span className="text-sm text-cyan-400 text-right w-full block">− {formatManwon(returnAnnual)}</span></Row>
+                  <Row label="= 실제 배당"><span className={`text-sm font-bold text-right w-full block ${phase1Dividend > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{phase1Dividend > 0 ? formatManwon(phase1Dividend) : '0 (배당 불가)'}</span></Row>
+                </div>
+                <div className="bg-gray-900/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-1">Phase 2 (가수금 소진 후)</p>
+                  <Row label="잔여 현금"><span className="text-sm text-blue-400 text-right w-full block">{formatManwon(corp.distributable)}</span></Row>
+                  <Row label="− 가수금 회수"><span className="text-sm text-gray-600 text-right w-full block">— (소진)</span></Row>
+                  <Row label="= 실제 배당"><span className="text-sm font-bold text-emerald-400 text-right w-full block">{formatManwon(corp.distributable)}</span></Row>
+                </div>
+              </div>
+            )
+          })()}
+
+          <p className="text-[11px] text-gray-600 pt-3">아래 주주별 배당 표는 <b>Phase 2</b>(가수금 소진 후) 기준 — 잔여 전액을 지분율로 분배.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs mt-2">
+              <thead><tr className="text-gray-500 border-b border-gray-700">
+                <th className="text-left py-2 pr-3">주주</th>
+                <th className="text-right py-2 px-2">지분</th>
+                <th className="text-right py-2 px-2">배당(세전)</th>
+                <th className="text-right py-2 px-2">개인 배당세 15.4%</th>
+                <th className="text-right py-2 pl-2">수령(세후)</th>
+              </tr></thead>
+              <tbody>
+                {([['부', plan.shareHusband, corp.perShare.husband], ['모', plan.shareWife, corp.perShare.wife], ['자', plan.shareSon, corp.perShare.son]] as const).map(([n, sh, ps]) => (
+                  <tr key={n} className="border-b border-gray-700/50">
+                    <td className="py-2 pr-3 text-gray-300">{n}</td>
+                    <td className="text-right py-2 px-2 text-gray-400">{sh}%</td>
+                    <td className="text-right py-2 px-2 text-gray-200">{formatManwon(ps.gross)}</td>
+                    <td className="text-right py-2 px-2 text-red-400">− {formatManwon(ps.gross * plan.tax.dividendTaxRate)}</td>
+                    <td className="text-right py-2 pl-2 text-emerald-400 font-semibold">{formatManwon(ps.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="pt-3 border-t border-gray-700">
+            <p className="text-xs text-gray-500 mb-1">4대보험 사업주 부담(연) — 보험별 상세</p>
+            <Row label="　건보 사업주 50%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.health)}</span></Row>
+            <Row label="　국민연금 사업주 4.5%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.pension)}</span></Row>
+            <Row label="　고용보험 사업주 0.9%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.employment)}</span></Row>
+            <Row label="　산재보험 사업주 0.7%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.accident)}</span></Row>
+            <Row label="　소계"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.total)}</span></Row>
           </div>
         </Section>
       </Expander>
