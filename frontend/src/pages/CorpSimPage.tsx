@@ -360,7 +360,16 @@ export default function CorpSimPage() {
               </tbody>
             </table>
           </div>
-          <Row label="건보·유지비(연)"><span className="text-sm text-gray-400 text-right w-full block">{formatManwon(corp.corpHealthAnnual + corp.maintAnnual)}</span></Row>
+          <Row label="건보 본인부담(연)"><span className="text-sm text-gray-400 text-right w-full block">{formatManwon(corp.corpHealthAnnual)}</span></Row>
+          <div className="pt-2 border-t border-gray-700">
+            <p className="text-xs text-gray-500 mb-1">4대보험 사업주 부담(연)</p>
+            <Row label="　건보 사업주 50%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.health)}</span></Row>
+            <Row label="　국민연금 사업주 4.5%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.pension)}</span></Row>
+            <Row label="　고용보험 사업주 0.9%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.employment)}</span></Row>
+            <Row label="　산재보험 사업주 0.7%"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.accident)}</span></Row>
+            <Row label="　소계"><span className="text-sm text-red-400 text-right w-full block">− {formatManwon(corp.employerInsAnnual.total)}</span></Row>
+          </div>
+          <Row label="법인 유지비(연)"><span className="text-sm text-gray-400 text-right w-full block">{formatManwon(corp.maintAnnual)}</span></Row>
         </Section>
       </Expander>
 
@@ -444,6 +453,11 @@ export default function CorpSimPage() {
                 <td className="py-2 pr-3 text-gray-300">건강보험료(연)</td>
                 <td className="text-right py-2 px-2 text-red-400">{formatManwon(personal.personalHealthAnnual)}</td>
                 <td className="text-right py-2 pl-2 text-emerald-400">{formatManwon(corp.corpHealthAnnual)}</td>
+              </tr>
+              <tr className="border-b border-gray-700/50">
+                <td className="py-2 pr-3 text-gray-300">4대보험 사업주분(연)</td>
+                <td className="text-right py-2 px-2 text-gray-500">—</td>
+                <td className="text-right py-2 pl-2 text-orange-400">{formatManwon(corp.employerInsAnnual.total)}</td>
               </tr>
               <tr className="border-b border-gray-700/50">
                 <td className="py-2 pr-3 text-gray-300">소득세(연·배당관련){personal.marginalRate > 0 && <span className="text-[10px] text-gray-600 block">한계 {(personal.marginalRate * 100).toFixed(0)}%</span>}</td>

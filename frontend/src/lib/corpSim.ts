@@ -54,6 +54,26 @@ export function corpHealthMonthly(plan: CorpSimPlan): number {
   return Math.round(sum)
 }
 
+/** 4대보험 사업주 부담 월 합계 (법인 비용) */
+export interface EmployerInsurance {
+  health:     number  // 건강보험 사업주 50%
+  pension:    number  // 국민연금 사업주 4.5%
+  employment: number  // 고용보험 사업주 ~0.9%
+  accident:   number  // 산재보험 사업주 100% ~0.7%
+  total:      number
+}
+
+export function employerInsuranceMonthly(plan: CorpSimPlan): EmployerInsurance {
+  const totalSalary = (plan.repSalaryMonthly > 0 ? plan.repSalaryMonthly : 0)
+    + (plan.repSalaryHusbandMonthly > 0 ? plan.repSalaryHusbandMonthly : 0)
+  const rate = plan.tax.healthInsRate ?? 0.0801
+  const health = Math.round(totalSalary * rate * 0.5)       // 건보 사업주 50%
+  const pension = Math.round(totalSalary * 0.045)            // 국민연금 사업주 4.5%
+  const employment = Math.round(totalSalary * 0.009)         // 고용보험 사업주 0.9%
+  const accident = Math.round(totalSalary * 0.007)           // 산재보험 사업주 0.7% (사무직)
+  return { health, pension, employment, accident, total: health + pension + employment + accident }
+}
+
 /** 부부 합산 연간 급여 */
 export const salariesAnnual = (plan: CorpSimPlan): number =>
   (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
@@ -110,13 +130,14 @@ export function comprehensiveTax(taxable: number): number {
 
 export interface PerShare { gross: number; net: number }
 export interface CorpResult {
-  grossDividend:   number
-  corpTax:         number
-  distributable:   number  // 배당가능 = gross - 법인세
-  perShare:        { husband: PerShare; wife: PerShare; son: PerShare }
-  corpHealthAnnual: number // 대표 직장건보(연)
-  maintAnnual:     number
-  totalLeakAnnual: number  // 법인세 + 유지비 + 건보 (연간 법인 측 비용)
+  grossDividend:     number
+  corpTax:           number
+  distributable:     number  // 배당가능 = gross - 법인세 - 급여
+  perShare:          { husband: PerShare; wife: PerShare; son: PerShare }
+  corpHealthAnnual:  number  // 직장건보 본인부담(연)
+  employerInsAnnual: EmployerInsurance  // 4대보험 사업주분(연)
+  maintAnnual:       number
+  totalLeakAnnual:   number  // 법인세 + 유지비 + 건보 + 4대보험 사업주분 (연간 법인 측 비용)
 }
 
 /** 법인 시나리오 계산 */
@@ -131,6 +152,14 @@ export function computeCorp(plan: CorpSimPlan): CorpResult {
     return { gross: g, net: g * (1 - plan.tax.dividendTaxRate) }
   }
   const corpHealthAnnual = corpHealthMonthly(plan) * 12
+  const employerInsMonthly = employerInsuranceMonthly(plan)
+  const employerInsAnnual = {
+    health: employerInsMonthly.health * 12,
+    pension: employerInsMonthly.pension * 12,
+    employment: employerInsMonthly.employment * 12,
+    accident: employerInsMonthly.accident * 12,
+    total: employerInsMonthly.total * 12,
+  }
   const maintAnnual = plan.annualMaintCost
   return {
     grossDividend: gross,
@@ -138,8 +167,9 @@ export function computeCorp(plan: CorpSimPlan): CorpResult {
     distributable,
     perShare: { husband: split(plan.shareHusband), wife: split(plan.shareWife), son: split(plan.shareSon) },
     corpHealthAnnual,
+    employerInsAnnual,
     maintAnnual,
-    totalLeakAnnual: tax + maintAnnual + corpHealthAnnual,
+    totalLeakAnnual: tax + maintAnnual + corpHealthAnnual + employerInsAnnual.total,
   }
 }
 
