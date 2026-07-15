@@ -132,7 +132,7 @@ export interface PerShare { gross: number; net: number }
 export interface CorpResult {
   grossDividend:     number
   corpTax:           number
-  distributable:     number  // 배당가능 = gross - 법인세 - 급여
+  distributable:     number  // 배당가능 = gross - 법인세 - 급여 - 4대보험 사업주분
   perShare:          { husband: PerShare; wife: PerShare; son: PerShare }
   corpHealthAnnual:  number  // 직장건보 본인부담(연)
   employerInsAnnual: EmployerInsurance  // 4대보험 사업주분(연)
@@ -144,21 +144,23 @@ export interface CorpResult {
 export function computeCorp(plan: CorpSimPlan): CorpResult {
   const gross = grossDividend(plan)
   const salAnnual = salariesAnnual(plan)
-  const taxable = Math.max(0, gross - salAnnual)  // 급여는 법인 비용(공제)
+  const empInsMonthly = employerInsuranceMonthly(plan)
+  const empInsAnnual = empInsMonthly.total * 12
+  // 급여 + 4대보험 사업주분 모두 법인 비용(공제)
+  const taxable = Math.max(0, gross - salAnnual - empInsAnnual)
   const tax = corpTaxOn(taxable, plan.tax)
-  const distributable = gross - tax - salAnnual   // 급여·법인세 지급 후 잔여 = 배당가능액
+  const distributable = gross - tax - salAnnual - empInsAnnual   // 배당가능액
   const split = (pct: number): PerShare => {
     const g = distributable * (pct / 100)
     return { gross: g, net: g * (1 - plan.tax.dividendTaxRate) }
   }
   const corpHealthAnnual = corpHealthMonthly(plan) * 12
-  const employerInsMonthly = employerInsuranceMonthly(plan)
   const employerInsAnnual = {
-    health: employerInsMonthly.health * 12,
-    pension: employerInsMonthly.pension * 12,
-    employment: employerInsMonthly.employment * 12,
-    accident: employerInsMonthly.accident * 12,
-    total: employerInsMonthly.total * 12,
+    health: empInsMonthly.health * 12,
+    pension: empInsMonthly.pension * 12,
+    employment: empInsMonthly.employment * 12,
+    accident: empInsMonthly.accident * 12,
+    total: empInsAnnual,
   }
   const maintAnnual = plan.annualMaintCost
   return {
@@ -259,7 +261,8 @@ export interface RunwayResult {
 export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
   const salaryAnnual = (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
   const returnAnnual = plan.monthlyReturn * 12
-  const familyDraw = salaryAnnual + returnAnnual
+  const empInsAnnual = employerInsuranceMonthly(plan).total * 12
+  const familyDraw = salaryAnnual + returnAnnual + empInsAnnual  // 급여 + 가수금 + 4대보험 사업주분
   const baseYear = new Date().getFullYear()
 
   let principal = totalInvest(plan)
@@ -268,7 +271,8 @@ export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
 
   for (let i = 1; i <= maxYears; i++) {
     const cashIn = principal * (plan.dividendYield / 100)
-    const corpTaxable = Math.max(0, cashIn - salaryAnnual)  // 급여는 법인 비용(공제)
+    // 급여 + 4대보험 사업주분 모두 법인 비용(공제)
+    const corpTaxable = Math.max(0, cashIn - salaryAnnual - empInsAnnual)
     const tax = corpTaxOn(corpTaxable, plan.tax)
     const net = cashIn - tax - familyDraw
     rows.push({
@@ -295,23 +299,25 @@ export function simulateRunway(plan: CorpSimPlan, maxYears = 50): RunwayResult {
 // 동일 액을 배당(과세)으로 채운다. 법인세·건보·급여소득세는 양상 공통, 배당세·종합과세가 차이.
 export interface TwoPhaseResult {
   salariesAnnual:   number
+  empInsAnnual:     number // 4대보험 사업주분(연)
   corpTaxable:      number
   corpTax:          number
   corpHealth:       number
   salaryTax:        number
-  dividendDist:     number // Phase2 에서 배당으로 인출(= monthlyReturn×12)
+  dividendDist:     number
   dividendTax:      number
   combinedExtra:    number
-  marginalRate:     number // Phase2 적용 한계세율 (%)
-  cost1:            number // Phase1: 법인세+건보+급여세 (가수금 비과세)
+  marginalRate:     number
+  cost1:            number // Phase1: 법인세+건보+급여세+4대보험 (가수금 비과세)
   cost2:            number // Phase2: + 배당세 + 종합
-  diff:             number // cost2 - cost1
+  diff:             number
 }
 
 export function computeTwoPhase(plan: CorpSimPlan): TwoPhaseResult {
   const salariesAnnual = (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
+  const empInsAnnual = employerInsuranceMonthly(plan).total * 12
   const gross = grossDividend(plan)
-  const corpTaxable = Math.max(0, gross - salariesAnnual)
+  const corpTaxable = Math.max(0, gross - salariesAnnual - empInsAnnual)  // 급여+4대보험 공제
   const corpTax = corpTaxOn(corpTaxable, plan.tax)
   const corpHealth = corpHealthMonthly(plan) * 12
   const salaryTax = salariesAnnual * plan.tax.salaryTaxRate
@@ -330,10 +336,10 @@ export function computeTwoPhase(plan: CorpSimPlan): TwoPhaseResult {
     marginalRate = excess > 0 ? combinedExtra / excess : 0
   }
 
-  const cost1 = corpTax + corpHealth + salaryTax
+  const cost1 = corpTax + corpHealth + salaryTax + empInsAnnual
   const cost2 = cost1 + dividendTax + combinedExtra
   return {
-    salariesAnnual, corpTaxable, corpTax, corpHealth, salaryTax,
+    salariesAnnual, empInsAnnual, corpTaxable, corpTax, corpHealth, salaryTax,
     dividendDist, dividendTax, combinedExtra, marginalRate,
     cost1, cost2, diff: cost2 - cost1,
   }

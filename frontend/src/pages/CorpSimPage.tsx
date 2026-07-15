@@ -237,7 +237,6 @@ export default function CorpSimPage() {
           )}
           <Row label="연 배당총액(0=자동)"><AmountInput value={plan.targetDividendTotal} onChange={(v) => update('targetDividendTotal', v)} placeholder="0" /></Row>
           <Row label="가수금 월 반환(생활비)"><AmountInput value={plan.monthlyReturn} onChange={(v) => update('monthlyReturn', v)} /></Row>
-          <Row label="법인 연 유지비"><AmountInput value={plan.annualMaintCost} onChange={(v) => update('annualMaintCost', v)} /></Row>
         </Section>
       </Expander>
 
@@ -582,11 +581,12 @@ export default function CorpSimPage() {
           <p className="text-[11px] text-gray-500 leading-relaxed">
             기본값이 들어있으니 그대로 써도 됨. 본인 상황에 맞추려면 여기서 편집. 모든 수치는 추정치.
           </p>
-          <p className="text-xs text-gray-400 pt-2">비교 가정 (Before)</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <p className="text-xs text-gray-400 pt-2">비교 가정·운영비</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="개인명의 지역건보(연)"><AmountInput value={plan.personalHealthAnnual} onChange={(v) => update('personalHealthAnnual', v)} /></Field>
             <Field label="승계 비교 재산액"><AmountInput value={plan.giftTaxBase} onChange={(v) => update('giftTaxBase', v)} /></Field>
             <Field label="법인 설립비(초기)"><AmountInput value={plan.setupCost} onChange={(v) => update('setupCost', v)} /></Field>
+            <Field label="법인 연 유지비(세무기장 등)"><AmountInput value={plan.annualMaintCost} onChange={(v) => update('annualMaintCost', v)} /></Field>
           </div>
           <p className="text-xs text-gray-400 pt-3">세율·공식</p>
           <div className="grid grid-cols-2 gap-3">

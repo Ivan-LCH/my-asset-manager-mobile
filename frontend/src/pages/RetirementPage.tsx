@@ -5,7 +5,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
-import { computeCorp, corpTaxOn, corpHealthMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
+import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
@@ -847,8 +847,10 @@ export default function RetirementPage() {
     const ep = corpPlan
     const gross = ep.targetDividendTotal > 0 ? ep.targetDividendTotal : (ep.capitalContribution + ep.loanAmount) * (ep.dividendYield / 100)
     const salAnnual = (ep.repSalaryMonthly + ep.repSalaryHusbandMonthly) * 12
-    const corpTax = corpTaxOn(Math.max(0, gross - salAnnual), ep.tax)
-    const cashAfterTax = gross - corpTax - salAnnual  // 급여 지급 후 잔여 현금
+    const empInsAnnual = employerInsuranceMonthly(ep).total * 12
+    // 급여 + 4대보험 사업주분 모두 법인 비용(공제)
+    const corpTax = corpTaxOn(Math.max(0, gross - salAnnual - empInsAnnual), ep.tax)
+    const cashAfterTax = gross - corpTax - salAnnual - empInsAnnual  // 급여·4대보험·법인세 후 잔여
     const returnAnnual = ep.monthlyReturn * 12
     const rMonths = ep.monthlyReturn > 0 ? Math.floor(ep.loanAmount / ep.monthlyReturn) : 0
     // 부부 지분(%) + 배당소득세 15.4% 후 실수령
