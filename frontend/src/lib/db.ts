@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type {
   Asset, AssetDetail, AssetType, ChartDataPoint, ChartParams, Currency, HistoryItem,
-  DividendRecord, DividendSummary, RetirementPlan, CorpSimPlan, Settings,
+  DividendRecord, DividendSummary, RetirementPlan, CorpSimPlan, PensionSimPlan, Settings,
 } from '@/types'
 import { generateChartData } from './chartData'
 
@@ -852,5 +852,24 @@ export async function seedSampleData(): Promise<void> {
 
   // 기본 환율(USD) — 배당/해외주식 표시용
   await saveSettings({ exchange_rate_USD: '1380' })
+}
+
+// ──────────────────────────────────────────────────────────────
+// 연금 시뮬레이터 (settings 에 JSON 직렬화)
+// ──────────────────────────────────────────────────────────────
+const PENSION_SIM_KEY = 'pension_sim_plan'
+
+export async function getPensionSim(): Promise<PensionSimPlan | null> {
+  const row = await db.settings.get(PENSION_SIM_KEY)
+  if (!row) return null
+  try {
+    return JSON.parse(row.value) as PensionSimPlan
+  } catch {
+    return null
+  }
+}
+
+export async function savePensionSim(data: PensionSimPlan): Promise<void> {
+  await db.settings.put({ key: PENSION_SIM_KEY, value: JSON.stringify(data) })
 }
 

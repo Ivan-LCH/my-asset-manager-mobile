@@ -120,6 +120,7 @@ const EMPTY_PLAN: RetirementPlan = {
   retirementYear:  new Date().getFullYear() + 10,
   healthInsurance: DEFAULT_HI,
   linkCorpSim:     false,
+  linkPensionSim:  false,
 }
 
 // ── 유틸 ───────────────────────────────────────────────────
@@ -811,6 +812,7 @@ export default function RetirementPage() {
         retirementYear:  saved.retirementYear  ?? new Date().getFullYear() + 10,
         healthInsurance: saved.healthInsurance  ? { ...DEFAULT_HI, ...saved.healthInsurance } : DEFAULT_HI,
         linkCorpSim:     saved.linkCorpSim ?? false,
+        linkPensionSim:  saved.linkPensionSim ?? false,
       })
     }
   }, [saved])
@@ -909,6 +911,10 @@ export default function RetirementPage() {
           <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${linked ? 'text-blue-400' : 'text-gray-500'}`}>
             <input type="checkbox" checked={plan.linkCorpSim} onChange={(e) => update('linkCorpSim', e.target.checked)} className="accent-blue-500" />
             🏛️ 법인 연동
+          </label>
+          <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${plan.linkPensionSim ? 'text-blue-400' : 'text-gray-500'}`}>
+            <input type="checkbox" checked={plan.linkPensionSim} onChange={(e) => update('linkPensionSim', e.target.checked)} className="accent-blue-500" />
+            🪙 연금(IRP) 연동
           </label>
           <button
             onClick={handleSave}

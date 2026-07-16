@@ -143,6 +143,7 @@ export interface RetirementPlan {
   retirementYear:  number
   healthInsurance: HealthInsuranceInputs
   linkCorpSim:     boolean
+  linkPensionSim:  boolean
 }
 
 // ── 투자법인 시뮬레이터 ────────────────────────────────────
@@ -186,5 +187,30 @@ export interface CorpSimPlan {
   linkPension:             boolean            // 연금 자동 연동(은퇴 계획에서)
   pensionIncomeAnnual:     number             // 연금소득(연) — linkPension 시 자동 산출
   tax:                     CorpTaxParams
+}
+
+// ── 연금 시뮬레이터 ────────────────────────────────────────
+export type PensionTaxType = 'irp' | 'taxable' | 'taxExempt'
+// irp: 퇴직연금(DC)→IRP 이체, 연금소득세 대상 (공제 1,200만 적용)
+// taxable: 연금저축(신규), 연금소득세 대상
+// taxExempt: 연금저축(98년 한시적 비과세), 수령 시 세금 0
+
+export interface PensionSource {
+  id: string
+  name: string              // 자산명 (자산에서 자동 채움)
+  principal: number         // 원금 (자산 currentValue)
+  taxType: PensionTaxType   // 과세 구분
+  yieldRate: number         // 운용 수익률(%)
+}
+
+export interface PensionSimPlan {
+  sources:                  PensionSource[]
+  withdrawalYears:          number           // 수령 기간(연)
+  startYear:                number           // 수령 개시 연도
+  isaBalance:               number           // ISA 잔액
+  rentalDeposit:            number           // 전세금/보증금 (수령 예정)
+  rentalYield:              number           // 전세금 투자 수익률(%)
+  pensionDeduction:         number           // 연금소득공제 (기본 12,000,000)
+  healthPropertyBase:       number           // 건보 재산 과표
 }
 

@@ -69,4 +69,14 @@
 - [O] **RF-7. 배당 열 출처 표시 (P2)**: "(개인+법인)" 힌트
 - [O] **RF-8. 검증(tsc+vitest) + 커밋&push**
 
+### 🔵 연금 시뮬레이션 (PensionSim) 신규 페이지
+- [ ] **PS-1. types**: PensionSimPlan + PensionSource + PensionTaxType
+- [ ] **PS-2. lib/pensionSim.ts**: pensionIncomeTax 누진 + computePensionAnnual + simulatePension
+- [ ] **PS-3. db.ts + usePensionSim.ts**: getPensionSim/savePensionSim + 훅
+- [ ] **PS-4. PensionSimPage.tsx**: UI (KPI + 입력 + 현금흐름 + ISA + 전세금)
+- [ ] **PS-5. App.tsx + Sidebar.tsx**: 라우트 + 네비
+- [ ] **PS-6. RetirementPage 연동**: 법인/연금 택일 토글 + buildCashFlow
+- [ ] **PS-7. pensionSim.test.ts**: 단위테스트
+- [ ] **PS-8. 검증(tsc+vitest) + 커밋&push**
+
 <!-- 완료 항목은 TO-DO-ARCHIVE.md 로 이동 -->
