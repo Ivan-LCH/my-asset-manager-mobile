@@ -171,7 +171,7 @@ export default function PensionSimPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <Kpi label="연 수령액" value={formatManwon(r0?.totalWithdraw ?? 0)} sub={`원금 ${formatManwon(totalP)} / ${plan.withdrawalYears}년`} />
         <Kpi label="연금소득세(연)" value={formatManwon(r0?.pensionTax ?? 0)} sub={`과세표준 ${formatManwon(r0?.pensionTaxable ?? 0)}`} color="text-red-400" />
-        <Kpi label="전세금 투자 수익(연)" value={formatManwon(r0?.isaIncome ?? 0)} sub={`세후 ${formatManwon((r0?.isaIncome ?? 0) - (r0?.isaTax ?? 0))}`} color="text-blue-400" />
+        <Kpi label="전세금 수익(연)" value={formatManwon(r0?.isaIncome ?? 0)} sub={`세후 ${formatManwon((r0?.isaIncome ?? 0) - (r0?.isaTax ?? 0))}`} color="text-blue-400" />
         <Kpi label="순수령액(연)" value={formatManwon(r0?.netIncome ?? 0)} sub="수령 + 투자수익 − 세금" color="text-emerald-400" />
       </div>
 
@@ -245,12 +245,15 @@ export default function PensionSimPage() {
       </Expander>
 
       {/* ISA 만기 세금 */}
-      <Expander title="📊 ISA 만기 세금">
+      <Expander title="📊 ISA 세금">
         <Section>
           <Row label="ISA 잔액"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(plan.isaBalance)}</span></Row>
-          <Row label="비과세 한도 내"><span className="text-sm text-emerald-400 text-right w-full block">분리과세 9.9% (비과세 한도 우선)</span></Row>
-          <Row label="초과분 세금(추정)"><span className="text-sm text-orange-400 text-right w-full block">{formatManwon(plan.isaBalance * 0.099)}</span></Row>
-          <p className="text-[11px] text-gray-600">ISA 비과세 한도(이자·배당 소득 200만/250만) 초과분에 9.9% 분리과세. 만기 후 연금계좌 이전 시 추가 세액공제(전환액 10%, 최대 300만). 건보 소득 산정에서 제외.</p>
+          <Row label="비과세 한도"><span className="text-sm text-emerald-400 text-right w-full block">이자·배당 연 200만원까지 면세</span></Row>
+          <p className="text-[11px] text-gray-600 leading-relaxed">
+            ISA 운용 중 발생한 이자·배당 소득 중 연 200만원(중개형)까지 비과세. 만기 시 전액 수령하면 초과분에 9.9% 분리과세.
+            만기 후 연금계좌(IRP/연금저축)로 이전 시 세액공제 추가 (전환액의 10%, 최대 30만원).
+            ISA 수익은 건강보험료 소득 산정에서 제외.
+          </p>
         </Section>
       </Expander>
 
