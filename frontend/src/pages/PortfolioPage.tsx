@@ -126,8 +126,11 @@ export default function PortfolioPage() {
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
         <p className="text-xs text-gray-500 mb-1">가중평균 배당수익률 (3년 평균 기준)</p>
         <p className="text-2xl font-bold text-blue-400">
-          {yieldVal > 0 ? `${yieldVal}%` : '— (자동 산정 버튼을 누르세요)'}
+          {yieldVal > 0 ? `${yieldVal}%` : '—'}
         </p>
+        {yieldVal === 0 && (
+          <p className="text-xs text-gray-500 mt-1">위 "배당률 자동 산정" 버튼을 누르세요.</p>
+        )}
         <p className="text-[11px] text-gray-600 mt-2">
           이 수익률이 법인 시뮬·연금 시뮬에 자동 반영됩니다.
         </p>
