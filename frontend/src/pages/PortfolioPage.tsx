@@ -12,6 +12,7 @@ export default function PortfolioPage() {
   const [yieldVal, setYieldVal] = useState(0)
   const [yields, setYields] = useState<PortfolioYield[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
@@ -23,7 +24,13 @@ export default function PortfolioPage() {
 
   const fetchYields = async () => {
     setLoading(true)
+    setError('')
     const tickers = holdings.map((h) => h.ticker).filter(Boolean)
+    if (tickers.length === 0) {
+      setError('종목을 먼저 입력하세요.')
+      setLoading(false)
+      return
+    }
     const results: PortfolioYield[] = await Promise.all(
       tickers.map(async (t) => {
         try {
@@ -41,6 +48,9 @@ export default function PortfolioPage() {
     setYieldVal(Math.round(blended * 100) / 100)
     setDirty(true)
     setLoading(false)
+    const okCount = results.filter((r) => r.yield > 0).length
+    if (okCount === 0) setError(`${tickers.length}개 종목 조회 실패. 잠시 후 다시 시도하거나 수동으로 수익률을 입력하세요.`)
+    else if (okCount < tickers.length) setError(`${tickers.length - okCount}개 종목 조회 실패 (부분 성공).`)
   }
 
   const handleSave = () => {
@@ -120,6 +130,7 @@ export default function PortfolioPage() {
             {loading ? '조회 중...' : '배당률 자동 산정'}
           </button>
         </div>
+        {error && <p className="text-xs text-red-400">{error}</p>}
       </div>
 
       {/* 가중평균 수익률 */}
