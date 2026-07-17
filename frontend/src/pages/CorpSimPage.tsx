@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Save, ChevronDown, AlertTriangle, Trash2, RefreshCw } from 'lucide-react'
+import { Save, ChevronDown, AlertTriangle } from 'lucide-react'
 import { useCorpSim, useSaveCorpSim } from '@/hooks/useCorpSim'
 import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { useRetirement } from '@/hooks/useRetirement'
+import { usePortfolio } from '@/hooks/usePortfolio'
 import {
   EMPTY_CORP_PLAN, DEFAULT_CORP_TAX, grossDividend, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway, totalInvest,
-  computeTwoPhase, blendedYield, salariedCount, comprehensiveTax, corpHealthMonthly,
+  computeTwoPhase, salariedCount, comprehensiveTax, corpHealthMonthly,
 } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatManwon } from '@/lib/utils'
-import type { CorpSimPlan, CorpTaxParams, PortfolioHolding, PortfolioYield } from '@/types'
+import type { CorpSimPlan, CorpTaxParams } from '@/types'
 
 // ── 헬퍼 ───────────────────────────────────────────────────
 function numFmt(v: number) { return v > 0 ? Math.round(v).toLocaleString() : '' }
@@ -113,8 +114,7 @@ export default function CorpSimPage() {
   const [plan, setPlan] = useState<CorpSimPlan>(EMPTY_CORP_PLAN)
   const [dirty, setDirty] = useState(false)
   const [sonYears, setSonYears] = useState(10)
-  const [yields, setYields] = useState<PortfolioYield[]>([])
-  const [loadingYields, setLoadingYields] = useState(false)
+  const { data: portfolioData } = usePortfolio()
 
   useEffect(() => {
     if (saved) {
@@ -139,28 +139,6 @@ export default function CorpSimPage() {
   }, [])
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
-  // 배당주 포트폴리오 수익률 자동 산정
-  const fetchYields = async () => {
-    setLoadingYields(true)
-    const tickers = plan.portfolio.map((h) => h.ticker).filter(Boolean)
-    const results: PortfolioYield[] = await Promise.all(
-      tickers.map(async (t) => {
-        try {
-          const r = await fetch(`/api/yield?ticker=${encodeURIComponent(t)}`)
-          if (!r.ok) return { ticker: t, yield: 0 }
-          const d = await r.json()
-          return { ticker: t, yield: d.avg3yYield ?? 0 }
-        } catch {
-          return { ticker: t, yield: 0 }
-        }
-      }),
-    )
-    setYields(results)
-    const blended = blendedYield(results, plan.portfolio)
-    update('dividendYield', Math.round(blended * 100) / 100)
-    setLoadingYields(false)
-  }
-
   // ── 연금 자동 연동 ──
   const currentAge = settings?.currentAge ?? 40
   const retirementYear = retirementPlan?.retirementYear ?? new Date().getFullYear() + 10
@@ -169,7 +147,10 @@ export default function CorpSimPage() {
     const pensionMap = calcPensionByYear(allAssets, currentAge)
     pensionAnnual = (pensionMap.get(retirementYear) ?? 0) * 12
   }
-  const effectivePlan: CorpSimPlan = { ...plan, pensionIncomeAnnual: pensionAnnual }
+  // 포트폴리오 blendedYield가 있으면 dividendYield override
+  const portfolioYield = portfolioData?.blendedYield ?? 0
+  const effectiveYield = portfolioYield > 0 ? portfolioYield : plan.dividendYield
+  const effectivePlan: CorpSimPlan = { ...plan, pensionIncomeAnnual: pensionAnnual, dividendYield: effectiveYield }
 
   const corp = computeCorp(effectivePlan)
   const personal = computePersonal(effectivePlan)
@@ -226,10 +207,10 @@ export default function CorpSimPage() {
         <Section>
           <Row label="출자금(자본금)"><AmountInput value={plan.capitalContribution} onChange={(v) => update('capitalContribution', v)} /></Row>
           <Row label="가수금(대여금)"><AmountInput value={plan.loanAmount} onChange={(v) => update('loanAmount', v)} /></Row>
-          {plan.portfolio.length > 0 ? (
-            <Row label="배당수익률(자동)">
+          {portfolioYield > 0 ? (
+            <Row label="배당수익률(공통)">
               <span className="text-sm text-blue-400 text-right w-full block">
-                {plan.dividendYield}% <span className="text-gray-500 text-[11px]">(포트폴리오 산정)</span>
+                {portfolioYield}% <span className="text-gray-500 text-[11px]">→ 📊 투자 포트폴리오에서 설정</span>
               </span>
             </Row>
           ) : (
@@ -273,59 +254,6 @@ export default function CorpSimPage() {
           <p className="text-[11px] text-gray-600 pt-2 border-t border-gray-700">
             비교용 가정(개인명의 건보·승계재산·설립비)는 입력하지 않아도 됨 — 기본값으로 표시. 변경은 아래 <b>'세제 · 비교 파라미터'</b>에서.
           </p>
-        </Section>
-      </Expander>
-
-      {/* 배당주 포트폴리오 */}
-      <Expander title="📊 배당주 포트폴리오 (수익률 자동 산정)" badge={`현재 ${plan.dividendYield}%`}>
-        <Section>
-          <p className="text-[11px] text-gray-500 leading-relaxed">
-            종목과 비중을 입력하고 "자동 산정"을 누르면 Yahoo에서 3년 평균 배당률을 가져와 가중평균 → 시뮬 수익률 자동 반영.
-          </p>
-          {plan.portfolio.map((h, i) => {
-            const y = yields.find((v) => v.ticker === h.ticker)?.yield
-            return (
-              <div key={i} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  className="w-28 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
-                  value={h.ticker}
-                  onChange={(e) => { const p = [...plan.portfolio]; p[i] = { ...p[i], ticker: e.target.value.toUpperCase() }; update('portfolio', p) }}
-                  placeholder="TICKER"
-                />
-                <input
-                  type="number" inputMode="decimal"
-                  className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
-                  value={h.weight || ''}
-                  onChange={(e) => { const p = [...plan.portfolio]; p[i] = { ...p[i], weight: Number(e.target.value) }; update('portfolio', p) }}
-                />
-                <span className="text-xs text-gray-500">비중</span>
-                {typeof y === 'number' && y > 0 && <span className="text-xs text-emerald-400 shrink-0 ml-auto">{y.toFixed(2)}%</span>}
-                <button
-                  onClick={() => update('portfolio', plan.portfolio.filter((_, j) => j !== i))}
-                  className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )
-          })}
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              onClick={() => update('portfolio', [...plan.portfolio, { ticker: '', weight: 1 }])}
-              className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-            >
-              ＋ 종목 추가
-            </button>
-            <button
-              onClick={() => void fetchYields()}
-              disabled={loadingYields}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingYields ? 'animate-spin' : ''}`} />
-              {loadingYields ? '조회 중...' : '배당률 자동 산정'}
-            </button>
-          </div>
         </Section>
       </Expander>
 

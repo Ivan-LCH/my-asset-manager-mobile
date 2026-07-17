@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Home, TrendingUp, Shield,
-  PiggyBank, Gem, Music, Settings, Sunset, Building2, Wallet,
+  PiggyBank, Gem, Music, Settings, Sunset, Building2, Wallet, PieChart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
 
 const PLAN_ITEMS = [
   { to: '/retirement',  icon: Sunset,      label: '은퇴 계획' },
+  { to: '/portfolio',   icon: PieChart,    label: '투자 포트폴리오' },
   { to: '/corp-sim',    icon: Building2,   label: '투자법인 시뮬' },
   { to: '/pension-sim', icon: Wallet,      label: '연금 시뮬' },
 ]

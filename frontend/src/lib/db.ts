@@ -1,7 +1,8 @@
 import Dexie, { type Table } from 'dexie'
 import type {
   Asset, AssetDetail, AssetType, ChartDataPoint, ChartParams, Currency, HistoryItem,
-  DividendRecord, DividendSummary, RetirementPlan, CorpSimPlan, PensionSimPlan, Settings,
+  DividendRecord, DividendSummary, RetirementPlan, CorpSimPlan, PensionSimPlan,
+  PortfolioHolding, PortfolioSettings, Settings,
 } from '@/types'
 import { generateChartData } from './chartData'
 
@@ -871,5 +872,24 @@ export async function getPensionSim(): Promise<PensionSimPlan | null> {
 
 export async function savePensionSim(data: PensionSimPlan): Promise<void> {
   await db.settings.put({ key: PENSION_SIM_KEY, value: JSON.stringify(data) })
+}
+
+// ──────────────────────────────────────────────────────────────
+// 공통 투자 포트폴리오 (법인·연금 시뮬 공유)
+// ──────────────────────────────────────────────────────────────
+const PORTFOLIO_KEY = 'portfolio_settings'
+
+export async function getPortfolio(): Promise<PortfolioSettings | null> {
+  const row = await db.settings.get(PORTFOLIO_KEY)
+  if (!row) return null
+  try {
+    return JSON.parse(row.value) as PortfolioSettings
+  } catch {
+    return null
+  }
+}
+
+export async function savePortfolio(data: PortfolioSettings): Promise<void> {
+  await db.settings.put({ key: PORTFOLIO_KEY, value: JSON.stringify(data) })
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Save, ChevronDown, AlertTriangle, Wallet } from 'lucide-react'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useAssetsByType } from '@/hooks/useAssets'
@@ -100,19 +100,24 @@ export default function PensionSimPage() {
   const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [dirty, setDirty] = useState(false)
 
-  // 로드 + PENSION 자산 자동 병합
+  // 로드 + PENSION 자산 자동 병합 (최초 1회만, 이후 수동 편집 보존)
+  const didInit = useRef(false)
   useEffect(() => {
+    if (didInit.current) return
+    if (!saved && pensionAssets.length === 0) return
+    didInit.current = true
+
     const base = saved ?? EMPTY_PENSION_PLAN
-    // PENSION 자산을 sources에 자동 반영 (이미 있으면 유지, 없으면 추가)
+    // 수동 편집된 sources(현재 plan)가 있으면 우선, 없으면 saved/EMPTY
+    const currentSources = plan.sources.length > 0 ? plan.sources : base.sources
     const autoSources = sourcesFromAssets(
       pensionAssets.map((a) => ({
         id: a.id, name: a.name, currentValue: a.currentValue,
         detail: { pensionType: (a.detail as { pensionType?: string })?.pensionType },
       })),
-      base.sources,
+      currentSources,
     )
-    // 자산 기반 + 수동 추가(자산에 없는 기존 source) 병합
-    const manualSources = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
+    const manualSources = currentSources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
     setPlan({
       ...EMPTY_PENSION_PLAN,
       ...base,
@@ -236,43 +241,6 @@ export default function PensionSimPage() {
             <Row label="전세금/보증금"><AmountInput value={plan.rentalDeposit} onChange={(v) => update('rentalDeposit', v)} /></Row>
             <Row label="투자 수익률"><NumInput value={plan.rentalYield} onChange={(v) => update('rentalYield', v)} suffix="%" /></Row>
           </div>
-        </Section>
-      </Expander>
-
-      {/* 현금흐름 */}
-      <Expander title="📊 연도별 현금흐름" badge={`총 순수령 ${formatManwon(sim.totalNet)}`} defaultOpen>
-        <Section>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr className="text-gray-500 border-b border-gray-700">
-                <th className="text-left py-2 pr-2 font-medium">연도</th>
-                <th className="text-right py-2 px-1 font-medium bg-emerald-950/30">IRP수령</th>
-                <th className="text-right py-2 px-1 font-medium bg-emerald-950/30">과세수령</th>
-                <th className="text-right py-2 px-1 font-medium bg-emerald-950/30">비과세</th>
-                <th className="text-right py-2 px-1 font-medium bg-emerald-950/30">총수령</th>
-                <th className="text-right py-2 px-1 font-medium bg-red-950/20">연금세</th>
-                <th className="text-right py-2 px-1 font-medium bg-red-950/20">투자세</th>
-                <th className="text-right py-2 px-1 font-medium bg-red-950/20">순수령</th>
-                <th className="text-right py-2 pl-1 font-medium">잔액</th>
-              </tr></thead>
-              <tbody>
-                {sim.rows.slice(0, 10).map((r) => (
-                  <tr key={r.year} className="border-b border-gray-700/50">
-                    <td className="py-2 pr-2 text-gray-300">{r.year}</td>
-                    <td className="text-right py-2 px-1 text-gray-300 bg-emerald-950/30">{r.irpWithdraw > 0 ? Math.round(r.irpWithdraw / 1000).toLocaleString() : '—'}</td>
-                    <td className="text-right py-2 px-1 text-gray-300 bg-emerald-950/30">{r.taxableWithdraw > 0 ? Math.round(r.taxableWithdraw / 1000).toLocaleString() : '—'}</td>
-                    <td className="text-right py-2 px-1 text-emerald-400 bg-emerald-950/30">{r.exemptWithdraw > 0 ? Math.round(r.exemptWithdraw / 1000).toLocaleString() : '—'}</td>
-                    <td className="text-right py-2 px-1 font-semibold text-gray-100 bg-emerald-950/30">{Math.round(r.totalWithdraw / 1000).toLocaleString()}</td>
-                    <td className="text-right py-2 px-1 text-red-400 bg-red-950/20">{r.pensionTax > 0 ? Math.round(r.pensionTax / 1000).toLocaleString() : '—'}</td>
-                    <td className="text-right py-2 px-1 text-orange-400 bg-red-950/20">{Math.round(r.isaTax / 1000).toLocaleString()}</td>
-                    <td className="text-right py-2 px-1 font-semibold text-emerald-400 bg-red-950/20">{Math.round(r.netIncome / 1000).toLocaleString()}</td>
-                    <td className="text-right py-2 pl-1 text-gray-400">{Math.round(r.remainingBalance / 1000).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-gray-600 mt-2">단위: 천원. 처음 10년만 표시 (전체 {sim.rows.length}년).</p>
         </Section>
       </Expander>
 

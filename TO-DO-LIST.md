@@ -70,13 +70,20 @@
 - [O] **RF-8. 검증(tsc+vitest) + 커밋&push**
 
 ### 🔵 연금 시뮬레이션 (PensionSim) 신규 페이지
-- [ ] **PS-1. types**: PensionSimPlan + PensionSource + PensionTaxType
-- [ ] **PS-2. lib/pensionSim.ts**: pensionIncomeTax 누진 + computePensionAnnual + simulatePension
-- [ ] **PS-3. db.ts + usePensionSim.ts**: getPensionSim/savePensionSim + 훅
-- [ ] **PS-4. PensionSimPage.tsx**: UI (KPI + 입력 + 현금흐름 + ISA + 전세금)
-- [ ] **PS-5. App.tsx + Sidebar.tsx**: 라우트 + 네비
-- [ ] **PS-6. RetirementPage 연동**: 법인/연금 택일 토글 + buildCashFlow
-- [ ] **PS-7. pensionSim.test.ts**: 단위테스트
-- [ ] **PS-8. 검증(tsc+vitest) + 커밋&push**
+- [O] **PS-1. types**: PensionSimPlan + PensionSource + PensionTaxType
+- [O] **PS-2. lib/pensionSim.ts**: pensionIncomeTax 누진 + simulatePension + sourcesFromAssets
+- [O] **PS-3. db.ts + usePensionSim.ts**: getPensionSim/savePensionSim + 훅
+- [O] **PS-4. PensionSimPage.tsx**: UI (KPI + 연금원천 + 수령설정 + 현금흐름 + ISA + 전세금)
+- [O] **PS-5. App.tsx + Sidebar.tsx**: 라우트(/pension-sim) + 🪙 Wallet 네비
+- [O] **PS-6. RetirementPage 연동**: 🪙 연금(IRP) 연동 토글 추가 (빌드 통과)
+- [O] **PS-7. pensionSim.test.ts**: 6개 단위테스트 (연금소득세 누진/잔액감소/비과세/자산연동)
+- [O] **PS-8. 검증(tsc+42테스트) + 커밋&push**
+
+### 🔵 전면 재설계: 공통 포트폴리오 분리 + 시뮬 구조 개선
+- [ ] **A-1. 공통 투자포트폴리오 페이지** (types + db + hook + PortfolioPage + 라우트/네비 + CorpSim에서 제거)
+- [ ] **B-1. 연금시뮬 과세구분 버그 수정 + 현금흐름 제거**
+- [ ] **C-1. 은퇴계획 라디오 택일 + 연금시뮬 연동**
+- [ ] **D-1. CorpSim portfolio 필드 제거 정리**
+- [ ] **E-1. 검증(tsc+vitest) + 커밋&push**
 
 <!-- 완료 항목은 TO-DO-ARCHIVE.md 로 이동 -->

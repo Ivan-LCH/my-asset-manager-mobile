@@ -162,6 +162,12 @@ export interface PortfolioHolding {
   ticker: string
   weight: number                 // 비중(정규화 전, 예: 1:1:1 → 각 1)
 }
+
+// ── 공통 투자 포트폴리오 (법인·연금 시뮬 공유) ─────────────
+export interface PortfolioSettings {
+  holdings:    PortfolioHolding[]
+  blendedYield: number           // 자동 산정 가중평균 수익률(%)
+}
 export interface PortfolioYield {
   ticker: string
   yield: number                  // 3년평균 배당수익률(%)
