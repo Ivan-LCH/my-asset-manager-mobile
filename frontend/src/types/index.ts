@@ -196,7 +196,7 @@ export interface CorpSimPlan {
 }
 
 // ── 연금 시뮬레이터 ────────────────────────────────────────
-export type PensionTaxType = 'irp' | 'taxable' | 'taxExempt'
+export type PensionTaxType = 'irp' | 'national' | 'taxable' | 'taxExempt'
 // irp: 퇴직연금(DC)→IRP 이체, 연금소득세 대상 (공제 1,200만 적용)
 // taxable: 연금저축(신규), 연금소득세 대상
 // taxExempt: 연금저축(98년 한시적 비과세), 수령 시 세금 0

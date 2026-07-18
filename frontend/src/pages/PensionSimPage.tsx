@@ -88,12 +88,14 @@ function Kpi({ label, value, sub, color = 'text-gray-100' }: {
 
 const TAX_LABELS: Record<PensionTaxType, string> = {
   irp: 'IRP(퇴직)',
+  national: '국민연금',
   taxable: '과세',
   taxExempt: '비과세',
 }
 
 const TAX_COLORS: Record<PensionTaxType, string> = {
   irp: 'text-blue-400',
+  national: 'text-cyan-400',
   taxable: 'text-orange-400',
   taxExempt: 'text-emerald-400',
 }
@@ -221,7 +223,7 @@ export default function PensionSimPage() {
                   {formatManwon(src.principal)}
                 </div>
                 <div className="flex gap-1">
-                  {(['irp', 'taxable', 'taxExempt'] as PensionTaxType[]).map((t) => (
+                  {(['irp', 'national', 'taxable', 'taxExempt'] as PensionTaxType[]).map((t) => (
                     <button
                       key={t}
                       onClick={() => updateSource(i, { taxType: t })}

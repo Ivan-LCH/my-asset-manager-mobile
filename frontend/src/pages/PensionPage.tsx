@@ -18,10 +18,13 @@ const SIM_START_YEAR = 2029
 const AREA_COLORS = ['#60a5fa', '#34d399', '#fb923c', '#c084fc', '#f87171', '#a3e635', '#fbbf24', '#22d3ee']
 
 const TAX_LABELS: Record<PensionTaxType, string> = {
-  irp: 'IRP', taxable: '과세', taxExempt: '비과세',
+  irp: 'IRP(퇴직)', national: '국민연금', taxable: '과세', taxExempt: '비과세',
 }
 const TAX_ACTIVE: Record<PensionTaxType, string> = {
-  irp: 'bg-blue-600 text-white', taxable: 'bg-orange-600 text-white', taxExempt: 'bg-emerald-600 text-white',
+  irp: 'bg-blue-600 text-white',
+  national: 'bg-cyan-600 text-white',
+  taxable: 'bg-orange-600 text-white',
+  taxExempt: 'bg-emerald-600 text-white',
 }
 
 interface SimRow { year: number; total: number; [source: string]: number }
@@ -331,7 +334,7 @@ export default function PensionPage() {
                 <div className="pt-1 border-t border-gray-700/60" onClick={(e) => e.stopPropagation()}>
                   <p className="text-[10px] text-gray-500 mb-1">과세 구분</p>
                   <div className="flex gap-1">
-                    {(['irp', 'taxable', 'taxExempt'] as PensionTaxType[]).map((t) => (
+                    {(['irp', 'national', 'taxable', 'taxExempt'] as PensionTaxType[]).map((t) => (
                       <button
                         key={t}
                         onClick={() => updateSourceTaxType(a.id, t)}

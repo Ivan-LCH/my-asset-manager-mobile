@@ -79,7 +79,7 @@ export function simulatePension(plan: PensionSimPlan): PensionSimResult {
       const withdraw = Math.min(annualFromSource[idx], balances[idx])
       balances[idx] -= withdraw
 
-      if (src.taxType === 'irp') irpW += withdraw
+      if (src.taxType === 'irp' || src.taxType === 'national') irpW += withdraw
       else if (src.taxType === 'taxable') taxableW += withdraw
       else exemptW += withdraw
     })
@@ -118,7 +118,7 @@ export function sourcesFromAssets(
 ): PensionSource[] {
   return assets.map((a) => {
     const pt = a.detail?.pensionType ?? ''
-    const taxType = pt.includes('퇴직') ? 'irp' : pt.includes('비과세') ? 'taxExempt' : 'taxable'
+    const taxType = pt.includes('퇴직') ? 'irp' : pt.includes('국민') ? 'national' : pt.includes('비과세') ? 'taxExempt' : 'taxable'
     const existingSrc = existing.find((s) => s.id === a.id)
     return {
       id: a.id,
