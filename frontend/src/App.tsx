@@ -9,7 +9,6 @@ import StockPage from '@/pages/StockPage'
 import PensionPage from '@/pages/PensionPage'
 import RetirementPage from '@/pages/RetirementPage'
 import CorpSimPage from '@/pages/CorpSimPage'
-import PensionSimPage from '@/pages/PensionSimPage'
 import PortfolioPage from '@/pages/PortfolioPage'
 import Settings from '@/pages/Settings'
 import { getAllAssets, getSettings, saveSettings, seedSampleData } from '@/lib/db'
@@ -54,7 +53,6 @@ export default function App() {
             <Route path="etc"         element={<AssetPage type="ETC" />} />
             <Route path="retirement"  element={<RetirementPage />} />
             <Route path="corp-sim"    element={<CorpSimPage />} />
-            <Route path="pension-sim" element={<PensionSimPage />} />
             <Route path="portfolio"   element={<PortfolioPage />} />
             <Route path="settings"    element={<Settings />} />
             <Route path="*"           element={<Navigate to="/" replace />} />
