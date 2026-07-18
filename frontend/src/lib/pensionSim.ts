@@ -22,7 +22,6 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   ],
   withdrawalYears:    30,
   startYear:          new Date().getFullYear() + 3,
-  isaBalance:         50_000_000,
   pensionDeduction:   12_000_000,
 }
 

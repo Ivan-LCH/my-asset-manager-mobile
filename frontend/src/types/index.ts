@@ -213,7 +213,6 @@ export interface PensionSimPlan {
   sources:                  PensionSource[]
   withdrawalYears:          number           // 수령 기간(연)
   startYear:                number           // 수령 개시 연도
-  isaBalance:               number           // ISA 잔액
   pensionDeduction:         number           // 연금소득공제 (기본 12,000,000)
 }
 

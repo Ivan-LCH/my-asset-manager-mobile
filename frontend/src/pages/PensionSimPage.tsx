@@ -256,7 +256,6 @@ export default function PensionSimPage() {
         <Section>
           <Row label="수령 개시 연도"><NumInput value={plan.startYear} onChange={(v) => update('startYear', v)} /></Row>
           <Row label="수령 기간(연)"><NumInput value={plan.withdrawalYears} onChange={(v) => update('withdrawalYears', v)} suffix="년" /></Row>
-          <Row label="ISA 잔액"><AmountInput value={plan.isaBalance} onChange={(v) => update('isaBalance', v)} /></Row>
         </Section>
       </Expander>
 

@@ -361,11 +361,10 @@ export default function PensionPage() {
         </div>
       </section>
 
-      {/* 시뮬 설정 (수령 기간, ISA) */}
+      {/* 시뮬 설정 */}
       <Expander title="⚙️ IRP 수령 시뮬 설정">
         <Row label="수령 개시 연도"><NumInput value={simPlan.startYear} onChange={(v) => updateSim('startYear', v)} /></Row>
         <Row label="수령 기간(연)"><NumInput value={simPlan.withdrawalYears} onChange={(v) => updateSim('withdrawalYears', v)} suffix="년" /></Row>
-        <Row label="ISA 잔액"><AmountInput value={simPlan.isaBalance} onChange={(v) => updateSim('isaBalance', v)} /></Row>
         {portfolioYield > 0 && (
           <p className="text-[11px] text-blue-400">운용 수익률: {portfolioYield}% (📊 투자 포트폴리오에서 공통 적용)</p>
         )}
