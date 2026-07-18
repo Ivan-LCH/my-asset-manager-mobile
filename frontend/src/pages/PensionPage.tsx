@@ -159,14 +159,16 @@ export default function PensionPage() {
 
   const portfolioYield = portfolioData?.blendedYield ?? 0
 
-  // PensionSim 로드 + PENSION 자산 자동 병합 (최초 1회)
+  // PensionSim 로드 + PENSION 자산 자동 병합
+  // savedSim(undefined=로딩중)가 해결되고 자산도 로드된 후 1회 실행.
   const didInit = useRef(false)
   useEffect(() => {
     if (didInit.current) return
-    if (!savedSim && pensionAssets.length === 0) return
+    if (savedSim === undefined) return       // sim plan 아직 로딩 중
+    if (pensionAssets.length === 0 && savedSim === null) return  // 둘 다 비어있으면 대기
     didInit.current = true
     const base = savedSim ?? EMPTY_PENSION_PLAN
-    const currentSources = simPlan.sources.length > 0 && savedSim ? simPlan.sources : base.sources
+    const currentSources = base.sources
     const auto = sourcesFromAssets(
       pensionAssets.map((a) => ({
         id: a.id, name: a.name, currentValue: a.currentValue,
@@ -184,10 +186,17 @@ export default function PensionPage() {
   }, [])
 
   const updateSourceTaxType = (assetId: string, taxType: PensionTaxType) => {
-    setSimPlan((p) => ({
-      ...p,
-      sources: p.sources.map((s) => s.id === assetId ? { ...s, taxType } : s),
-    }))
+    setSimPlan((p) => {
+      const exists = p.sources.some((s) => s.id === assetId)
+      if (exists) {
+        return { ...p, sources: p.sources.map((s) => s.id === assetId ? { ...s, taxType } : s) }
+      }
+      const asset = pensionAssets.find((a) => a.id === assetId)
+      if (!asset) return p
+      return { ...p, sources: [...p.sources, {
+        id: assetId, name: asset.name, principal: asset.currentValue, taxType, yieldRate: 4,
+      }] }
+    })
     setSimDirty(true)
   }
 
