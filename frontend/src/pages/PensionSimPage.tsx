@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Save, ChevronDown, AlertTriangle, Wallet } from 'lucide-react'
+import { Save, ChevronDown, AlertTriangle, Trash2 } from 'lucide-react'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useAssetsByType } from '@/hooks/useAssets'
-import { EMPTY_PENSION_PLAN, simulatePension, totalPrincipal, sourcesFromAssets } from '@/lib/pensionSim'
+import { usePortfolio } from '@/hooks/usePortfolio'
+import { EMPTY_PENSION_PLAN, simulatePension, totalPrincipal, sourcesFromAssets, pensionIncomeTax } from '@/lib/pensionSim'
 import { formatManwon } from '@/lib/utils'
 import type { PensionSimPlan, PensionSource, PensionTaxType } from '@/types'
 
@@ -88,7 +89,13 @@ function Kpi({ label, value, sub, color = 'text-gray-100' }: {
 const TAX_LABELS: Record<PensionTaxType, string> = {
   irp: 'IRP(퇴직)',
   taxable: '과세',
-  taxExempt: '비과세(98년)',
+  taxExempt: '비과세',
+}
+
+const TAX_COLORS: Record<PensionTaxType, string> = {
+  irp: 'text-blue-400',
+  taxable: 'text-orange-400',
+  taxExempt: 'text-emerald-400',
 }
 
 // ── 메인 ───────────────────────────────────────────────────
@@ -96,11 +103,15 @@ export default function PensionSimPage() {
   const { data: saved } = usePensionSim()
   const saveMut = useSavePensionSim()
   const pensionAssets = useAssetsByType('PENSION')
+  const { data: portfolioData } = usePortfolio()
 
   const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [dirty, setDirty] = useState(false)
 
-  // 로드 + PENSION 자산 자동 병합 (최초 1회만, 이후 수동 편집 보존)
+  // 포트폴리오 수익률
+  const portfolioYield = portfolioData?.blendedYield ?? 0
+
+  // 로드 + PENSION 자산 자동 병합 (최초 1회만)
   const didInit = useRef(false)
   useEffect(() => {
     if (didInit.current) return
@@ -108,7 +119,6 @@ export default function PensionSimPage() {
     didInit.current = true
 
     const base = saved ?? EMPTY_PENSION_PLAN
-    // 수동 편집된 sources(현재 plan)가 있으면 우선, 없으면 saved/EMPTY
     const currentSources = plan.sources.length > 0 ? plan.sources : base.sources
     const autoSources = sourcesFromAssets(
       pensionAssets.map((a) => ({
@@ -141,18 +151,30 @@ export default function PensionSimPage() {
 
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
-  const sim = simulatePension(plan)
+  // 포트폴리오 수익률을 각 원천에 적용
+  const effectivePlan: PensionSimPlan = {
+    ...plan,
+    sources: portfolioYield > 0
+      ? plan.sources.map((s) => ({ ...s, yieldRate: portfolioYield }))
+      : plan.sources,
+  }
+  const sim = simulatePension(effectivePlan)
   const r0 = sim.rows[0]
   const totalP = totalPrincipal(plan)
+
+  // 과세별 합산
+  const irpTotal = plan.sources.filter((s) => s.taxType === 'irp').reduce((s, src) => s + src.principal, 0)
+  const taxableTotal = plan.sources.filter((s) => s.taxType === 'taxable').reduce((s, src) => s + src.principal, 0)
+  const exemptTotal = plan.sources.filter((s) => s.taxType === 'taxExempt').reduce((s, src) => s + src.principal, 0)
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-xl mx-auto">
       {/* 헤더 */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <h2 className="text-lg sm:text-xl font-bold text-gray-100">🪙 연금 시뮬레이션 (IRP)</h2>
         <button
           onClick={handleSave} disabled={!dirty || saveMut.isPending}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 self-start"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40"
         >
           <Save className="w-4 h-4" />
           {saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
@@ -169,58 +191,55 @@ export default function PensionSimPage() {
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <Kpi label="연 수령액" value={formatManwon(r0?.totalWithdraw ?? 0)} sub={`원금 ${formatManwon(totalP)} / ${plan.withdrawalYears}년`} />
-        <Kpi label="연금소득세(연)" value={formatManwon(r0?.pensionTax ?? 0)} sub={`과세표준 ${formatManwon(r0?.pensionTaxable ?? 0)}`} color="text-red-400" />
-        <Kpi label="전세금 수익(연)" value={formatManwon(r0?.isaIncome ?? 0)} sub={`세후 ${formatManwon((r0?.isaIncome ?? 0) - (r0?.isaTax ?? 0))}`} color="text-blue-400" />
-        <Kpi label="순수령액(연)" value={formatManwon(r0?.netIncome ?? 0)} sub="수령 + 투자수익 − 세금" color="text-emerald-400" />
+        <Kpi label="연금 총액" value={formatManwon(totalP)} sub={`IRP ${formatManwon(irpTotal)} + 기타 ${formatManwon(taxableTotal + exemptTotal)}`} />
+        <Kpi label="연 수령액" value={formatManwon(r0?.totalWithdraw ?? 0)} sub={`${plan.withdrawalYears}년 × 균등인출`} />
+        <Kpi label="연금소득세(연)" value={formatManwon(r0?.pensionTax ?? 0)} sub={`공제 ${formatManwon(plan.pensionDeduction)} 후 누진`} color="text-red-400" />
+        <Kpi label="순수령액(연)" value={formatManwon(r0?.netIncome ?? 0)} sub="수령 − 세금" color="text-emerald-400" />
       </div>
 
-      {/* 입력: 연금 원천 */}
-      <Expander title="✏️ 연금 원천 (PENSION 자산 자동)" badge={`총액 ${formatManwon(totalP)}`} defaultOpen>
+      {/* 연금 원천 타일 (2 per line) */}
+      <Expander title="✏️ 연금 원천" badge={`${plan.sources.length}개 · 총액 ${formatManwon(totalP)}`} defaultOpen>
         <Section>
           <p className="text-[11px] text-gray-500 leading-relaxed">
             PENSION 자산이 자동으로 표시됩니다. 각 원천의 <b>과세 구분</b>을 확인하세요:
             IRP(퇴직)·과세(연금저축신규) → 연금소득세, 비과세(98년) → 세금 0.
+            운용 수익률은 <b>📊 투자 포트폴리오</b>에서 공통 적용{portfolioYield > 0 ? ` (현재 ${portfolioYield}%)` : ''}.
           </p>
-          {plan.sources.map((src, i) => (
-            <div key={src.id} className="bg-gray-900/50 rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-gray-200 font-medium truncate flex-1">{src.name}</span>
-                <button
-                  onClick={() => update('sources', plan.sources.filter((_, j) => j !== i))}
-                  className="text-xs text-gray-600 hover:text-red-400 shrink-0"
-                >
-                  삭제
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[11px] text-gray-500 block mb-0.5">원금</label>
-                  <AmountInput value={src.principal} onChange={(v) => updateSource(i, { principal: v })} />
+          <div className="grid grid-cols-2 gap-3">
+            {plan.sources.map((src, i) => (
+              <div key={src.id} className="bg-gray-900/50 rounded-xl border border-gray-700 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-1">
+                  <span className="text-sm text-gray-200 font-medium truncate flex-1">{src.name}</span>
+                  <button
+                    onClick={() => update('sources', plan.sources.filter((_, j) => j !== i))}
+                    className="text-gray-600 hover:text-red-400 shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <div>
-                  <label className="text-[11px] text-gray-500 block mb-0.5">운용 수익률</label>
-                  <NumInput value={src.yieldRate} onChange={(v) => updateSource(i, { yieldRate: v })} suffix="%" />
+                <div className={`text-lg font-bold ${TAX_COLORS[src.taxType]}`}>
+                  {formatManwon(src.principal)}
                 </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-gray-500 block mb-0.5">과세 구분</label>
                 <div className="flex gap-1">
                   {(['irp', 'taxable', 'taxExempt'] as PensionTaxType[]).map((t) => (
                     <button
                       key={t}
                       onClick={() => updateSource(i, { taxType: t })}
-                      className={`px-2 py-1 text-[11px] rounded-md transition-colors ${
-                        src.taxType === t ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                        src.taxType === t ? `${t === 'irp' ? 'bg-blue-600' : t === 'taxable' ? 'bg-orange-600' : 'bg-emerald-600'} text-white` : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                       }`}
                     >
                       {TAX_LABELS[t]}
                     </button>
                   ))}
                 </div>
+                <div>
+                  <label className="text-[10px] text-gray-500 block mb-0.5">원금 (자산에서 자동)</label>
+                  <AmountInput value={src.principal} onChange={(v) => updateSource(i, { principal: v })} />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
           <button
             onClick={() => update('sources', [...plan.sources, { id: `manual-${Date.now()}`, name: '수동 추가', principal: 0, taxType: 'taxable', yieldRate: 4 }])}
             className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
@@ -230,59 +249,37 @@ export default function PensionSimPage() {
         </Section>
       </Expander>
 
-      {/* 입력: 수령 설정 */}
-      <Expander title="✏️ 수령 설정 + 자산">
+      {/* 수령 설정 */}
+      <Expander title="✏️ 수령 설정">
         <Section>
           <Row label="수령 개시 연도"><NumInput value={plan.startYear} onChange={(v) => update('startYear', v)} /></Row>
           <Row label="수령 기간(연)"><NumInput value={plan.withdrawalYears} onChange={(v) => update('withdrawalYears', v)} suffix="년" /></Row>
           <Row label="ISA 잔액"><AmountInput value={plan.isaBalance} onChange={(v) => update('isaBalance', v)} /></Row>
-          <div className="pt-2 border-t border-gray-700">
-            <p className="text-xs text-gray-500 mb-2">전세금/보증금 투자</p>
-            <Row label="전세금/보증금"><AmountInput value={plan.rentalDeposit} onChange={(v) => update('rentalDeposit', v)} /></Row>
-            <Row label="투자 수익률"><NumInput value={plan.rentalYield} onChange={(v) => update('rentalYield', v)} suffix="%" /></Row>
-          </div>
         </Section>
       </Expander>
 
-      {/* ISA 만기 세금 */}
-      <Expander title="📊 ISA 세금">
+      {/* 세금 요약 */}
+      <Expander title="📊 세금 요약" defaultOpen>
         <Section>
-          <Row label="ISA 잔액"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(plan.isaBalance)}</span></Row>
-          <Row label="비과세 한도"><span className="text-sm text-emerald-400 text-right w-full block">이자·배당 연 200만원까지 면세</span></Row>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">과세 대상 (IRP + 과세)</p>
+              <p className="text-base font-bold text-blue-400">{formatManwon(irpTotal + taxableTotal)}</p>
+              <p className="text-[11px] text-gray-600 mt-1">연금소득세 3~6% 누진 (1,200만 공제)</p>
+            </div>
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">비과세 (98년 연금저축)</p>
+              <p className="text-base font-bold text-emerald-400">{formatManwon(exemptTotal)}</p>
+              <p className="text-[11px] text-gray-600 mt-1">수령 시 세금 0</p>
+            </div>
+          </div>
+          <Row label="연금소득세(연, 첫 해 기준)"><span className="text-sm text-red-400 text-right w-full block">{formatManwon(r0?.pensionTax ?? 0)}</span></Row>
+          <Row label="과세표준"><span className="text-sm text-gray-300 text-right w-full block">{formatManwon(r0?.pensionTaxable ?? 0)}</span></Row>
+          <Row label="순수령액(연, 첫 해)"><span className="text-sm text-emerald-400 font-bold text-right w-full block">{formatManwon(r0?.netIncome ?? 0)}</span></Row>
           <p className="text-[11px] text-gray-600 leading-relaxed">
-            ISA 운용 중 발생한 이자·배당 소득 중 연 200만원(중개형)까지 비과세. 만기 시 전액 수령하면 초과분에 9.9% 분리과세.
-            만기 후 연금계좌(IRP/연금저축)로 이전 시 세액공제 추가 (전환액의 10%, 최대 30만원).
-            ISA 수익은 건강보험료 소득 산정에서 제외.
+            연금소득 = IRP 수령 + 과세 연금저축 수령. 여기서 연금소득공제 1,200만원을 뺀 과세표준에 3~6% 누진세율 적용.
+            비과세(98년) 연금저축은 연금소득에 포함되지 않음.
           </p>
-        </Section>
-      </Expander>
-
-      {/* 전세금 투자 시나리오 */}
-      <Expander title="📊 전세금 투자 시나리오">
-        <Section>
-          <p className="text-[11px] text-gray-500 leading-relaxed">
-            전세금/보증금 수령 후 투자 운용 시뮬레이션. 수익률별 월/연 수익 + ISA 분리과세 9.9% 후 순수익.
-          </p>
-          <Row label="전세금/보증금"><span className="text-sm text-gray-100 text-right w-full block">{formatManwon(plan.rentalDeposit)}</span></Row>
-          <div className="grid grid-cols-3 gap-2 mt-2">
-            {[
-              { label: '예금(3.5%)', rate: 3.5 },
-              { label: '국채(4%)', rate: 4 },
-              { label: '배당ETF(6%)', rate: 6 },
-            ].map((s) => {
-              const annual = plan.rentalDeposit * (s.rate / 100)
-              const net = annual * (1 - 0.099)
-              return (
-                <div key={s.rate} className={`rounded-lg p-2 cursor-pointer transition-colors ${plan.rentalYield === s.rate ? 'bg-blue-600/20 border border-blue-500/40' : 'bg-gray-900/50 border border-gray-700'}`}
-                  onClick={() => update('rentalYield', s.rate)}
-                >
-                  <p className="text-xs text-gray-400">{s.label}</p>
-                  <p className="text-sm font-bold text-blue-400">{Math.round(annual / 10000).toLocaleString()}만</p>
-                  <p className="text-[11px] text-gray-500">세후 {Math.round(net / 10000).toLocaleString()}만</p>
-                </div>
-              )
-            })}
-          </div>
         </Section>
       </Expander>
     </div>

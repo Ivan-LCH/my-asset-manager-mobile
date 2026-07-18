@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Save, ChevronDown, AlertTriangle } from 'lucide-react'
 import { useCorpSim, useSaveCorpSim } from '@/hooks/useCorpSim'
 import { useAssets } from '@/hooks/useAssets'
@@ -116,17 +116,18 @@ export default function CorpSimPage() {
   const [sonYears, setSonYears] = useState(10)
   const { data: portfolioData } = usePortfolio()
 
+  // 로드 (최초 1회만, 이후 수동 편집 보존)
+  const didInit = useRef(false)
   useEffect(() => {
-    if (saved) {
-      const oldInvest = (saved as unknown as Record<string, unknown>).investAmount as number | undefined
-      setPlan({
-        ...EMPTY_CORP_PLAN,
-        ...saved,
-        // 구버전(investAmount) → 가수금으로 마이그레이션
-        loanAmount: saved.loanAmount ?? (oldInvest ?? EMPTY_CORP_PLAN.loanAmount),
-        tax: { ...DEFAULT_CORP_TAX, ...(saved.tax ?? {}) },
-      })
-    }
+    if (didInit.current || !saved) return
+    didInit.current = true
+    const oldInvest = (saved as unknown as Record<string, unknown>).investAmount as number | undefined
+    setPlan({
+      ...EMPTY_CORP_PLAN,
+      ...saved,
+      loanAmount: saved.loanAmount ?? (oldInvest ?? EMPTY_CORP_PLAN.loanAmount),
+      tax: { ...DEFAULT_CORP_TAX, ...(saved.tax ?? {}) },
+    })
   }, [saved])
 
   const update = useCallback(<K extends keyof CorpSimPlan>(key: K, val: CorpSimPlan[K]) => {

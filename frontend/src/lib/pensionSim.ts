@@ -23,10 +23,7 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   withdrawalYears:    30,
   startYear:          new Date().getFullYear() + 3,
   isaBalance:         50_000_000,
-  rentalDeposit:      500_000_000,
-  rentalYield:        4,
   pensionDeduction:   12_000_000,
-  healthPropertyBase: 0,
 }
 
 /** 연금 원천 총액 */
@@ -91,9 +88,9 @@ export function simulatePension(plan: PensionSimPlan): PensionSimResult {
     const pensionTaxable = Math.max(0, pensionIncome - deduction)
     const pensionTax = pensionIncomeTax(pensionTaxable)
 
-    // 전세금 투자 수익 (단순화: 매년 rentalYield% 수익, 분리과세 9.9%)
-    const isaIncome = plan.rentalDeposit * (plan.rentalYield / 100)
-    const isaTax = isaIncome * 0.099
+    // ISA 수익은 별도 (운용 중 비과세, 만기 시 분리과세)
+    const isaIncome = 0
+    const isaTax = 0
 
     const totalWithdraw = irpW + taxableW + exemptW
     const netIncome = totalWithdraw + isaIncome - pensionTax - isaTax

@@ -214,9 +214,6 @@ export interface PensionSimPlan {
   withdrawalYears:          number           // 수령 기간(연)
   startYear:                number           // 수령 개시 연도
   isaBalance:               number           // ISA 잔액
-  rentalDeposit:            number           // 전세금/보증금 (수령 예정)
-  rentalYield:              number           // 전세금 투자 수익률(%)
   pensionDeduction:         number           // 연금소득공제 (기본 12,000,000)
-  healthPropertyBase:       number           // 건보 재산 과표
 }
 
