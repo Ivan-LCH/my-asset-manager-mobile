@@ -211,6 +211,13 @@ export interface PensionSource {
 
 export interface PensionSimPlan {
   sources:                  PensionSource[]
+  severancePay:             number           // 희망퇴직위로금 → IRP로 이체
+  rentalDeposit:             number           // 전세보증금 (개인 주식 계좌 투자)
+  rentalYield:               number           // 전세금 배당 투자 수익률(%), 기본 6
+  rentalOwner:              'husband' | 'wife' // 전세금 투자 명의
+  interestIncome:           number           // 기타 이자소득(연, 예금 등) — 금융소득 합산
+  otherIncome:              number           // 기타 종합소득(연, 근로/사업 등) — 은퇴 후 보통 0
+  comprehensiveDeduction:   number           // 종합소득공제 (기본 본인 1,500,000 + 부양가족)
   withdrawalYears:          number           // 수령 기간(연)
   startYear:                number           // 수령 개시 연도
   pensionDeduction:         number           // 연금소득공제 (기본 12,000,000)

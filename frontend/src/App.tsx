@@ -7,6 +7,7 @@ import RealEstatePage from '@/pages/RealEstatePage'
 import AssetPage from '@/pages/AssetPage'
 import StockPage from '@/pages/StockPage'
 import PensionPage from '@/pages/PensionPage'
+import PensionSimPage from '@/pages/PensionSimPage'
 import RetirementPage from '@/pages/RetirementPage'
 import CorpSimPage from '@/pages/CorpSimPage'
 import PortfolioPage from '@/pages/PortfolioPage'
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="real-estate" element={<RealEstatePage />} />
             <Route path="stock"       element={<StockPage />} />
             <Route path="pension"     element={<PensionPage />} />
+            <Route path="pension/sim" element={<PensionSimPage />} />
             <Route path="savings"     element={<AssetPage type="SAVINGS" />} />
             <Route path="physical"    element={<AssetPage type="PHYSICAL" />} />
             <Route path="etc"         element={<AssetPage type="ETC" />} />

@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, ChevronDown, Save } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Save } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import { useAssets, useAssetsByType } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
-import { usePortfolio } from '@/hooks/usePortfolio'
 import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
-import { EMPTY_PENSION_PLAN, simulatePension, totalPrincipal, sourcesFromAssets } from '@/lib/pensionSim'
+import { EMPTY_PENSION_PLAN, sourcesFromAssets } from '@/lib/pensionSim'
 import { formatMoney, formatManwon, cn } from '@/lib/utils'
 import type { Asset, PensionDetail, StockDetail, SavingsDetail, PensionSimPlan, PensionTaxType } from '@/types'
 
@@ -92,57 +92,6 @@ function SimTooltip({ active, payload, label }: SimTooltipProps) {
   )
 }
 
-function numFmt(v: number) { return v > 0 ? Math.round(v).toLocaleString() : '' }
-function parseNum(s: string) { return Number(s.replace(/,/g, '')) || 0 }
-
-function AmountInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [raw, setRaw] = useState(value > 0 ? numFmt(value) : '')
-  useEffect(() => { setRaw(value > 0 ? numFmt(value) : '') }, [value])
-  return (
-    <input type="text" inputMode="numeric"
-      className="w-28 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
-      value={raw} onChange={(e) => setRaw(e.target.value)}
-      onBlur={() => { const n = parseNum(raw); onChange(n); setRaw(n > 0 ? numFmt(n) : '') }}
-    />
-  )
-}
-
-function NumInput({ value, onChange, suffix }: { value: number; onChange: (v: number) => void; suffix?: string }) {
-  return (
-    <div className="flex items-center gap-1">
-      <input type="number" inputMode="decimal"
-        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
-        value={value || ''} onChange={(e) => onChange(Number(e.target.value))} />
-      {suffix && <span className="text-xs text-gray-500 shrink-0">{suffix}</span>}
-    </div>
-  )
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-1">
-      <span className="text-sm text-gray-400">{label}</span>
-      <div className="w-40 shrink-0">{children}</div>
-    </div>
-  )
-}
-
-function Expander({ title, children, defaultOpen = false }: {
-  title: string; children: React.ReactNode; defaultOpen?: boolean
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-      <button onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 text-left hover:bg-gray-750 transition-colors">
-        <span className="text-sm font-semibold text-gray-200">{title}</span>
-        <ChevronDown className={`w-4 h-4 text-gray-500 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && <div className="px-4 sm:px-5 pb-5 pt-1 border-t border-gray-700 space-y-3">{children}</div>}
-    </div>
-  )
-}
-
 // ── 메인 ───────────────────────────────────────────────────
 export default function PensionPage() {
   const pensionAssets = useAssetsByType('PENSION')
@@ -150,14 +99,12 @@ export default function PensionPage() {
   const { data: settings } = useSettings()
   const { data: savedSim } = usePensionSim()
   const saveSimMut = useSavePensionSim()
-  const { data: portfolioData } = usePortfolio()
+  const navigate = useNavigate()
 
   const [modalId, setModalId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [simPlan, setSimPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [simDirty, setSimDirty] = useState(false)
-
-  const portfolioYield = portfolioData?.blendedYield ?? 0
 
   // PensionSim 로드 + PENSION 자산 자동 병합
   // savedSim(undefined=로딩중)가 해결되고 자산도 로드된 후 1회 실행.
@@ -179,11 +126,6 @@ export default function PensionPage() {
     const manual = currentSources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
     setSimPlan({ ...EMPTY_PENSION_PLAN, ...base, sources: [...auto, ...manual] })
   }, [savedSim, pensionAssets])
-
-  const updateSim = useCallback(<K extends keyof PensionSimPlan>(key: K, val: PensionSimPlan[K]) => {
-    setSimPlan((p) => ({ ...p, [key]: val }))
-    setSimDirty(true)
-  }, [])
 
   const updateSourceTaxType = (assetId: string, taxType: PensionTaxType) => {
     setSimPlan((p) => {
@@ -216,19 +158,6 @@ export default function PensionPage() {
   const retirementRow = simData.find((r) => r.year >= retirementYear)
   const active = pensionAssets.filter((a) => !a.disposalDate)
 
-  // PensionSim 계산
-  const effectivePlan: PensionSimPlan = {
-    ...simPlan,
-    sources: portfolioYield > 0
-      ? simPlan.sources.map((s) => ({ ...s, yieldRate: portfolioYield }))
-      : simPlan.sources,
-  }
-  const sim = simulatePension(effectivePlan)
-  const simRow0 = sim.rows[0]
-  const simTotalP = totalPrincipal(simPlan)
-  const irpTotal = simPlan.sources.filter((s) => s.taxType === 'irp').reduce((s, src) => s + src.principal, 0)
-  const exemptTotal = simPlan.sources.filter((s) => s.taxType === 'taxExempt').reduce((s, src) => s + src.principal, 0)
-
   if (loadPension) {
     return <div className="flex items-center justify-center h-64 text-gray-400">로딩 중...</div>
   }
@@ -239,6 +168,12 @@ export default function PensionPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg sm:text-xl font-bold text-gray-100">🛡️ 연금</h2>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/pension/sim')}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors"
+          >
+            🪙 시뮬레이션
+          </button>
           <button
             onClick={handleSaveSim} disabled={!simDirty || saveSimMut.isPending}
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-40"
@@ -360,39 +295,6 @@ export default function PensionPage() {
           })}
         </div>
       </section>
-
-      {/* 시뮬 설정 */}
-      <Expander title="⚙️ IRP 수령 시뮬 설정">
-        <Row label="수령 개시 연도"><NumInput value={simPlan.startYear} onChange={(v) => updateSim('startYear', v)} /></Row>
-        <Row label="수령 기간(연)"><NumInput value={simPlan.withdrawalYears} onChange={(v) => updateSim('withdrawalYears', v)} suffix="년" /></Row>
-        {portfolioYield > 0 && (
-          <p className="text-[11px] text-blue-400">운용 수익률: {portfolioYield}% (📊 투자 포트폴리오에서 공통 적용)</p>
-        )}
-      </Expander>
-
-      {/* 시뮬 결과 KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-          <p className="text-[11px] text-gray-500 mb-1">연금 총액</p>
-          <p className="text-[13px] sm:text-lg font-bold text-gray-100">{formatManwon(simTotalP)}</p>
-          <p className="text-[11px] text-gray-600 mt-0.5">IRP {formatManwon(irpTotal)} + 기타 {formatManwon(simTotalP - irpTotal)}</p>
-        </div>
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-          <p className="text-[11px] text-gray-500 mb-1">연 수령액 (IRP)</p>
-          <p className="text-[13px] sm:text-lg font-bold text-blue-400">{formatManwon(simRow0?.irpWithdraw ?? 0)}</p>
-          <p className="text-[11px] text-gray-600 mt-0.5">{simPlan.withdrawalYears}년 균등</p>
-        </div>
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-          <p className="text-[11px] text-gray-500 mb-1">연금소득세(연)</p>
-          <p className="text-[13px] sm:text-lg font-bold text-red-400">{formatManwon(simRow0?.pensionTax ?? 0)}</p>
-          <p className="text-[11px] text-gray-600 mt-0.5">공제 후 누진 3~6%</p>
-        </div>
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-          <p className="text-[11px] text-gray-500 mb-1">순수령액(연)</p>
-          <p className="text-[13px] sm:text-lg font-bold text-emerald-400">{formatManwon(simRow0?.netIncome ?? 0)}</p>
-          <p className="text-[11px] text-gray-600 mt-0.5">수령 − 세금</p>
-        </div>
-      </div>
 
       {/* 연금형 포함 자산 */}
       {pensionLikeAssets.filter((a) => a.type !== 'PENSION').length > 0 && (

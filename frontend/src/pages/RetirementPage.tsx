@@ -822,6 +822,13 @@ export default function RetirementPage() {
     setDirty(true)
   }, [])
 
+  // 연동 소득원 — 범인/연금 상호배타 라디오
+  const linkMode: 'none' | 'corp' | 'pension' = plan.linkCorpSim ? 'corp' : plan.linkPensionSim ? 'pension' : 'none'
+  const setLinkMode = useCallback((m: 'none' | 'corp' | 'pension') => {
+    setPlan((p) => ({ ...p, linkCorpSim: m === 'corp', linkPensionSim: m === 'pension' }))
+    setDirty(true)
+  }, [])
+
   const handleSave = () => {
     saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
   }
@@ -908,14 +915,25 @@ export default function RetirementPage() {
             />
             <span className="text-xs sm:text-sm text-gray-500">년</span>
           </div>
-          <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${linked ? 'text-blue-400' : 'text-gray-500'}`}>
-            <input type="checkbox" checked={plan.linkCorpSim} onChange={(e) => update('linkCorpSim', e.target.checked)} className="accent-blue-500" />
-            🏛️ 법인 연동
-          </label>
-          <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${plan.linkPensionSim ? 'text-blue-400' : 'text-gray-500'}`}>
-            <input type="checkbox" checked={plan.linkPensionSim} onChange={(e) => update('linkPensionSim', e.target.checked)} className="accent-blue-500" />
-            🪙 연금(IRP) 연동
-          </label>
+          <fieldset className="flex items-center gap-3">
+            <legend className="sr-only">연동 소득원</legend>
+            {([
+              ['none', '연동 안함'],
+              ['corp', '🏛️ 법인 연동'],
+              ['pension', '🪙 연금(IRP) 연동'],
+            ] as const).map(([v, label]) => (
+              <label key={v} className={`flex items-center gap-1.5 text-xs cursor-pointer ${linkMode === v ? 'text-blue-400' : 'text-gray-500'}`}>
+                <input
+                  type="radio"
+                  name="retireLinkMode"
+                  checked={linkMode === v}
+                  onChange={() => setLinkMode(v)}
+                  className="accent-blue-500"
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
           <button
             onClick={handleSave}
             disabled={!dirty || saveMut.isPending}
