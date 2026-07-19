@@ -103,6 +103,11 @@ function InflowCard({ item, onChange, onRemove }: {
         <button onClick={onRemove} className="text-gray-600 hover:text-red-400 shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
       </div>
       <AmountInput value={item.amount} onChange={(v) => onChange({ amount: v })} />
+      {/* 발생 연도 */}
+      <div>
+        <p className="text-[10px] text-gray-500 mb-1">{item.type === 'annual' ? '시작 연도' : '발생 연도'}</p>
+        <NumInput value={item.year} onChange={(v) => onChange({ year: v })} suffix="년" />
+      </div>
       {/* 유형 */}
       <div>
         <p className="text-[10px] text-gray-500 mb-1">유형</p>
@@ -159,7 +164,10 @@ export default function PensionSimPage() {
       base.sources,
     )
     const manual = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
-    setPlan({ ...EMPTY_PENSION_PLAN, ...base, sources: [...auto, ...manual] })
+    // 구버전 데이터 방어: inflows.year 누락 시 startYear로 보정
+    const startY = base.startYear ?? EMPTY_PENSION_PLAN.startYear
+    const inflows = (base.inflows ?? []).map((i) => ({ ...i, year: i.year ?? startY }))
+    setPlan({ ...EMPTY_PENSION_PLAN, ...base, sources: [...auto, ...manual], inflows })
   }, [saved, pensionAssets])
 
   const update = useCallback(<K extends keyof PensionSimPlan>(key: K, val: PensionSimPlan[K]) => {
@@ -172,7 +180,7 @@ export default function PensionSimPage() {
     setDirty(true)
   }
   const addInflow = () => {
-    setPlan((p) => ({ ...p, inflows: [...p.inflows, { id: uid(), name: '', amount: 0, type: 'lumpsum', destination: 'irp' }] }))
+    setPlan((p) => ({ ...p, inflows: [...p.inflows, { id: uid(), name: '', amount: 0, type: 'lumpsum', destination: 'irp', year: p.startYear }] }))
     setDirty(true)
   }
   const removeInflow = (id: string) => {
@@ -254,6 +262,11 @@ export default function PensionSimPage() {
         {(irpInflow > 0 || stockInflow > 0) && (
           <p className="text-[11px] text-gray-600">
             퇴직IRP 유입 {formatManwon(irpInflow)} · 일반주식계좌 유입 {formatManwon(stockInflow)}
+          </p>
+        )}
+        {r.pendingInflowCount > 0 && (
+          <p className="text-[11px] text-orange-400/80">
+            ⏳ 수령 개시({plan.startYear}년) 이후 도착 항목 {r.pendingInflowCount}개 · {formatManwon(r.pendingInflowAmount)} (위 KPI에서는 미반영 — 은퇴계획 현금흐름에서 반영)
           </p>
         )}
       </Expander>

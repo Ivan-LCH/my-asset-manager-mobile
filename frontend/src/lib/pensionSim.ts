@@ -108,15 +108,15 @@ export const totalInflows = (plan: PensionSimPlan): number =>
 
 export interface PensionVehicleResult {
   // IRP side
-  irpPrincipal:           number   // IRP 총 원금 (기존 과세 sources + IRP 유입)
+  irpPrincipal:           number   // IRP 총 원금 (수령개시 시점 기준: 기존 sources + 도착한 IRP 유입)
   exemptPrincipal:        number   // 비과세 연금 원금
   annualPensionTaxable:   number   // 연 과세 연금 수령
   annualPensionExempt:    number   // 연 비과세 연금 수령
   pensionTaxable:         number   // 연금소득세 과세표준
   pensionTax:             number   // 연금소득세(연)
   // Stock side
-  stockBalance:           number   // 일반주식계좌 총액 (기본 + 일회성 유입)
-  financialIncome:        number   // 연간 금융소득 (배당 + 연간 유입)
+  stockBalance:           number   // 일반주식계좌 총액 (수령개시 시점: 기본 + 도착한 일회성 유입)
+  financialIncome:        number   // 연간 금융소득 (배당 + 활성 연간 유입)
   financialTax:           number   // 금융소득세 (분리+종합)
   separatedTax:           number
   consolidatedFinancial:  number
@@ -127,15 +127,21 @@ export interface PensionVehicleResult {
   totalAnnualTax:         number   // 연금소득세 + 금융소득세 (연)
   grossAnnual:            number   // 연 총수입 (연금수령 + 금융소득)
   netAnnual:              number   // 연 순취득 (총수입 − 세금)
+  // 시점
+  pendingInflowCount:     number   // 수령 개시 "이후"에 도착하는 유입 항목 수 (별도 반영)
+  pendingInflowAmount:    number   // 그 합계
 }
 
 /**
  * 연금·개인 vehicle 연간 결과 산출.
- * - IRP 유입(일회성/연간 모두) → IRP 원금에 합산, 수령기간으로 균등 인출.
- * - 주식 유입: 일회성 → 잔액 가산(배당 발생), 연간 → 직접 금융소득 가산.
+ * 각 유입 항목의 `year`(발생 연도)가 수령 개시 연도(startYear) 이전/동시이면
+ * 수령 개시 시점 잔액에 반영되고, 이후면 pending(수령 중 도착)으로 별도 집계.
+ * - IRP 유입(도착) → IRP 원금 합산, 수령기간으로 균등 인출.
+ * - 주식 일회성(도착) → 잔액 가산(배당 발생), 연간(활성) → 직접 금융소득 가산.
  */
 export function computePensionVehicle(plan: PensionSimPlan): PensionVehicleResult {
   const years = plan.withdrawalYears || 1
+  const startY = plan.startYear
 
   // 기존 sources 분류
   const taxableSrc = plan.sources
@@ -145,10 +151,16 @@ export function computePensionVehicle(plan: PensionSimPlan): PensionVehicleResul
     .filter((s) => s.taxType === 'taxExempt')
     .reduce((s, src) => s + src.principal, 0)
 
-  // 유입 항목을 목적지별로 합산
-  const irpInflow = plan.inflows.filter((i) => i.destination === 'irp').reduce((s, i) => s + i.amount, 0)
-  const stockLumpsum = plan.inflows.filter((i) => i.destination === 'stock' && i.type === 'lumpsum').reduce((s, i) => s + i.amount, 0)
-  const stockAnnual = plan.inflows.filter((i) => i.destination === 'stock' && i.type === 'annual').reduce((s, i) => s + i.amount, 0)
+  // 수령 개시 시점까지 도착한 유입만 잔액에 반영
+  const arrived = (i: { year: number }) => i.year <= startY
+  const irpInflow = plan.inflows.filter((i) => i.destination === 'irp' && arrived(i)).reduce((s, i) => s + i.amount, 0)
+  const stockLumpsum = plan.inflows.filter((i) => i.destination === 'stock' && i.type === 'lumpsum' && arrived(i)).reduce((s, i) => s + i.amount, 0)
+  const stockAnnual = plan.inflows.filter((i) => i.destination === 'stock' && i.type === 'annual' && arrived(i)).reduce((s, i) => s + i.amount, 0)
+
+  // 수령 개시 이후 도착(미반영) 집계
+  const pending = plan.inflows.filter((i) => !arrived(i))
+  const pendingInflowCount = pending.length
+  const pendingInflowAmount = pending.reduce((s, i) => s + i.amount, 0)
 
   // IRP 수령
   const irpPrincipal = taxableSrc + irpInflow
@@ -182,6 +194,7 @@ export function computePensionVehicle(plan: PensionSimPlan): PensionVehicleResul
     comprehensiveTax: fin.comprehensiveTax,
     healthMonthly: hi.totalMonthly,
     totalAnnualTax, grossAnnual, netAnnual,
+    pendingInflowCount, pendingInflowAmount,
   }
 }
 

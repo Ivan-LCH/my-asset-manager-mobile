@@ -215,6 +215,7 @@ export interface PensionInflowItem {
   amount: number                      // 금액
   type: 'lumpsum' | 'annual'          // 일회성 / 연간반복
   destination: 'irp' | 'stock'        // 퇴직IRP / 일반주식계좌
+  year: number                        // 발생(시작) 연도 — 언제 들어오는지
 }
 
 export interface PensionSimPlan {
