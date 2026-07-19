@@ -264,11 +264,6 @@ export default function PensionSimPage() {
             퇴직IRP 유입 {formatManwon(irpInflow)} · 일반주식계좌 유입 {formatManwon(stockInflow)}
           </p>
         )}
-        {r.pendingInflowCount > 0 && (
-          <p className="text-[11px] text-orange-400/80">
-            ⏳ 수령 개시({plan.startYear}년) 이후 도착 항목 {r.pendingInflowCount}개 · {formatManwon(r.pendingInflowAmount)} (위 KPI에서는 미반영 — 은퇴계획 현금흐름에서 반영)
-          </p>
-        )}
       </Expander>
 
       {/* 일반주식계좌 포트폴리오 */}

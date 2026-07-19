@@ -101,18 +101,4 @@ describe('pensionSim 계산', () => {
     expect(r.pensionTax).toBe(0)
     expect(r.grossAnnual).toBeGreaterThan(0)
   })
-
-  it('computePensionVehicle: 수령개시 이후 도착 유입은 pending (잔액 미반영)', () => {
-    // startYear 2029. 위로금 1.5억이 2035(수령 중)에 도착 → IRP 원금에 미반영, pending 집계
-    const p = plan({
-      sources: [{ id: 's', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0 }],
-      inflows: [{ id: 'i', name: '위로금', amount: 150_000_000, type: 'lumpsum', destination: 'irp', year: 2035 }],
-      withdrawalYears: 30,
-      startYear: 2029,
-    })
-    const r = computePensionVehicle(p)
-    expect(r.irpPrincipal).toBe(300_000_000)         // 도착 전이므로 미반영
-    expect(r.pendingInflowCount).toBe(1)
-    expect(r.pendingInflowAmount).toBe(150_000_000)
-  })
 })
