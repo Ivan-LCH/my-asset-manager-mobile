@@ -7,6 +7,9 @@ import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
+import { computePensionVehiclePerPerson, EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
+import { realEstatePropertyBases } from '@/lib/healthInsurance'
+import { usePensionSim } from '@/hooks/usePensionSim'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
   Asset, StockDetail, SavingsDetail,
@@ -723,12 +726,21 @@ function buildCashFlow(
   healthInsuranceMonthly: number,
   corpCF?: CorpCashFlow,
   corpLoanOutflow: number = 0,
+  /** 연금시뮬 연동 시 1인별 결과에서 산출한 가구 합계 오버라이드 (세금/건보 1인별 정확). */
+  linked?: {
+    startYear:       number
+    pensionMonthly:  number  // 가구 연금(남편+와이프)/12
+    dividendMonthly: number  // 가구 금융소득(명의별)/12 — useDividendSummary 풀 대체
+    healthMonthly:   number  // 남편+와이프 건보(재산분 포함)
+    taxMonthly:      number  // 남편+와이프 세금(연금+금융, 2천만 한도 각자)/12
+  },
 ): CashFlowRow[] {
   const currentYear = new Date().getFullYear()
   const endYear = currentYear + (100 - currentAge)
   const rows: CashFlowRow[] = []
 
   const expenseMonthly = plan.expenses.reduce((s, e) => s + num(e.amount), 0)
+  const hiMonthly = linked ? linked.healthMonthly : healthInsuranceMonthly
 
   let cumulative = 0
 
@@ -741,7 +753,10 @@ function buildCashFlow(
       return s + (times * num(t.costPerTrip)) / 12
     }, 0)
 
-    const pensionMonthly = pensionMap.get(year) ?? 0
+    // 연금: 연동 시 pension sim 결과(수령개시 연도 이후), 아니면 자산 기반 pensionMap
+    const pensionMonthly = linked
+      ? (year >= linked.startYear ? linked.pensionMonthly : 0)
+      : (pensionMap.get(year) ?? 0)
 
     const lumpsumMonthly = plan.lumpsum.reduce((s, l) => {
       const ry = num(l.receiveYear), ue = num(l.useEndYear), amt = num(l.amount)
@@ -761,14 +776,15 @@ function buildCashFlow(
     const corpSalaryMonthly = corpCF?.salaryMonthly ?? 0
     const corpReturnMonthly = corpCF ? (isPhase2 ? 0 : corpCF.returnP1Monthly) : 0
     const corpDiv = corpCF ? (isPhase2 ? corpCF.divP2Monthly : corpCF.divP1Monthly) : 0
-    const dividendMonthly = stockDivMonthly + corpDiv
+    // 배당: 연동 시 pension sim 금융소득(명의별), 아니면 실제 배당 풀 + 법인 배당
+    const dividendMonthly = linked ? (year >= linked.startYear ? linked.dividendMonthly : 0) : (stockDivMonthly + corpDiv)
 
-    // 세금 (월 추정): 배당소득세 15.4% 원천징수 + 급여소득세 3%
-    const divTaxMonthly = dividendMonthly * 0.154
-    const salaryTaxMonthly = corpSalaryMonthly * 0.03
-    const taxMonthly = divTaxMonthly + salaryTaxMonthly
+    // 세금: 연동 시 1인별 산정값, 아니면 근사(배당 15.4% + 급여 3%)
+    const taxMonthly = linked
+      ? linked.taxMonthly
+      : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03)
 
-    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + healthInsuranceMonthly + taxMonthly
+    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly + taxMonthly
     const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     const balance      = totalIncome - totalExpense
 
@@ -780,7 +796,7 @@ function buildCashFlow(
       taxMonthly,
       expenseMonthly, travelMonthly,
       medicalMonthly: num(plan.medicalMonthly),
-      healthInsuranceMonthly,
+      healthInsuranceMonthly: hiMonthly,
       totalExpense, lumpsumMonthly, lumpsumReceived, totalIncome, balance,
       emergencyAnnual, cumulative,
     })
@@ -877,6 +893,26 @@ export default function RetirementPage() {
 
   const pensionMap = calcPensionByYear(pensionLikeAssets, currentAge)
 
+  // ── 연금시뮬 연동 (linkMode==='pension') ──
+  const { data: rawPensionSim } = usePensionSim()
+  const realEstateAssets = allAssets.filter((a) => a.type === 'REAL_ESTATE')
+  const pensionSimPlan = rawPensionSim ? { ...EMPTY_PENSION_PLAN, ...rawPensionSim } : null
+  const pensionLinked = linkMode === 'pension' && !!pensionSimPlan
+  const perPerson = (pensionLinked && pensionSimPlan)
+    ? computePensionVehiclePerPerson(pensionSimPlan, {
+        husbandProperty: realEstatePropertyBases(realEstateAssets).husband,
+        wifeProperty: realEstatePropertyBases(realEstateAssets).wife,
+      })
+    : null
+  const linkedOverride = perPerson ? {
+    startYear: pensionSimPlan!.startYear,
+    pensionMonthly: (perPerson.husband.annualPensionTaxable + perPerson.husband.annualPensionExempt
+      + perPerson.wife.annualPensionTaxable + perPerson.wife.annualPensionExempt) / 12,
+    dividendMonthly: (perPerson.husband.financialIncome + perPerson.wife.financialIncome) / 12,
+    healthMonthly: perPerson.husband.healthMonthly + perPerson.wife.healthMonthly,
+    taxMonthly: (perPerson.husband.totalAnnualTax + perPerson.wife.totalAnnualTax) / 12,
+  } : undefined
+
   // 건강보험료: 연동 시 직장건보(급여×율×50%, 자동 산정), 미연동 시 지역건보
   const retirementYear    = plan.retirementYear
   const retirementPensionMonthly = pensionMap.get(retirementYear) ?? 0
@@ -889,7 +925,7 @@ export default function RetirementPage() {
     ? corpHealthMonthly(corpPlan)
     : hiResult.grandTotal
 
-  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, stockDivMonthly, healthInsuranceMonthly, corpCF, linked && corpPlan ? corpPlan.loanAmount : 0)
+  const cashFlow = buildCashFlow(plan, pensionMap, currentAge, stockDivMonthly, healthInsuranceMonthly, corpCF, linked && corpPlan ? corpPlan.loanAmount : 0, linkedOverride)
 
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
@@ -1031,6 +1067,36 @@ export default function RetirementPage() {
           dividendAutoMonthly={stockDivMonthly}
         />
       </Expander>
+
+      {/* 연금시뮬 연동 시 1인별 세금·건보 요약 */}
+      {perPerson && (
+        <div className="bg-gray-800 border border-blue-700/40 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-2">🪙 연금시뮬 연동 — 1인별 세금·건보 (수령개시 이후 연간 기준)</h3>
+          <div className="grid grid-cols-3 gap-3 text-[11px]">
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">🧑 남편</p>
+              <p className="text-gray-300">세금 <span className="text-red-400 font-semibold">{formatManwon(perPerson.husband.totalAnnualTax)}</span></p>
+              <p className="text-gray-300">건보 <span className="text-gray-100 font-semibold">{formatManwon(perPerson.husband.healthMonthly)}/월</span></p>
+              <p className="text-gray-300">순취득 <span className="text-emerald-400 font-semibold">{formatManwon(perPerson.husband.netAnnual)}</span></p>
+            </div>
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">👩 와이프</p>
+              <p className="text-gray-300">세금 <span className="text-red-400 font-semibold">{formatManwon(perPerson.wife.totalAnnualTax)}</span></p>
+              <p className="text-gray-300">건보 <span className="text-gray-100 font-semibold">{formatManwon(perPerson.wife.healthMonthly)}/월</span></p>
+              <p className="text-gray-300">순취득 <span className="text-emerald-400 font-semibold">{formatManwon(perPerson.wife.netAnnual)}</span></p>
+            </div>
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">🏠 가구 합계</p>
+              <p className="text-gray-300">세금 <span className="text-red-400 font-semibold">{formatManwon(perPerson.totals.totalAnnualTax)}</span></p>
+              <p className="text-gray-300">건보 <span className="text-gray-100 font-semibold">{formatManwon(perPerson.totals.healthMonthly)}/월</span></p>
+              <p className="text-gray-300">순취득 <span className="text-emerald-400 font-semibold">{formatManwon(perPerson.totals.netAnnual)}</span></p>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-600 mt-2">
+            금융소득 2천만 한도·연금소득세·건보(부동산 명의 재산분 포함) 각자 적용. 연금·배당은 이 기준으로 현금흐름에 반영됨.
+          </p>
+        </div>
+      )}
 
       {/* 연도별 현금흐름 테이블 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
