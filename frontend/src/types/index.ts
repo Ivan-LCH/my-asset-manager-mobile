@@ -38,6 +38,7 @@ export interface RealEstateDetail {
   tenantDeposit: number
   address:       string
   loanAmount:    number
+  ownership:     Ownership   // 명의 지분 (기본 {husband:50,wife:50})
 }
 
 export interface StockDetail {

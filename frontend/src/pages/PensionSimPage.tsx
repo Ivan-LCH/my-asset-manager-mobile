@@ -9,6 +9,7 @@ import {
   EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, stockBalanceFromInflows,
   stockAccountYield, totalInflows, sourcesFromAssets, FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
+import { realEstatePropertyBases } from '@/lib/healthInsurance'
 import { blendedYield } from '@/lib/corpSim'
 import { formatManwon, cn } from '@/lib/utils'
 import {
@@ -166,6 +167,7 @@ export default function PensionSimPage() {
   const { data: saved } = usePensionSim()
   const saveMut = useSavePensionSim()
   const pensionAssets = useAssetsByType('PENSION')
+  const realEstateAssets = useAssetsByType('REAL_ESTATE')
 
   const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [dirty, setDirty] = useState(false)
@@ -268,7 +270,12 @@ export default function PensionSimPage() {
 
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
-  const h = computePensionVehiclePerPerson(plan)
+  // 부동산 명의 가중 → 1인별 건보 재산분
+  const prop = realEstatePropertyBases(realEstateAssets)
+  const h = computePensionVehiclePerPerson(plan, {
+    husbandProperty: prop.husband,
+    wifeProperty: prop.wife,
+  })
   const stockBalance = stockBalanceFromInflows(plan.inflows)
   const yieldPct = stockAccountYield(plan)
   const inflowTotal = totalInflows(plan)
@@ -333,6 +340,14 @@ export default function PensionSimPage() {
           </div>
         </div>
       </div>
+
+      {/* 부동산 재산분(명의 가중) 정보 */}
+      {(prop.husband.propertyTaxBase > 0 || prop.wife.propertyTaxBase > 0) && (
+        <p className="text-[11px] text-gray-600">
+          🏠 부동산 재산과세표준 — 남편 {formatManwon(prop.husband.propertyTaxBase)} · 와이프 {formatManwon(prop.wife.propertyTaxBase)}
+          (지분별 건보 재산분 반영 · 자산 페이지 부동산 명의에서 설정)
+        </p>
+      )}
 
       {/* + 유입 항목 */}
       <Expander title="➕ 유입 항목 (목적지·명의 선택)" badge={`${plan.inflows.length}개 · ${formatManwon(inflowTotal)}`} defaultOpen>

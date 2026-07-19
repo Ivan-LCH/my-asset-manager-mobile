@@ -53,7 +53,7 @@ describe('generateChartData — forward fill', () => {
       id: 're', type: 'REAL_ESTATE', name: '아파트',
       acquisitionPrice: 50000, quantity: 0,
       currentValue: 60000,
-      detail: { isOwned: true, hasTenant: true, tenantDeposit: 10000, address: '', loanAmount: 20000 },
+      detail: { isOwned: true, hasTenant: true, tenantDeposit: 10000, address: '', loanAmount: 20000, ownership: { husband: 50, wife: 50 } },
     })
     const rows = generateChartData([re], 'all', 'type')
     expect(valueAt(rows, RE_LABEL, '2023-01-01')).toBe(20000)  // 50000 - 30000

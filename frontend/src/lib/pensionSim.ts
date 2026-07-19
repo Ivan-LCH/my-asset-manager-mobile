@@ -5,6 +5,7 @@
 // 모든 수치는 사용자 가정에 기반한 추정치.
 import type { PensionSimPlan, PensionSource, PensionInflowItem, Ownership, PortfolioHolding, PortfolioYield } from '@/types'
 import { blendedYield } from '@/lib/corpSim'
+import { calcHealthInsurance } from '@/lib/healthInsurance'
 
 /** 연금소득세 누진구간 (연금소득 전용, 종합소득세와 별개) */
 export function pensionIncomeTax(taxable: number): number {
@@ -162,11 +163,24 @@ export interface HouseholdVehicleResult {
   }
 }
 
+/** 1인별 부동산 재산분 옵션 (PensionSimPage에서 realEstatePropertyBases로 산출해 전달). */
+export interface PersonProperty {
+  propertyTaxBase: number
+  rentalDeposit:  number
+  carValue?:       number
+}
+export interface VehicleOptions {
+  husbandProperty?: PersonProperty
+  wifeProperty?:    PersonProperty
+  scorePerPoint?:   number
+}
+
 /** 1인별 연금·개인 vehicle 결과.
  *  - 연금(IRP/과세/비과세 원금) = 남편 100% (연금=남편 가정).
  *  - 일반주식계좌 잔액 = stockBalanceFromInflows → stockOwnership으로 1인 분할.
- *  - 금융소득 2천만 한도·연금소득세·건보 모두 1인별 산출. */
-export function computePensionVehiclePerPerson(plan: PensionSimPlan): HouseholdVehicleResult {
+ *  - 금융소득 2천만 한도·연금소득세·건보 모두 1인별 산출.
+ *  - 건보 재산분은 opts.property(부동산 명의 가중)로 1인별 — 미제공 시 소득분만. */
+export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: VehicleOptions): HouseholdVehicleResult {
   const years = plan.withdrawalYears || 1
 
   // 기존 sources (남편 명의 가정) 분류
@@ -215,7 +229,18 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan): HouseholdV
     const ft = comprehensiveTaxBreakdown(personFin, personOther, plan.comprehensiveDeduction)
 
     const stockBalance = stockTotal * (isHusband ? husbandShare : wifeShare)
-    const healthMonthly = estimateHealthInsurance(annualPensionTaxable + annualPensionExempt, personFin, personOther)
+    const prop = isHusband ? opts?.husbandProperty : opts?.wifeProperty
+    const healthMonthly = prop
+      ? calcHealthInsurance({
+          pensionAnnual: annualPensionTaxable + annualPensionExempt,
+          dividendAnnual: personFin,
+          otherAnnual: personOther,
+          propertyTaxBase: prop.propertyTaxBase,
+          rentalDeposit: prop.rentalDeposit,
+          carValue: prop.carValue ?? 0,
+          scorePerPoint: opts?.scorePerPoint ?? 208.4,
+        }).grandTotal
+      : estimateHealthInsurance(annualPensionTaxable + annualPensionExempt, personFin, personOther)
 
     const grossAnnual = annualPensionTaxable + annualPensionExempt + personFin
     const totalAnnualTax = pensionTax + ft.totalFinancialTax

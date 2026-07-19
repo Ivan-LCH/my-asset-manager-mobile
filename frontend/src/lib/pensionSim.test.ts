@@ -5,6 +5,7 @@ import {
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
+import { realEstatePropertyBases, calcHealthInsurance } from '@/lib/healthInsurance'
 import { blendedYield } from '@/lib/corpSim'
 import type { PensionSimPlan } from '@/types'
 
@@ -110,5 +111,20 @@ describe('pensionSim 계산', () => {
 
   it('estimateHealthInsurance: 소득 없으면 0', () => {
     expect(estimateHealthInsurance(0, 0, 0)).toBe(0)
+  })
+
+  it('부동산 명의 가중 → 1인별 재산과세표준 + 건보 재산분에 반영', () => {
+    // 부동산 10억, 와이프 100% 명의
+    const assets = [{
+      id: 're1', type: 'REAL_ESTATE' as const, name: '아파트', currentValue: 1_000_000_000,
+      disposalDate: undefined,
+      detail: { isOwned: true, hasTenant: false, tenantDeposit: 0, address: '', loanAmount: 0, ownership: { husband: 0, wife: 100 } },
+    }] as any
+    const prop = realEstatePropertyBases(assets)
+    expect(prop.husband.propertyTaxBase).toBe(0)
+    expect(prop.wife.propertyTaxBase).toBe(1_000_000_000)
+    // 와이프 건보(재산분 포함) > 0
+    const wifeHI = calcHealthInsurance({ pensionAnnual: 0, dividendAnnual: 0, otherAnnual: 0, propertyTaxBase: prop.wife.propertyTaxBase, rentalDeposit: 0, carValue: 0, scorePerPoint: 208.4 })
+    expect(wifeHI.grandTotal).toBeGreaterThan(0)
   })
 })

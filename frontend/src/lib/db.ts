@@ -47,6 +47,7 @@ export interface RealEstateRow {
   tenantDeposit: number
   address:       string
   loanAmount:    number
+  ownership?:    { husband: number; wife: number }  // 구버전 미존재 시 {50,50}
 }
 
 export interface StockRow {
@@ -146,6 +147,10 @@ async function getDetail(id: string, type: AssetType): Promise<AssetDetail | und
   }
   if (!row) return undefined
   const { assetId: _omit, ...detail } = row
+  // 구버전 방어: 부동산 ownership 누락 시 기본 50:50
+  if (type === 'REAL_ESTATE' && !(detail as { ownership?: unknown }).ownership) {
+    ;(detail as { ownership: { husband: number; wife: number } }).ownership = { husband: 50, wife: 50 }
+  }
   return detail as AssetDetail
 }
 
@@ -192,6 +197,7 @@ async function putDetail(id: string, type: AssetType, detail: Record<string, any
         tenantDeposit: detail.tenantDeposit ?? 0,
         address:       detail.address ?? '',
         loanAmount:    detail.loanAmount ?? 0,
+        ownership:     detail.ownership ?? { husband: 50, wife: 50 },
       })
       break
     case 'STOCK': {
