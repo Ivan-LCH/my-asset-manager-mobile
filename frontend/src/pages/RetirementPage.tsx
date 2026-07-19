@@ -10,6 +10,7 @@ import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { computePensionVehiclePerPerson, EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
 import { realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { usePensionSim } from '@/hooks/usePensionSim'
+import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
   Asset, StockDetail, SavingsDetail,
@@ -893,8 +894,9 @@ export default function RetirementPage() {
 
   const pensionMap = calcPensionByYear(pensionLikeAssets, currentAge)
 
-  // 1인별 STOCK 배당 (실제 주식자산 배당 × 명의)
-  const stockDiv = divSummary ? stockDividendsByOwner(allAssets, divSummary) : { husband: 0, wife: 0 }
+  // 1인별 STOCK 배당 (실제 주식자산 배당 × 계좌 명의)
+  const { data: accountOwners = {} } = useStockAccountOwnership()
+  const stockDiv = divSummary ? stockDividendsByOwner(allAssets, divSummary, accountOwners) : { husband: 0, wife: 0 }
 
   // ── 연금시뮬 연동 (linkMode==='pension') ──
   const { data: rawPensionSim } = usePensionSim()

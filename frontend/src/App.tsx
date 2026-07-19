@@ -12,7 +12,7 @@ import RetirementPage from '@/pages/RetirementPage'
 import CorpSimPage from '@/pages/CorpSimPage'
 import PortfolioPage from '@/pages/PortfolioPage'
 import Settings from '@/pages/Settings'
-import { getAllAssets, getSettings, saveSettings, seedSampleData } from '@/lib/db'
+import { getAllAssets, getSettings, saveSettings, seedSampleData, migrateStockOwnershipToAccount } from '@/lib/db'
 
 const qc = new QueryClient()
 
@@ -30,6 +30,9 @@ function Bootstrap() {
           await saveSettings({ sampleSeeded: '1' })
           c.invalidateQueries()
         }
+        // 주식 계좌 명의 마이그레이션 (구 종목별 ownership → 계좌별)
+        await migrateStockOwnershipToAccount()
+        c.invalidateQueries({ queryKey: ['stock_account_ownership'] })
       } catch {
         /* 무시 */
       }

@@ -98,18 +98,33 @@ export function realEstatePropertyBases(
   }
 }
 
-/** STOCK 자산의 배당을 1인별로 분할 (월). summary의 per-asset monthlyKrw × ownership.husband/wife%. */
+/** STOCK 자산의 배당을 1인별로 분할 (월).
+ *  summary의 per-asset monthlyKrw × 계좌명의(ownerByAccount). 계좌 없으면 자산별 ownership fallback. */
 export function stockDividendsByOwner(
   assets: Asset[],
   summary: { items: { assetId: string; monthlyKrw: number }[] },
+  ownerByAccount: Record<string, { husband: number; wife: number }> = {},
 ): { husband: number; wife: number } {
   const byId = new Map(summary.items.map((i) => [i.assetId, i.monthlyKrw]))
   let h = 0, w = 0
   for (const a of assets) {
     if (a.type !== 'STOCK' || a.disposalDate) continue
     const m = byId.get(a.id) ?? 0
-    h += m * (a.ownership.husband / 100)
-    w += m * (a.ownership.wife / 100)
+    const d = a.detail as { accountName?: string } | undefined
+    const acct = d?.accountName
+    const o: { husband: number; wife: number } = (acct ? ownerByAccount[acct] : undefined) ?? a.ownership ?? { husband: 50, wife: 50 }
+    h += m * (o.husband / 100)
+    w += m * (o.wife / 100)
   }
   return { husband: Math.round(h), wife: Math.round(w) }
+}
+
+/** 계좌 이름으로 계좌 명의 조회 (없으면 fallback 또는 50:50). */
+export function accountOwnership(
+  accountName: string | undefined,
+  ownerByAccount: Record<string, { husband: number; wife: number }>,
+  fallback?: { husband: number; wife: number },
+): { husband: number; wife: number } {
+  if (accountName && ownerByAccount[accountName]) return ownerByAccount[accountName]
+  return fallback ?? { husband: 50, wife: 50 }
 }

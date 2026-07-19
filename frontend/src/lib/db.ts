@@ -931,3 +931,33 @@ export async function savePortfolio(data: PortfolioSettings): Promise<void> {
   await db.settings.put({ key: PORTFOLIO_KEY, value: JSON.stringify(data) })
 }
 
+// ── 주식 계좌별 명의 ──────────────────────────────────────────
+// 주식은 계좌 단위(키움증권, NH증권 등)로 명의가 결정됨 — 계좌 안 종목 공유.
+const STOCK_ACCOUNT_OWNERSHIP_KEY = 'stock_account_ownership'
+
+export async function getStockAccountOwnership(): Promise<Record<string, { husband: number; wife: number }>> {
+  const row = await db.settings.get(STOCK_ACCOUNT_OWNERSHIP_KEY)
+  if (!row) return {}
+  try { return JSON.parse(row.value) as Record<string, { husband: number; wife: number }> }
+  catch { return {} }
+}
+
+export async function saveStockAccountOwnership(map: Record<string, { husband: number; wife: number }>): Promise<void> {
+  await db.settings.put({ key: STOCK_ACCOUNT_OWNERSHIP_KEY, value: JSON.stringify(map) })
+}
+
+/** 마이그레이션: 기존 STOCK 자산들의 ownership을 계좌별 첫 값으로 옮김 (1회). */
+export async function migrateStockOwnershipToAccount(): Promise<void> {
+  const current = await getStockAccountOwnership()
+  if (Object.keys(current).length > 0) return  // 이미 마이그레이션됨
+  const all = await getAllAssets()
+  const next: Record<string, { husband: number; wife: number }> = {}
+  for (const a of all) {
+    if (a.type !== 'STOCK' || !a.detail) continue
+    const acct = (a.detail as { accountName?: string }).accountName
+    if (!acct || next[acct]) continue
+    next[acct] = a.ownership ?? { husband: 50, wife: 50 }
+  }
+  if (Object.keys(next).length > 0) await saveStockAccountOwnership(next)
+}
+

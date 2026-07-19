@@ -156,17 +156,32 @@ describe('pensionSim 계산', () => {
     expect(wifeHI.grandTotal).toBeGreaterThan(0)
   })
 
-  it('stockDividendsByOwner: 1인별 STOCK 배당 분할', () => {
+  it('stockDividendsByOwner: 1인별 STOCK 배당 분할 (계좌 명의 우선, 자산별 폴백)', () => {
     const assets = [
-      { id: 's1', type: 'STOCK' as const, name: '삼성', currentValue: 0, disposalDate: undefined, ownership: { husband: 70, wife: 30 } },
-      { id: 's2', type: 'STOCK' as const, name: 'Apple', currentValue: 0, disposalDate: undefined, ownership: { husband: 0, wife: 100 } },
+      // 키움증권 계좌: 와이프 100% (계좌 명의가 이김)
+      { id: 's1', type: 'STOCK' as const, name: '삼성', currentValue: 0, disposalDate: undefined,
+        ownership: { husband: 70, wife: 30 },
+        detail: { accountName: '키움증권' } },
+      // NH증권 계좌: 자산별(폴백) — husband 100%
+      { id: 's2', type: 'STOCK' as const, name: '에코프로', currentValue: 0, disposalDate: undefined,
+        ownership: { husband: 100, wife: 0 },
+        detail: { accountName: 'NH증권' } },
+      // 미분류: 자산별(폴백) — wife 100%
+      { id: 's3', type: 'STOCK' as const, name: '기타', currentValue: 0, disposalDate: undefined,
+        ownership: { husband: 0, wife: 100 },
+        detail: { accountName: '미분류' } },
     ] as any
     const summary = { items: [
       { assetId: 's1', monthlyKrw: 100_000 },
       { assetId: 's2', monthlyKrw: 200_000 },
+      { assetId: 's3', monthlyKrw: 50_000 },
     ] }
-    const d = stockDividendsByOwner(assets, summary)
-    expect(d.husband).toBe(70_000)  // 100k × 0.7
-    expect(d.wife).toBe(230_000)      // 100k × 0.3 + 200k × 1.0
+    const accountOwners = { '키움증권': { husband: 0, wife: 100 } }  // 키움만 와이프 100% 강제
+    const d = stockDividendsByOwner(assets, summary, accountOwners)
+    // s1: 계좌 명의 100/0 → husband 0, wife 100k
+    // s2: NH증권 미설정 → 자산별 100/0 → husband 200k, wife 0
+    // s3: 미분류 → 자산별 0/100 → husband 0, wife 50k
+    expect(d.husband).toBe(200_000)
+    expect(d.wife).toBe(150_000)
   })
 })

@@ -9,9 +9,10 @@ import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
+import { useStockAccountOwnership, useSaveStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { updateHistory } from '@/lib/db'
 import { fetchPrices } from '@/lib/stockPrice'
-import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice } from '@/lib/utils'
+import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice, cn } from '@/lib/utils'
 import type { Asset, Settings, StockDetail } from '@/types'
 
 // settings KV 키는 snake_case (exchange_rate_USD). db.getExchangeRate 와 동일.
@@ -32,6 +33,8 @@ export default function StockPage() {
   const { isLoading } = useAssets()
   const { data: divSummary } = useDividendSummary()
   const { data: settings }   = useSettings()
+  const { data: accountOwners = {} } = useStockAccountOwnership()
+  const saveAccountOwners = useSaveStockAccountOwnership()
   const qc = useQueryClient()
 
   // 계좌별 뷰: null=계좌 목록, string=선택된 계좌명
@@ -74,6 +77,11 @@ export default function StockPage() {
     setUpdating(false)
     setUpdMsg(cnt > 0 ? `갱신 완료 ${cnt}/${items.length}` : '갱신 실패')
     setTimeout(() => setUpdMsg(''), 4000)
+  }
+
+  // 계좌별 명의 (계좌 안 모든 종목 공유) — 저장 헬퍼
+  const setAccountOwnership = (account: string, ownership: { husband: number; wife: number }) => {
+    saveAccountOwners.mutate({ ...accountOwners, [account]: ownership })
   }
 
   const totalVal  = active.reduce((s, a) => s + a.currentValue, 0)
@@ -146,6 +154,46 @@ export default function StockPage() {
         </div>
       )}
 
+      {/* 계좌별 명의 관리 (계좌 단위 — 그 안 종목 공유) */}
+      {accountEntries.length > 0 && (
+        <details className="bg-gray-800 border border-gray-700 rounded-xl">
+          <summary className="px-4 py-3 cursor-pointer text-sm font-semibold text-gray-200 flex items-center justify-between">
+            <span>🏛️ 계좌별 명의 관리</span>
+            <span className="text-[11px] text-gray-500">계좌 안 모든 종목이 같은 명의 사용</span>
+          </summary>
+          <div className="px-4 pb-4 pt-1 space-y-3 border-t border-gray-700">
+            {accountEntries.map(([acct, list]) => {
+              const o = accountOwners[acct] ?? { husband: 50, wife: 50 }
+              const preset = o.husband === 100 ? 'mine' : o.wife === 100 ? 'wife' : o.husband === 50 && o.wife === 50 ? 'half' : 'custom'
+              return (
+                <div key={acct} className="flex items-center justify-between gap-3 py-2 border-b border-gray-700/50 last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-100 font-medium truncate">{acct}</p>
+                    <p className="text-[11px] text-gray-500">{list.length}개 종목 · 총 {formatManwon(accountTotal(list))}</p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    {(['mine', 'half', 'wife', 'custom'] as const).map((p) => (
+                      <button key={p}
+                        onClick={() => setAccountOwnership(acct, p === 'mine' ? { husband: 100, wife: 0 } : p === 'half' ? { husband: 50, wife: 50 } : p === 'wife' ? { husband: 0, wife: 100 } : o)}
+                        className={cn('px-2 py-1 text-[10px] rounded transition-colors',
+                          preset === p ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
+                        {p === 'mine' ? '내 100%' : p === 'half' ? '50:50' : p === 'wife' ? '와이프 100%' : '직접'}
+                      </button>
+                    ))}
+                  </div>
+                  {preset === 'custom' && (
+                    <input type="number" inputMode="decimal"
+                      className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-100 text-right"
+                      value={o.husband}
+                      onChange={(e) => { const h = Math.min(100, Math.max(0, +e.target.value)); setAccountOwnership(acct, { husband: h, wife: 100 - h }) }} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </details>
+      )}
+
       {/* KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="평가 총액" value={formatMoney(totalVal)} color="default" />
@@ -196,6 +244,7 @@ export default function StockPage() {
                     name={acct}
                     stocks={stocks}
                     settings={settings}
+                    accountOwners={accountOwners}
                     onClick={() => setActiveAccount(acct)}
                   />
                 ))}
@@ -261,10 +310,11 @@ export default function StockPage() {
 
 /* ── 계좌 카드 ── */
 function AccountCard({
-  name, stocks, settings, onClick,
+  name, stocks, settings, onClick, accountOwners,
 }: {
   name: string
   stocks: Asset[]
+  accountOwners: Record<string, { husband: number; wife: number }>
   settings: Settings | undefined
   onClick: () => void
 }) {
@@ -320,7 +370,11 @@ function AccountCard({
             <div key={a.id} className="flex items-center justify-between text-xs">
               <span className="text-gray-400 truncate flex items-center gap-1.5">
                 {a.name}
-                <OwnershipBadge ownership={a.ownership} />
+                {(() => {
+                  const acct = (a.detail as { accountName?: string } | undefined)?.accountName
+                  const o = (acct && accountOwners[acct]) || a.ownership
+                  return <OwnershipBadge ownership={o} />
+                })()}
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-gray-300">{formatManwon(a.currentValue)}</span>
