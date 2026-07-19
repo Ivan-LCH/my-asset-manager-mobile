@@ -105,7 +105,9 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   stockYields: [],
   stockOwnership: { husband: 50, wife: 50 },
   otherIncome: 0,
-  comprehensiveDeduction: 1_500_000,
+  spouseDependent: true,
+  dependents: 0,
+  useStandardDeduction: true,
   withdrawalYears: 30,
   startYear: new Date().getFullYear() + 3,
   pensionDeduction: 12_000_000,
@@ -118,6 +120,17 @@ export const totalPrincipal = (plan: PensionSimPlan): number =>
 /** + 유입 항목 합계 */
 export const totalInflows = (plan: PensionSimPlan): number =>
   plan.inflows.reduce((s, it) => s + it.amount, 0)
+
+/** 1인별 종합소득공제 자동 계산 (법정 한도, 단순화).
+ *  본인 150만 + (배우자 150만 + 부양가족 150만×N + 표준공제 100만) ÷ 2
+ *  배우자/부양가족/표준은 부부 공통으로 반씩 분배. */
+export function computePerPersonComprehensiveDeduction(plan: Pick<PensionSimPlan, 'spouseDependent' | 'dependents' | 'useStandardDeduction'>): { husband: number; wife: number } {
+  const shared = (plan.spouseDependent ? 1_500_000 : 0)
+              + plan.dependents * 1_500_000
+              + (plan.useStandardDeduction ? 1_000_000 : 0)
+  const perPerson = 1_500_000 + shared / 2
+  return { husband: perPerson, wife: perPerson }
+}
 
 /** 일반주식계좌 blended 배당률(%) — 종목 기반, 실패 시 stockManualYield */
 export function stockAccountYield(plan: PensionSimPlan): number {
@@ -141,6 +154,7 @@ export interface PersonVehicleResult {
   financialTax:         number
   separatedTax:         number
   consolidatedFinancial:number
+  comprehensiveTaxable: number        // 과세표준
   comprehensiveTax:     number
   healthMonthly:        number
   totalAnnualTax:       number
@@ -211,6 +225,9 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   // 기타소득은 남편 근로 가정(연금시뮬에선 남편에 배정; 은퇴계획에서 1인별 처리)
   const other = { husband: plan.otherIncome, wife: 0 }
 
+  // 1인별 종합소득공제 자동 산정
+  const perPersonDed = computePerPersonComprehensiveDeduction(plan)
+
   // 1인별 연금 — 남편만 (와이프 연금 0)
   const annualPensionTaxableH = (taxableSrc + irpInflow) / years
   const annualPensionExemptH = exemptSrc / years
@@ -226,7 +243,8 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
 
     const personFin = isHusband ? fin.husband : fin.wife
     const personOther = isHusband ? other.husband : other.wife
-    const ft = comprehensiveTaxBreakdown(personFin, personOther, plan.comprehensiveDeduction)
+    const personDeduction = (isHusband ? perPersonDed.husband : perPersonDed.wife)
+    const ft = comprehensiveTaxBreakdown(personFin, personOther, personDeduction)
 
     const stockBalance = stockTotal * (isHusband ? husbandShare : wifeShare)
     const prop = isHusband ? opts?.husbandProperty : opts?.wifeProperty
@@ -249,7 +267,9 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
       annualPensionTaxable, annualPensionExempt, pensionTax,
       stockBalance, financialIncome: personFin,
       financialTax: ft.totalFinancialTax, separatedTax: ft.separatedTax,
-      consolidatedFinancial: ft.consolidatedFinancial, comprehensiveTax: ft.comprehensiveTax,
+      consolidatedFinancial: ft.consolidatedFinancial,
+      comprehensiveTaxable: ft.comprehensiveTaxable,
+      comprehensiveTax: ft.comprehensiveTax,
       healthMonthly, totalAnnualTax,
       grossAnnual, netAnnual: grossAnnual - totalAnnualTax,
     }

@@ -6,8 +6,8 @@ import { Save, ChevronDown, AlertTriangle, Trash2, ArrowLeft, Plus } from 'lucid
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useAssetsByType } from '@/hooks/useAssets'
 import {
-  EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, stockBalanceFromInflows,
-  stockAccountYield, totalInflows, sourcesFromAssets, FINANCIAL_INCOME_LIMIT,
+  EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, computePerPersonComprehensiveDeduction,
+  stockBalanceFromInflows, stockAccountYield, totalInflows, sourcesFromAssets, FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
 import { realEstatePropertyBases } from '@/lib/healthInsurance'
 import { blendedYield } from '@/lib/corpSim'
@@ -276,6 +276,9 @@ export default function PensionSimPage() {
     husbandProperty: prop.husband,
     wifeProperty: prop.wife,
   })
+
+  // 1인별 종합소득공제 자동 산정 표시
+  const perPersonDed = computePerPersonComprehensiveDeduction(plan)
   const stockBalance = stockBalanceFromInflows(plan.inflows)
   const yieldPct = stockAccountYield(plan)
   const inflowTotal = totalInflows(plan)
@@ -432,7 +435,29 @@ export default function PensionSimPage() {
         <Row label="수령 기간(연)"><NumInput value={plan.withdrawalYears} onChange={(v) => update('withdrawalYears', v)} suffix="년" /></Row>
         <Row label="기타 종합소득(연)" hint="남편 근로/사업 — 와이프 분은 추후"><AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} /></Row>
         <Row label="연금소득공제"><AmountInput value={plan.pensionDeduction} onChange={(v) => update('pensionDeduction', v)} /></Row>
-        <Row label="종합소득공제" hint="본인 150만 + 부양가족 (1인별 적용)"><AmountInput value={plan.comprehensiveDeduction} onChange={(v) => update('comprehensiveDeduction', v)} /></Row>
+        <div className="py-1">
+          <p className="text-sm text-gray-400 mb-1">종합소득공제 (1인별 자동)</p>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+              <input type="checkbox" checked={plan.spouseDependent} onChange={(e) => update('spouseDependent', e.target.checked)} className="accent-blue-500" />
+              배우자 부양 (부부 가정 시 ON)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+              <input type="checkbox" checked={plan.useStandardDeduction} onChange={(e) => update('useStandardDeduction', e.target.checked)} className="accent-blue-500" />
+              표준공제 100만 사용 (특별공제 없을 때)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+              부양가족 수
+              <button type="button" onClick={() => update('dependents', Math.max(0, plan.dependents - 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">−</button>
+              <span className="w-6 text-center text-gray-100">{plan.dependents}</span>
+              <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
+              <span className="text-[10px] text-gray-600">(1인당 150만)</span>
+            </label>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1.5 sm:text-right sm:mr-44">
+            1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2 = <span className="text-blue-400 font-semibold">{formatManwon(perPersonDed.husband)}</span>
+          </p>
+        </div>
       </Expander>
     </div>
   )

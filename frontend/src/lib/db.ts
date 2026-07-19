@@ -893,6 +893,14 @@ export async function getPensionSim(): Promise<PensionSimPlan | null> {
       delete (parsed as { stockBalance?: number }).stockBalance
       delete (parsed as { stockDividendYield?: number }).stockDividendYield
     }
+    // 마이그레이션: 구 comprehensiveDeduction → spouseDependent/dependents/useStandardDeduction
+    const legacyDed = parsed as { comprehensiveDeduction?: number; spouseDependent?: boolean; useStandardDeduction?: boolean }
+    if (typeof legacyDed.comprehensiveDeduction === 'number' && legacyDed.spouseDependent === undefined) {
+      parsed.spouseDependent = true
+      parsed.dependents = (parsed.dependents as number) ?? 0
+      parsed.useStandardDeduction = true
+      delete (parsed as { comprehensiveDeduction?: number }).comprehensiveDeduction
+    }
     return parsed as unknown as PensionSimPlan
   } catch {
     return null

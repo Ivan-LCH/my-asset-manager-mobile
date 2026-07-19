@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehiclePerPerson,
-  computePensionVehicle, stockBalanceFromInflows, totalInflows, sourcesFromAssets,
+  computePensionVehicle, computePerPersonComprehensiveDeduction,
+  stockBalanceFromInflows, totalInflows, sourcesFromAssets,
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
@@ -111,6 +112,32 @@ describe('pensionSim 계산', () => {
 
   it('estimateHealthInsurance: 소득 없으면 0', () => {
     expect(estimateHealthInsurance(0, 0, 0)).toBe(0)
+  })
+
+  it('computePerPersonComprehensiveDeduction: 본인 150만 + 공통 ÷ 2', () => {
+    const base = { spouseDependent: true, dependents: 0, useStandardDeduction: true }
+    expect(computePerPersonComprehensiveDeduction(base)).toEqual({ husband: 2_750_000, wife: 2_750_000 })
+    // 부양가족 2명: 본인 150 + (150+300+100)/2 = 425만
+    expect(computePerPersonComprehensiveDeduction({ ...base, dependents: 2 })).toEqual({ husband: 4_250_000, wife: 4_250_000 })
+    // 배우자 OFF, 부양 2: 본인 150 + (300+100)/2 = 350만
+    expect(computePerPersonComprehensiveDeduction({ spouseDependent: false, dependents: 2, useStandardDeduction: true })).toEqual({ husband: 3_500_000, wife: 3_500_000 })
+  })
+
+  it('공제 자동 산정으로 종합소득세 정확도 ↑ (1인별 2천만 한도)', () => {
+    // 부부·부양 0·표준 ON → 각 275만 공제, 각 18M(한도 내) → 종합합산 0
+    const p = plan({
+      sources: [],
+      startYear: 2029,
+      stockYields: [{ ticker: 'A', yield: 6 }],
+      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockOwnership: { husband: 50, wife: 50 },
+      inflows: [{ id: 's', name: '전세금', amount: 600_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 50, wife: 50 } }],
+    })
+    const r = computePensionVehiclePerPerson(p)
+    expect(r.husband.financialIncome).toBeCloseTo(18_000_000, -4)
+    // 1인별 18M < 2천만 한도 + 공제 275만 → 과세표준 = max(0, 18M - 2천만 - 275만) = 0
+    expect(r.husband.comprehensiveTaxable).toBe(0)
+    expect(r.husband.comprehensiveTax).toBe(0)
   })
 
   it('부동산 명의 가중 → 1인별 재산과세표준 + 건보 재산분에 반영', () => {

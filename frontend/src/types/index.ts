@@ -255,9 +255,11 @@ export interface PensionSimPlan {
   stockOwnership:           Ownership           // 일반주식계좌 명의 지분
   stockManualYield?:        number              // 종목 없을 때 수동 배당률(%) 오버라이드
   otherIncome:              number              // 기타 종합소득(연, 근로/사업 등)
-  comprehensiveDeduction:   number              // 종합소득공제 (기본 본인 1,500,000 + 부양가족)
+  spouseDependent:          boolean             // 배우자 부양공제 (기본 true, 부부 가정)
+  dependents:               number              // 부양가족 수 (0~)
+  useStandardDeduction:     boolean             // 표준공제 100만 사용
   withdrawalYears:          number              // 수령 기간(연)
   startYear:                number              // 수령 개시 연도
-  pensionDeduction:         number              // 연금소득공제 (기본 12,000,000)
+  pensionDeduction:         number              // 연금소득공제 (법정 고정 12,000,000)
 }
 
