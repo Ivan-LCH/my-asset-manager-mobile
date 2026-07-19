@@ -11,6 +11,7 @@ const DEFAULT: PortfolioSettings = {
     { ticker: 'JEPQ', weight: 1 },
   ],
   blendedYield: 0,
+  manualYields: [],
 }
 
 export { DEFAULT as DEFAULT_PORTFOLIO }

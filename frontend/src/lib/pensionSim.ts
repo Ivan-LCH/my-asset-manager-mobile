@@ -1,14 +1,12 @@
 // 연금 시뮬레이터 — 순수 계산 함수(상태/IO 없음, 단위테스트 대상).
-// 법인시뮬과 대칭되는 "연금·개인 vehicle" 모델.
-// 기존 연금원천(sources)은 그대로 가정하고, 추가 + 유입 항목(inflows)의
-// 목적지(퇴직IRP / 일반주식계좌)에 따른 연간 세금·건보·순취득을 산출.
+// 법인시뮬과 대칭되는 "연금·개인 vehicle" 모델. 1인(남편/와이프) 단위 과세.
+// 기존 연금원천(sources)은 그대로 가정(연금=남편 명의), + 유입 항목의 목적지·명의에
+// 따라 1인별 세금·건보를 산출 → 가구 총계.
 // 모든 수치는 사용자 가정에 기반한 추정치.
-import type { PensionSimPlan, PensionSource } from '@/types'
+import type { PensionSimPlan, PensionSource, PensionInflowItem, Ownership, PortfolioHolding, PortfolioYield } from '@/types'
+import { blendedYield } from '@/lib/corpSim'
 
-/** 연금소득세 누진구간 (연금소득 전용, 종합소득세와 별개)
- *  ~1,200만: 면세(공제) / ~4,600만: 3% / ~8,800만: 4% / ~1.5억: 5% / 6%
- *  (과세표준 = 연금수령액 − 1,200만 연금소득공제)
- */
+/** 연금소득세 누진구간 (연금소득 전용, 종합소득세와 별개) */
 export function pensionIncomeTax(taxable: number): number {
   if (taxable <= 0) return 0
   if (taxable <= 34_000_000) return taxable * 0.03
@@ -34,17 +32,17 @@ export function comprehensiveTax(taxableIncome: number): number {
 /** 분리과세율 (이자·배당 15.4%) */
 export const SEPARATED_TAX_RATE = 0.154
 
-/** 금융소득종합과세 기준 — 연 2천만원 초과분은 종합소득세 합산과세 */
+/** 금융소득종합과세 기준 — 연 2천만원 초과분은 종합소득세 합산 (1인별 적용) */
 export const FINANCIAL_INCOME_LIMIT = 20_000_000
 
-/** 금융소득 과세 분해 — 분리과세/종합합산/종합소득세 */
+/** 금융소득 과세 분해 (1인분) */
 export interface TaxBreakdown {
   financialIncome:        number
-  separatedTax:           number  // 분리과세액 (한도 이하, 15.4%)
-  consolidatedFinancial:  number  // 종합합산 금융소득 (한도 초과분)
-  comprehensiveTaxable:   number  // 종합소득세 과세표준
-  comprehensiveTax:       number  // 종합소득세
-  totalFinancialTax:      number  // 분리과세 + 종합소득세
+  separatedTax:           number
+  consolidatedFinancial:  number
+  comprehensiveTaxable:   number
+  comprehensiveTax:       number
+  totalFinancialTax:      number
 }
 export function comprehensiveTaxBreakdown(
   financialIncome: number,
@@ -65,32 +63,46 @@ export function comprehensiveTaxBreakdown(
   }
 }
 
-/** 지역건강보험료 추정(월) — 소득월액(연금 50%·금융/기타 100%) × 7.09% + 장기요양 12.95%.
- *  재산·자동차 분은 은퇴계획 페이지에서 별도 산정하므로 여기선 소득분만 단순 추정. */
+/** 지역건강보험료 추정(월) — 소득분(연금 50%·금융/기타 100%) × 7.09% + 장기요양 12.95%. 1인분. */
 export function estimateHealthInsurance(
   pensionAnnual: number,
   financialAnnual: number,
   otherAnnual: number,
-): { healthMonthly: number; longTermMonthly: number; totalMonthly: number } {
+): number {
   const RATE = 0.0709
   const LONG_TERM = 0.1295
   const MIN_HEALTH = 19_780
   const totalIncome = financialAnnual * 1.0 + pensionAnnual * 0.5 + otherAnnual * 1.0
   const incomeMonthly = totalIncome > 0 ? (totalIncome / 12) * RATE : 0
   const healthMonthly = Math.max(incomeMonthly, totalIncome > 0 ? MIN_HEALTH : 0)
-  const longTermMonthly = Math.round(healthMonthly * LONG_TERM)
-  return { healthMonthly: Math.round(healthMonthly), longTermMonthly, totalMonthly: Math.round(healthMonthly) + longTermMonthly }
+  return Math.round(healthMonthly) + Math.round(healthMonthly * LONG_TERM)
+}
+
+/** 일반주식계좌 잔액 = stock 유입 합 (일회성 + 연간). 수동 입력 아님. */
+export function stockBalanceFromInflows(inflows: PensionInflowItem[]): number {
+  return inflows
+    .filter((i) => i.destination === 'stock')
+    .reduce((s, i) => s + i.amount, 0)
+}
+
+/** 종목별 배당률 → 가중평균. 수동 > 자동조회 > 0. */
+export function blendedYieldWithFallback(
+  yields: PortfolioYield[],
+  holdings: PortfolioHolding[],
+): number {
+  return blendedYield(yields, holdings)
 }
 
 /** 기본 입력값 (샘플) */
 export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   sources: [
-    { id: 'irp1', name: '퇴직연금(DC) → IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 4 },
-    { id: 'pen1', name: '연금저축(98년 비과세)', principal: 100_000_000, taxType: 'taxExempt', yieldRate: 4 },
+    { id: 'irp1', name: '퇴직연금(DC) → IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 4, owner: 'husband' },
+    { id: 'pen1', name: '연금저축(98년 비과세)', principal: 100_000_000, taxType: 'taxExempt', yieldRate: 4, owner: 'husband' },
   ],
   inflows: [],
-  stockBalance: 0,
-  stockDividendYield: 6,
+  stockHoldings: [],
+  stockYields: [],
+  stockOwnership: { husband: 50, wife: 50 },
   otherIncome: 0,
   comprehensiveDeduction: 1_500_000,
   withdrawalYears: 30,
@@ -98,7 +110,7 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   pensionDeduction: 12_000_000,
 }
 
-/** 연금 원천 총액 (기존 sources) */
+/** 연금 원천 총액 */
 export const totalPrincipal = (plan: PensionSimPlan): number =>
   plan.sources.reduce((s, src) => s + src.principal, 0)
 
@@ -106,40 +118,58 @@ export const totalPrincipal = (plan: PensionSimPlan): number =>
 export const totalInflows = (plan: PensionSimPlan): number =>
   plan.inflows.reduce((s, it) => s + it.amount, 0)
 
-export interface PensionVehicleResult {
-  // IRP side
-  irpPrincipal:           number   // IRP 총 원금 (기존 sources + IRP 유입)
-  exemptPrincipal:        number   // 비과세 연금 원금
-  annualPensionTaxable:   number   // 연 과세 연금 수령
-  annualPensionExempt:    number   // 연 비과세 연금 수령
-  pensionTaxable:         number   // 연금소득세 과세표준
-  pensionTax:             number   // 연금소득세(연)
-  // Stock side
-  stockBalance:           number   // 일반주식계좌 총액 (기본 + 일회성 유입)
-  financialIncome:        number   // 연간 금융소득 (배당 + 연간 유입)
-  financialTax:           number   // 금융소득세 (분리+종합)
-  separatedTax:           number
-  consolidatedFinancial:  number
-  comprehensiveTax:       number
-  // 건보
-  healthMonthly:          number   // 지역건보(월, 소득분 추정)
-  // totals
-  totalAnnualTax:         number   // 연금소득세 + 금융소득세 (연)
-  grossAnnual:            number   // 연 총수입 (연금수령 + 금융소득)
-  netAnnual:              number   // 연 순취득 (총수입 − 세금)
+/** 일반주식계좌 blended 배당률(%) — 종목 기반, 실패 시 stockManualYield */
+export function stockAccountYield(plan: PensionSimPlan): number {
+  if (plan.stockHoldings.length > 0) {
+    const y = blendedYieldWithFallback(plan.stockYields, plan.stockHoldings)
+    if (y > 0) return y
+  }
+  return plan.stockManualYield ?? 0
 }
 
-/**
- * 연금·개인 vehicle 연간 결과 산출.
- * 모든 유입 항목은 수령 개시 전에 도착한다고 가정 — 각 항목의 year는 기록용이며
- * 잔액 계산에는 전량 반영된다 (연도별 시점 배치는 은퇴계획 현금흐름에서).
- * - IRP 유입 → IRP 원금 합산, 수령기간으로 균등 인출.
- * - 주식 일회성 → 잔액 가산(배당 발생), 연간 → 직접 금융소득 가산.
- */
-export function computePensionVehicle(plan: PensionSimPlan): PensionVehicleResult {
+// ── 1인별 결과 ───────────────────────────────────────────────
+export interface PersonVehicleResult {
+  owner:                'husband' | 'wife'
+  irpPrincipal:         number
+  exemptPrincipal:      number
+  annualPensionTaxable: number
+  annualPensionExempt:  number
+  pensionTax:           number
+  stockBalance:         number        // 본인 주식잔액 지분
+  financialIncome:      number        // 본인 금융소득(배당+연간유입)
+  financialTax:         number
+  separatedTax:         number
+  consolidatedFinancial:number
+  comprehensiveTax:     number
+  healthMonthly:        number
+  totalAnnualTax:       number
+  grossAnnual:          number
+  netAnnual:            number
+}
+
+export interface HouseholdVehicleResult {
+  husband: PersonVehicleResult
+  wife:    PersonVehicleResult
+  totals: {
+    stockBalance:    number
+    financialIncome: number
+    pensionTax:      number
+    financialTax:    number
+    totalAnnualTax:  number
+    grossAnnual:     number
+    netAnnual:       number
+    healthMonthly:   number
+  }
+}
+
+/** 1인별 연금·개인 vehicle 결과.
+ *  - 연금(IRP/과세/비과세 원금) = 남편 100% (연금=남편 가정).
+ *  - 일반주식계좌 잔액 = stockBalanceFromInflows → stockOwnership으로 1인 분할.
+ *  - 금융소득 2천만 한도·연금소득세·건보 모두 1인별 산출. */
+export function computePensionVehiclePerPerson(plan: PensionSimPlan): HouseholdVehicleResult {
   const years = plan.withdrawalYears || 1
 
-  // 기존 sources 분류
+  // 기존 sources (남편 명의 가정) 분류
   const taxableSrc = plan.sources
     .filter((s) => s.taxType === 'irp' || s.taxType === 'national' || s.taxType === 'taxable')
     .reduce((s, src) => s + src.principal, 0)
@@ -147,43 +177,99 @@ export function computePensionVehicle(plan: PensionSimPlan): PensionVehicleResul
     .filter((s) => s.taxType === 'taxExempt')
     .reduce((s, src) => s + src.principal, 0)
 
-  // 유입 항목을 목적지/유형별로 합산 (전량 잔액에 반영)
+  // IRP 유입은 남편(퇴직) 명의로 합산
   const irpInflow = plan.inflows.filter((i) => i.destination === 'irp').reduce((s, i) => s + i.amount, 0)
-  const stockLumpsum = plan.inflows.filter((i) => i.destination === 'stock' && i.type === 'lumpsum').reduce((s, i) => s + i.amount, 0)
+
+  // 일반주식계좌: 잔액은 stock 유입에서, 명의는 stockOwnership
+  const stockTotal = stockBalanceFromInflows(plan.inflows)
+  const yieldPct = stockAccountYield(plan)
+  const annualDividendTotal = Math.round(stockTotal * (yieldPct / 100))
   const stockAnnual = plan.inflows.filter((i) => i.destination === 'stock' && i.type === 'annual').reduce((s, i) => s + i.amount, 0)
 
-  // IRP 수령
-  const irpPrincipal = taxableSrc + irpInflow
-  const exemptPrincipal = exemptSrc
-  const annualPensionTaxable = irpPrincipal / years
-  const annualPensionExempt = exemptPrincipal / years
-  const pensionTaxable = Math.max(0, annualPensionTaxable - plan.pensionDeduction)
-  const pensionTax = pensionIncomeTax(pensionTaxable)
+  // 주식 소득 1인 분할 (배당 + 연간 유입 모두 동일 지분 적용)
+  const husbandShare = plan.stockOwnership.husband / 100
+  const wifeShare = plan.stockOwnership.wife / 100
+  const fin = {
+    husband: annualDividendTotal * husbandShare + stockAnnual * husbandShare,
+    wife: annualDividendTotal * wifeShare + stockAnnual * wifeShare,
+  }
 
-  // 주식/금융소득
-  const stockBalance = plan.stockBalance + stockLumpsum
-  const annualDividend = Math.round(stockBalance * (plan.stockDividendYield / 100))
-  const financialIncome = annualDividend + stockAnnual
-  const fin = comprehensiveTaxBreakdown(financialIncome, plan.otherIncome, plan.comprehensiveDeduction)
+  // 기타소득은 남편 근로 가정(연금시뮬에선 남편에 배정; 은퇴계획에서 1인별 처리)
+  const other = { husband: plan.otherIncome, wife: 0 }
 
-  // 건보 (월)
-  const hi = estimateHealthInsurance(annualPensionTaxable + annualPensionExempt, financialIncome, plan.otherIncome)
+  // 1인별 연금 — 남편만 (와이프 연금 0)
+  const annualPensionTaxableH = (taxableSrc + irpInflow) / years
+  const annualPensionExemptH = exemptSrc / years
+  const pensionTaxH = pensionIncomeTax(Math.max(0, annualPensionTaxableH - plan.pensionDeduction))
 
-  const grossAnnual = annualPensionTaxable + annualPensionExempt + financialIncome
-  const totalAnnualTax = pensionTax + fin.totalFinancialTax
-  const netAnnual = grossAnnual - totalAnnualTax
+  const computePerson = (owner: 'husband' | 'wife'): PersonVehicleResult => {
+    const isHusband = owner === 'husband'
+    const irpPrincipal = isHusband ? taxableSrc + irpInflow : 0
+    const exemptPrincipal = isHusband ? exemptSrc : 0
+    const annualPensionTaxable = isHusband ? annualPensionTaxableH : 0
+    const annualPensionExempt = isHusband ? annualPensionExemptH : 0
+    const pensionTax = isHusband ? pensionTaxH : 0
 
+    const personFin = isHusband ? fin.husband : fin.wife
+    const personOther = isHusband ? other.husband : other.wife
+    const ft = comprehensiveTaxBreakdown(personFin, personOther, plan.comprehensiveDeduction)
+
+    const stockBalance = stockTotal * (isHusband ? husbandShare : wifeShare)
+    const healthMonthly = estimateHealthInsurance(annualPensionTaxable + annualPensionExempt, personFin, personOther)
+
+    const grossAnnual = annualPensionTaxable + annualPensionExempt + personFin
+    const totalAnnualTax = pensionTax + ft.totalFinancialTax
+    return {
+      owner, irpPrincipal, exemptPrincipal,
+      annualPensionTaxable, annualPensionExempt, pensionTax,
+      stockBalance, financialIncome: personFin,
+      financialTax: ft.totalFinancialTax, separatedTax: ft.separatedTax,
+      consolidatedFinancial: ft.consolidatedFinancial, comprehensiveTax: ft.comprehensiveTax,
+      healthMonthly, totalAnnualTax,
+      grossAnnual, netAnnual: grossAnnual - totalAnnualTax,
+    }
+  }
+
+  const husband = computePerson('husband')
+  const wife = computePerson('wife')
+
+  const sum = (k: keyof PersonVehicleResult) => (husband[k] as number) + (wife[k] as number)
   return {
-    irpPrincipal, exemptPrincipal,
-    annualPensionTaxable, annualPensionExempt,
-    pensionTaxable, pensionTax,
-    stockBalance, financialIncome,
-    financialTax: fin.totalFinancialTax,
-    separatedTax: fin.separatedTax,
-    consolidatedFinancial: fin.consolidatedFinancial,
-    comprehensiveTax: fin.comprehensiveTax,
-    healthMonthly: hi.totalMonthly,
-    totalAnnualTax, grossAnnual, netAnnual,
+    husband, wife,
+    totals: {
+      stockBalance: husband.stockBalance + wife.stockBalance,
+      financialIncome: sum('financialIncome'),
+      pensionTax: sum('pensionTax'),
+      financialTax: sum('financialTax'),
+      totalAnnualTax: sum('totalAnnualTax'),
+      grossAnnual: sum('grossAnnual'),
+      netAnnual: sum('netAnnual'),
+      healthMonthly: husband.healthMonthly + wife.healthMonthly,
+    },
+  }
+}
+
+/** @deprecated Phase C RetirementPage 연결 전 호환 shim — 가구 합계만 반환. */
+export function computePensionVehicle(plan: PensionSimPlan) {
+  const h = computePensionVehiclePerPerson(plan)
+  const t = h.totals
+  return {
+    irpPrincipal: h.husband.irpPrincipal,
+    exemptPrincipal: h.husband.exemptPrincipal,
+    annualPensionTaxable: h.husband.annualPensionTaxable,
+    annualPensionExempt: h.husband.annualPensionExempt,
+    pensionTaxable: Math.max(0, h.husband.annualPensionTaxable - plan.pensionDeduction),
+    pensionTax: t.pensionTax,
+    stockBalance: t.stockBalance,
+    financialIncome: t.financialIncome,
+    financialTax: t.financialTax,
+    separatedTax: h.husband.separatedTax + h.wife.separatedTax,
+    consolidatedFinancial: h.husband.consolidatedFinancial + h.wife.consolidatedFinancial,
+    comprehensiveTax: h.husband.comprehensiveTax + h.wife.comprehensiveTax,
+    healthMonthly: t.healthMonthly,
+    totalAnnualTax: t.totalAnnualTax,
+    grossAnnual: t.grossAnnual,
+    netAnnual: t.netAnnual,
   }
 }
 
@@ -202,6 +288,10 @@ export function sourcesFromAssets(
       principal: existingSrc?.principal ?? a.currentValue,
       taxType: existingSrc?.taxType ?? taxType,
       yieldRate: existingSrc?.yieldRate ?? 4,
+      owner: existingSrc?.owner ?? 'husband',
     }
   })
 }
+
+// (Ownership/PRESET helpers는 types에서 export — PensionSimPage에서 직접 import)
+export type { Ownership }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Save, RefreshCw, PieChart } from 'lucide-react'
 import { usePortfolio, useSavePortfolio, DEFAULT_PORTFOLIO } from '@/hooks/usePortfolio'
 import { blendedYield } from '@/lib/corpSim'
+import { cn } from '@/lib/utils'
 import type { PortfolioHolding, PortfolioYield } from '@/types'
 
 export default function PortfolioPage() {
@@ -11,6 +12,7 @@ export default function PortfolioPage() {
   const [holdings, setHoldings] = useState<PortfolioHolding[]>(DEFAULT_PORTFOLIO.holdings)
   const [yieldVal, setYieldVal] = useState(0)
   const [yields, setYields] = useState<PortfolioYield[]>([])
+  const [manual, setManual] = useState<{ ticker: string; yield: number }[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -19,8 +21,23 @@ export default function PortfolioPage() {
     if (saved) {
       setHoldings(saved.holdings)
       setYieldVal(saved.blendedYield)
+      setManual(saved.manualYields ?? [])
     }
   }, [saved])
+
+  const manualYieldOf = (ticker: string) => manual.find((m) => m.ticker === ticker)?.yield
+  const effectiveYields = (): PortfolioYield[] =>
+    holdings.map((h) => {
+      const m = manualYieldOf(h.ticker)
+      if (h.ticker && typeof m === 'number') return { ticker: h.ticker, yield: m, manual: true }
+      const f = yields.find((v) => v.ticker === h.ticker)
+      return { ticker: h.ticker, yield: f?.yield ?? 0 }
+    })
+
+  const setManualYield = (ticker: string, y: number) => {
+    setManual((prev) => [...prev.filter((m) => m.ticker !== ticker), { ticker, yield: y }])
+    setDirty(true)
+  }
 
   const fetchYields = async () => {
     setLoading(true)
@@ -31,8 +48,10 @@ export default function PortfolioPage() {
       setLoading(false)
       return
     }
+    const manualMap = new Map(manual.map((m) => [m.ticker, m.yield]))
     const results: PortfolioYield[] = await Promise.all(
       tickers.map(async (t) => {
+        if (manualMap.has(t)) return { ticker: t, yield: manualMap.get(t) as number, manual: true }  // 수동 행 보존
         try {
           const r = await fetch(`/api/yield?ticker=${encodeURIComponent(t)}`)
           if (!r.ok) return { ticker: t, yield: 0 }
@@ -49,12 +68,12 @@ export default function PortfolioPage() {
     setDirty(true)
     setLoading(false)
     const okCount = results.filter((r) => r.yield > 0).length
-    if (okCount === 0) setError(`${tickers.length}개 종목 조회 실패. 잠시 후 다시 시도하거나 수동으로 수익률을 입력하세요.`)
-    else if (okCount < tickers.length) setError(`${tickers.length - okCount}개 종목 조회 실패 (부분 성공).`)
+    if (okCount === 0) setError(`${tickers.length}개 종목 조회 실패. 행별 수동 배당률을 입력하세요.`)
+    else if (okCount < tickers.length) setError(`${tickers.length - okCount}개 종목 조회 실패 (수동 입력 필요).`)
   }
 
   const handleSave = () => {
-    saveMut.mutate({ holdings, blendedYield: yieldVal }, { onSuccess: () => setDirty(false) })
+    saveMut.mutate({ holdings, blendedYield: yieldVal, manualYields: manual }, { onSuccess: () => setDirty(false) })
   }
 
   return (
@@ -80,11 +99,13 @@ export default function PortfolioPage() {
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 space-y-3">
         {holdings.map((h, i) => {
           const y = yields.find((v) => v.ticker === h.ticker)?.yield
+          const m = manualYieldOf(h.ticker)
+          const effective = typeof m === 'number' ? m : y
           return (
             <div key={i} className="flex items-center gap-2">
               <input
                 type="text"
-                className="w-32 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                className="w-28 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
                 value={h.ticker}
                 onChange={(e) => {
                   const p = [...holdings]; p[i] = { ...p[i], ticker: e.target.value.toUpperCase() }
@@ -94,7 +115,7 @@ export default function PortfolioPage() {
               />
               <input
                 type="number" inputMode="decimal"
-                className="w-20 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
+                className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
                 value={h.weight || ''}
                 onChange={(e) => {
                   const p = [...holdings]; p[i] = { ...p[i], weight: Number(e.target.value) }
@@ -102,9 +123,14 @@ export default function PortfolioPage() {
                 }}
               />
               <span className="text-xs text-gray-500">비중</span>
-              {typeof y === 'number' && y > 0 && (
-                <span className="text-xs text-emerald-400 shrink-0 ml-auto">{y.toFixed(2)}%</span>
-              )}
+              <input
+                type="number" inputMode="decimal" placeholder="수동%"
+                className={cn('w-20 bg-gray-700 border rounded-lg px-2 py-2 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500',
+                  typeof m === 'number' ? 'border-emerald-600 text-emerald-300' : 'border-gray-600')}
+                value={effective ?? ''}
+                onChange={(e) => h.ticker && setManualYield(h.ticker, Number(e.target.value))}
+                title="조회 실패 시 수동 배당률 입력"
+              />
               <button
                 onClick={() => { setHoldings(holdings.filter((_, j) => j !== i)); setDirty(true) }}
                 className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0 text-xs"

@@ -864,7 +864,30 @@ export async function getPensionSim(): Promise<PensionSimPlan | null> {
   const row = await db.settings.get(PENSION_SIM_KEY)
   if (!row) return null
   try {
-    return JSON.parse(row.value) as PensionSimPlan
+    const parsed = JSON.parse(row.value) as Record<string, unknown>
+    // 마이그레이션: 구 stockBalance/stockDividendYield → holdings/yields/ownership + 합성 stock inflow
+    const legacy = parsed as { stockBalance?: number; stockDividendYield?: number; stockHoldings?: unknown }
+    if (legacy.stockBalance !== undefined && legacy.stockHoldings === undefined) {
+      const inflows = Array.isArray(parsed.inflows) ? parsed.inflows as PensionSimPlan['inflows'] : []
+      if ((legacy.stockBalance ?? 0) > 0) {
+        inflows.push({
+          id: `migrated-stock-${Date.now()}`,
+          name: '기존 일반주식계좌 잔액',
+          amount: legacy.stockBalance ?? 0,
+          type: 'lumpsum',
+          destination: 'stock',
+          year: (parsed.startYear as number) ?? new Date().getFullYear(),
+          ownership: { husband: 100, wife: 0 },
+        })
+      }
+      parsed.inflows = inflows
+      parsed.stockHoldings = []
+      parsed.stockYields = []
+      parsed.stockOwnership = { husband: 50, wife: 50 }
+      delete (parsed as { stockBalance?: number }).stockBalance
+      delete (parsed as { stockDividendYield?: number }).stockDividendYield
+    }
+    return parsed as unknown as PensionSimPlan
   } catch {
     return null
   }

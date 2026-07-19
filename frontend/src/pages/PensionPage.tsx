@@ -136,7 +136,7 @@ export default function PensionPage() {
       const asset = pensionAssets.find((a) => a.id === assetId)
       if (!asset) return p
       return { ...p, sources: [...p.sources, {
-        id: assetId, name: asset.name, principal: asset.currentValue, taxType, yieldRate: 4,
+        id: assetId, name: asset.name, principal: asset.currentValue, taxType, yieldRate: 4, owner: 'husband',
       }] }
     })
     setSimDirty(true)

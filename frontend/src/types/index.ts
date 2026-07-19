@@ -1,6 +1,30 @@
 export type AssetType = 'REAL_ESTATE' | 'STOCK' | 'PENSION' | 'SAVINGS' | 'PHYSICAL' | 'ETC'
 export type Currency   = 'KRW' | 'USD' | 'JPY'
 
+// ── 명의(지분) ─────────────────────────────────────────────
+// 프리셋(mine/half/wife)은 UI 입력용; 저장은 항상 Ownership(퍼센트).
+export type OwnershipPreset = 'mine' | 'half' | 'wife' | 'custom'
+export interface Ownership { husband: number; wife: number }   // husband + wife === 100
+export const PRESET_TO_OWNERSHIP: Record<Exclude<OwnershipPreset, 'custom'>, Ownership> = {
+  mine: { husband: 100, wife: 0 },
+  half: { husband: 50, wife: 50 },
+  wife: { husband: 0, wife: 100 },
+}
+export const ownershipFromPreset = (p: OwnershipPreset): Ownership =>
+  p === 'custom' ? { husband: 50, wife: 50 } : PRESET_TO_OWNERSHIP[p]
+export const presetFromOwnership = (o: Ownership): OwnershipPreset => {
+  const k = `${o.husband}|${o.wife}`
+  if (k === '100|0') return 'mine'
+  if (k === '50|50') return 'half'
+  if (k === '0|100') return 'wife'
+  return 'custom'
+}
+export const splitByOwnership = (amount: number, o: Ownership) => ({
+  husband: (amount * o.husband) / 100,
+  wife: (amount * o.wife) / 100,
+})
+
+
 export interface HistoryItem {
   date:      string
   value?:    number
@@ -167,10 +191,12 @@ export interface PortfolioHolding {
 export interface PortfolioSettings {
   holdings:    PortfolioHolding[]
   blendedYield: number           // 자동 산정 가중평균 수익률(%)
+  manualYields: { ticker: string; yield: number }[]  // 수동 배당률 폴백 (/api/yield 실패 시)
 }
 export interface PortfolioYield {
   ticker: string
   yield: number                  // 3년평균 배당수익률(%)
+  manual?: boolean               // 수동 입력 여부
 }
 
 export interface CorpSimPlan {
@@ -207,6 +233,7 @@ export interface PensionSource {
   principal: number         // 원금 (자산 currentValue)
   taxType: PensionTaxType   // 과세 구분
   yieldRate: number         // 운용 수익률(%)
+  owner: 'husband' | 'wife' // 명의 (기본 husband — 연금=남편 가정)
 }
 
 export interface PensionInflowItem {
@@ -216,13 +243,16 @@ export interface PensionInflowItem {
   type: 'lumpsum' | 'annual'          // 일회성 / 연간반복
   destination: 'irp' | 'stock'        // 퇴직IRP / 일반주식계좌
   year: number                        // 발생(시작) 연도 — 언제 들어오는지
+  ownership: Ownership                // 명의 지분 (destination='irp'는 남편 고정)
 }
 
 export interface PensionSimPlan {
   sources:                  PensionSource[]     // 기존 연금원천 (PensionPage에서 과세구분 관리)
   inflows:                  PensionInflowItem[] // + 유입 항목 (목적지 선택)
-  stockBalance:             number              // 일반주식계좌 잔액
-  stockDividendYield:       number              // 일반주식계좌 배당률(%)
+  stockHoldings:            PortfolioHolding[]  // 일반주식계좌 종목 (배당률 자동산정용)
+  stockYields:              PortfolioYield[]    // 종목별 배당률(조회+수동 폴백)
+  stockOwnership:           Ownership           // 일반주식계좌 명의 지분
+  stockManualYield?:        number              // 종목 없을 때 수동 배당률(%) 오버라이드
   otherIncome:              number              // 기타 종합소득(연, 근로/사업 등)
   comprehensiveDeduction:   number              // 종합소득공제 (기본 본인 1,500,000 + 부양가족)
   withdrawalYears:          number              // 수령 기간(연)

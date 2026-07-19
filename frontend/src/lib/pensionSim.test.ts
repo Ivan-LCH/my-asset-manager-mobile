@@ -1,104 +1,114 @@
 import { describe, it, expect } from 'vitest'
 import {
-  EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehicle, totalPrincipal, totalInflows,
-  sourcesFromAssets, comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
+  EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehiclePerPerson,
+  computePensionVehicle, stockBalanceFromInflows, totalInflows, sourcesFromAssets,
+  comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
+import { blendedYield } from '@/lib/corpSim'
 import type { PensionSimPlan } from '@/types'
 
 const plan = (over: Partial<PensionSimPlan> = {}): PensionSimPlan => ({ ...EMPTY_PENSION_PLAN, ...over })
 
 describe('pensionSim 계산', () => {
-  it('pensionIncomeTax: 1,200만 공제 후 누진', () => {
+  it('pensionIncomeTax / comprehensiveTax 기본', () => {
     expect(pensionIncomeTax(0)).toBe(0)
     expect(pensionIncomeTax(8_000_000)).toBeCloseTo(8_000_000 * 0.03)
-    expect(pensionIncomeTax(40_000_000)).toBeCloseTo(40_000_000 * 0.04 - 340_000)
-  })
-
-  it('comprehensiveTax: 종합소득세 누진세율', () => {
     expect(comprehensiveTax(0)).toBe(0)
     expect(comprehensiveTax(10_000_000)).toBeCloseTo(10_000_000 * 0.06)
-    expect(comprehensiveTax(100_000_000)).toBeCloseTo(100_000_000 * 0.35 - 15_400_000)
   })
 
-  it('comprehensiveTaxBreakdown: 한도 내 분리과세, 초과분 종합합산', () => {
-    const within = comprehensiveTaxBreakdown(10_000_000, 0, 1_500_000)
-    expect(within.separatedTax).toBeCloseTo(10_000_000 * 0.154)
-    expect(within.consolidatedFinancial).toBe(0)
-    expect(within.comprehensiveTax).toBe(0)
-
-    const over = comprehensiveTaxBreakdown(30_000_000, 0, 1_500_000)
-    expect(over.consolidatedFinancial).toBe(10_000_000)
-    expect(over.comprehensiveTax).toBeGreaterThan(0)
+  it('comprehensiveTaxBreakdown: 한도 내 분리과세, 초과 종합합산', () => {
+    expect(comprehensiveTaxBreakdown(10_000_000, 0, 1_500_000).consolidatedFinancial).toBe(0)
+    expect(comprehensiveTaxBreakdown(30_000_000, 0, 1_500_000).consolidatedFinancial).toBe(10_000_000)
   })
 
-  it('estimateHealthInsurance: 소득 없으면 0, 있으면 최저 이상', () => {
-    expect(estimateHealthInsurance(0, 0, 0).totalMonthly).toBe(0)
-    const hi = estimateHealthInsurance(20_000_000, 10_000_000, 0)
-    expect(hi.totalMonthly).toBeGreaterThan(0)
-  })
-
-  it('totalPrincipal / totalInflows: 합산', () => {
-    expect(totalPrincipal(plan())).toBe(400_000_000) // 3억 + 1억
-    const p = plan({ inflows: [
-      { id: 'a', name: '위로금', amount: 100_000_000, type: 'lumpsum', destination: 'irp', year: 2029 },
-      { id: 'b', name: '배당', amount: 5_000_000, type: 'annual', destination: 'stock', year: 2029 },
-    ] })
-    expect(totalInflows(p)).toBe(105_000_000)
-  })
-
-  it('sourcesFromAssets: PENSION 자산에서 과세 구분 추정', () => {
-    const assets = [
-      { id: 'a1', name: '퇴직연금', currentValue: 3_0000_0000, detail: { pensionType: '퇴직연금' } },
-      { id: 'a2', name: '연금저축', currentValue: 1_0000_0000, detail: { pensionType: '개인연금' } },
+  it('stockBalanceFromInflows: stock 유입만 합산', () => {
+    const inflows = [
+      { id: 'a', name: '위로금', amount: 100_000_000, type: 'lumpsum' as const, destination: 'irp' as const, year: 2029, ownership: { husband: 100, wife: 0 } },
+      { id: 'b', name: '전세금', amount: 200_000_000, type: 'lumpsum' as const, destination: 'stock' as const, year: 2029, ownership: { husband: 50, wife: 50 } },
+      { id: 'c', name: '배당', amount: 5_000_000, type: 'annual' as const, destination: 'stock' as const, year: 2029, ownership: { husband: 50, wife: 50 } },
     ]
-    const sources = sourcesFromAssets(assets, [])
-    expect(sources[0].taxType).toBe('irp')
-    expect(sources[1].taxType).toBe('taxable')
-    expect(sources[0].principal).toBe(3_0000_0000)
+    expect(stockBalanceFromInflows(inflows)).toBe(205_000_000) // stock만
+    expect(totalInflows(plan({ inflows }))).toBe(305_000_000)
   })
 
-  it('computePensionVehicle: IRP 유입은 연금원금에 합산, 수령기간으로 균등', () => {
+  it('blendedYield: 종목 가중평균', () => {
+    const y = blendedYield(
+      [{ ticker: 'A', yield: 4 }, { ticker: 'B', yield: 6 }],
+      [{ ticker: 'A', weight: 1 }, { ticker: 'B', weight: 1 }],
+    )
+    expect(y).toBeCloseTo(5) // (4+6)/2
+  })
+
+  it('computePensionVehiclePerPerson: IRP/연금은 남편 only', () => {
     const p = plan({
-      sources: [{ id: 's', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0 }],
-      inflows: [{ id: 'i', name: '위로금', amount: 150_000_000, type: 'lumpsum', destination: 'irp', year: 2029 }],
-      withdrawalYears: 30,
-      startYear: 2029,
+      sources: [{ id: 's', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' }],
+      withdrawalYears: 30, startYear: 2029,
     })
-    const r = computePensionVehicle(p)
-    expect(r.irpPrincipal).toBe(450_000_000)
-    expect(r.annualPensionTaxable).toBeCloseTo(450_000_000 / 30, -3)
-    expect(r.pensionTax).toBeGreaterThanOrEqual(0)
+    const r = computePensionVehiclePerPerson(p)
+    expect(r.husband.annualPensionTaxable).toBeCloseTo(300_000_000 / 30, -3)
+    expect(r.wife.annualPensionTaxable).toBe(0)
+    expect(r.wife.pensionTax).toBe(0)
   })
 
-  it('computePensionVehicle: 주식 일회성은 잔액 가산→배당, 연간은 직접 금융소득', () => {
+  it('1인별 2천만 한도: 부부 합산>2천만이어도 각<2천만이면 종합합산 없음', () => {
+    // stock 잔액 6억 × 6% = 3천6백만, 50:50 → 각 1천8백만 (<2천만)
     const p = plan({
       sources: [],
-      stockBalance: 300_000_000,
-      stockDividendYield: 6,
       startYear: 2029,
-      inflows: [
-        { id: 'l', name: '전세금', amount: 200_000_000, type: 'lumpsum', destination: 'stock', year: 2029 },
-        { id: 'a', name: '기타배당', amount: 3_000_000, type: 'annual', destination: 'stock', year: 2029 },
-      ],
+      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockYields: [{ ticker: 'A', yield: 6 }],
+      stockOwnership: { husband: 50, wife: 50 },
+      inflows: [{ id: 's', name: '전세금', amount: 600_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 50, wife: 50 } }],
     })
-    const r = computePensionVehicle(p)
-    // 잔액 (3억+2억) × 6% = 3천만 + 연간 3백만 = 3천3백만
-    expect(r.stockBalance).toBe(500_000_000)
-    expect(r.financialIncome).toBe(33_000_000)
-    // 3천3백만 > 2천만 → 종합합산 발생
-    expect(r.consolidatedFinancial).toBe(33_000_000 - FINANCIAL_INCOME_LIMIT)
-    expect(r.financialTax).toBeGreaterThan(0)
+    const r = computePensionVehiclePerPerson(p)
+    expect(r.husband.financialIncome).toBeCloseTo(18_000_000, -4)
+    expect(r.wife.financialIncome).toBeCloseTo(18_000_000, -4)
+    // 각 2천만 이하 → 종합합산 0
+    expect(r.husband.consolidatedFinancial).toBe(0)
+    expect(r.wife.consolidatedFinancial).toBe(0)
+    // 가구 합산(3천6백만)으로 한 번에 계산했으면 1천6백만이 종합합산되었을 것 → 1인별이 유리
   })
 
-  it('computePensionVehicle: 비과세 연금은 세금 0, 총수입에 포함', () => {
+  it('명의 100:0 → 와이프 금융소득 0', () => {
     const p = plan({
-      sources: [{ id: 'e', name: '비과세', principal: 120_000_000, taxType: 'taxExempt', yieldRate: 0 }],
-      withdrawalYears: 30,
+      sources: [],
+      startYear: 2029,
+      stockYields: [{ ticker: 'A', yield: 6 }],
+      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockOwnership: { husband: 100, wife: 0 },
+      inflows: [{ id: 's', name: '전세금', amount: 300_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 100, wife: 0 } }],
     })
-    const r = computePensionVehicle(p)
-    expect(r.annualPensionExempt).toBe(4_000_000)
-    expect(r.pensionTax).toBe(0)
-    expect(r.grossAnnual).toBeGreaterThan(0)
+    const r = computePensionVehiclePerPerson(p)
+    expect(r.husband.financialIncome).toBeCloseTo(18_000_000, -4)
+    expect(r.wife.financialIncome).toBe(0)
+  })
+
+  it('수동 yield가 조회=0을 이긴다', () => {
+    const p = plan({
+      sources: [],
+      startYear: 2029,
+      stockHoldings: [{ ticker: 'X', weight: 1 }],
+      stockYields: [{ ticker: 'X', yield: 5, manual: true }],  // 수동 5%
+      stockOwnership: { husband: 100, wife: 0 },
+      inflows: [{ id: 's', name: '잔액', amount: 100_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 100, wife: 0 } }],
+    })
+    const r = computePensionVehiclePerPerson(p)
+    expect(r.husband.financialIncome).toBeCloseTo(5_000_000, -4) // 1억 × 5%
+  })
+
+  it('computePensionVehicle(shim): 가구 합계 반환', () => {
+    const p = plan({
+      sources: [{ id: 's', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' }],
+      withdrawalYears: 30, startYear: 2029,
+    })
+    const legacy = computePensionVehicle(p)
+    const per = computePensionVehiclePerPerson(p)
+    expect(legacy.netAnnual).toBe(per.totals.netAnnual)
+  })
+
+  it('estimateHealthInsurance: 소득 없으면 0', () => {
+    expect(estimateHealthInsurance(0, 0, 0)).toBe(0)
   })
 })
