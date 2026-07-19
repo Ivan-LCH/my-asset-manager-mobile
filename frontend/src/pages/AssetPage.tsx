@@ -5,6 +5,7 @@ import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
+import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { formatMoney, formatManwon, formatPnl, TYPE_LABELS } from '@/lib/utils'
 import type { AssetType, Asset } from '@/types'
 
@@ -139,9 +140,10 @@ function AssetTile({
           <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">
             {asset.name}
           </p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {asset.acquisitionDate ?? '-'} 취득
-            {isSold && <span className="ml-2 text-red-400">· 매각</span>}
+          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+            <span>{asset.acquisitionDate ?? '-'} 취득</span>
+            {isSold && <span className="text-red-400">· 매각</span>}
+            <OwnershipBadge ownership={asset.ownership} />
           </p>
         </div>
       </div>

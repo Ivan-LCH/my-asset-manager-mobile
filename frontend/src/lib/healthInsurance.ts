@@ -1,6 +1,6 @@
 // 지역건강보험료 계산 (2025년 지역가입자 기준, 단순화).
 // RetirementPage 에서 추출 — 법인시뮬·연금시뮬·은퇴계획 공유.
-import type { Asset, RealEstateDetail, Ownership } from '@/types'
+import type { Asset, RealEstateDetail } from '@/types'
 
 // 재산 점수표: 재산세 과세표준 5,000만원 공제 후 구간별 점수 (단위: 만원)
 export const PROPERTY_SCORE_TABLE: [number, number][] = [
@@ -86,7 +86,7 @@ export function realEstatePropertyBases(
     if (a.type !== 'REAL_ESTATE' || a.disposalDate) continue
     const d = a.detail as RealEstateDetail | undefined
     if (!d) continue
-    const o: Ownership = d.ownership ?? { husband: 50, wife: 50 }
+    const o = a.ownership ?? { husband: 50, wife: 50 }
     hp += a.currentValue * (o.husband / 100)
     wp += a.currentValue * (o.wife / 100)
     hd += (d.tenantDeposit ?? 0) * (o.husband / 100)
@@ -96,4 +96,20 @@ export function realEstatePropertyBases(
     husband: { propertyTaxBase: Math.round(hp), rentalDeposit: Math.round(hd) },
     wife: { propertyTaxBase: Math.round(wp), rentalDeposit: Math.round(wd) },
   }
+}
+
+/** STOCK 자산의 배당을 1인별로 분할 (월). summary의 per-asset monthlyKrw × ownership.husband/wife%. */
+export function stockDividendsByOwner(
+  assets: Asset[],
+  summary: { items: { assetId: string; monthlyKrw: number }[] },
+): { husband: number; wife: number } {
+  const byId = new Map(summary.items.map((i) => [i.assetId, i.monthlyKrw]))
+  let h = 0, w = 0
+  for (const a of assets) {
+    if (a.type !== 'STOCK' || a.disposalDate) continue
+    const m = byId.get(a.id) ?? 0
+    h += m * (a.ownership.husband / 100)
+    w += m * (a.ownership.wife / 100)
+  }
+  return { husband: Math.round(h), wife: Math.round(w) }
 }

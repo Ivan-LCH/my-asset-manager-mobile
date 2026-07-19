@@ -27,6 +27,7 @@ export interface AssetRow {
   disposalDate?:    string | null
   disposalPrice?:   number | null
   quantity:         number
+  ownership?:       { husband: number; wife: number }  // 구버전 미존재 시 50:50
   createdAt:        string
   updatedAt:        string
 }
@@ -47,7 +48,6 @@ export interface RealEstateRow {
   tenantDeposit: number
   address:       string
   loanAmount:    number
-  ownership?:    { husband: number; wife: number }  // 구버전 미존재 시 {50,50}
 }
 
 export interface StockRow {
@@ -147,10 +147,6 @@ async function getDetail(id: string, type: AssetType): Promise<AssetDetail | und
   }
   if (!row) return undefined
   const { assetId: _omit, ...detail } = row
-  // 구버전 방어: 부동산 ownership 누락 시 기본 50:50
-  if (type === 'REAL_ESTATE' && !(detail as { ownership?: unknown }).ownership) {
-    ;(detail as { ownership: { husband: number; wife: number } }).ownership = { husband: 50, wife: 50 }
-  }
   return detail as AssetDetail
 }
 
@@ -162,6 +158,7 @@ async function composeAsset(row: AssetRow): Promise<Asset> {
   // 직전 이력 시점(전일 등락 계산용): 끝에서 2번째
   const prev = rows.length >= 2 ? rows[rows.length - 2] : undefined
 
+  const detail = await getDetail(row.id, row.type)
   return {
     id:               row.id,
     type:             row.type,
@@ -174,15 +171,18 @@ async function composeAsset(row: AssetRow): Promise<Asset> {
     disposalDate:     row.disposalDate ?? undefined,
     disposalPrice:    row.disposalPrice ?? undefined,
     quantity:         row.quantity,
-    createdAt:        row.createdAt,
-    updatedAt:        row.updatedAt,
+    ownership:        row.ownership
+                     ?? (row.type === 'REAL_ESTATE' ? (detail as { ownership?: { husband: number; wife: number } })?.ownership : undefined)
+                     ?? { husband: 50, wife: 50 },
     history: rows.map((h) => ({
       date:     h.date,
       value:    h.value ?? undefined,
       price:    h.price ?? undefined,
       quantity: h.quantity ?? undefined,
     })),
-    detail: await getDetail(row.id, row.type),
+    createdAt:        row.createdAt,
+    updatedAt:        row.updatedAt,
+    detail,
   }
 }
 
@@ -197,7 +197,6 @@ async function putDetail(id: string, type: AssetType, detail: Record<string, any
         tenantDeposit: detail.tenantDeposit ?? 0,
         address:       detail.address ?? '',
         loanAmount:    detail.loanAmount ?? 0,
-        ownership:     detail.ownership ?? { husband: 50, wife: 50 },
       })
       break
     case 'STOCK': {
@@ -298,6 +297,7 @@ export async function createAsset(data: Record<string, any>): Promise<string> {
       disposalDate:     data.disposalDate ?? null,
       disposalPrice:    data.disposalPrice ?? null,
       quantity:         qty,
+      ownership:        data.ownership ?? { husband: 50, wife: 50 },
       createdAt:        now,
       updatedAt:        now,
     })
@@ -342,6 +342,7 @@ export async function updateAsset(id: string, data: Record<string, any>): Promis
       disposalDate:     data.disposalDate     ?? row.disposalDate,
       disposalPrice:    data.disposalPrice    ?? row.disposalPrice,
       quantity:         data.quantity         ?? row.quantity,
+      ownership:        data.ownership        ?? row.ownership ?? { husband: 50, wife: 50 },
       updatedAt:        new Date().toISOString(),
     })
 

@@ -8,6 +8,7 @@ import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
+import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { updateHistory } from '@/lib/db'
 import { fetchPrices } from '@/lib/stockPrice'
 import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice } from '@/lib/utils'
@@ -317,7 +318,10 @@ function AccountCard({
           const aRoi  = aCost > 0 ? (aPnl / aCost) * 100 : 0
           return (
             <div key={a.id} className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 truncate max-w-[120px]">{a.name}</span>
+              <span className="text-gray-400 truncate flex items-center gap-1.5">
+                {a.name}
+                <OwnershipBadge ownership={a.ownership} />
+              </span>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-gray-300">{formatManwon(a.currentValue)}</span>
                 <span className={aRoi >= 0 ? 'text-emerald-400' : 'text-red-400'}>

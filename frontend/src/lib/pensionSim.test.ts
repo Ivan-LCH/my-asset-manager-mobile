@@ -6,7 +6,7 @@ import {
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
-import { realEstatePropertyBases, calcHealthInsurance } from '@/lib/healthInsurance'
+import { realEstatePropertyBases, calcHealthInsurance, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { blendedYield } from '@/lib/corpSim'
 import type { PensionSimPlan } from '@/types'
 
@@ -141,11 +141,12 @@ describe('pensionSim 계산', () => {
   })
 
   it('부동산 명의 가중 → 1인별 재산과세표준 + 건보 재산분에 반영', () => {
-    // 부동산 10억, 와이프 100% 명의
+    // 부동산 10억, 와이프 100% 명의 (asset.ownership)
     const assets = [{
       id: 're1', type: 'REAL_ESTATE' as const, name: '아파트', currentValue: 1_000_000_000,
       disposalDate: undefined,
-      detail: { isOwned: true, hasTenant: false, tenantDeposit: 0, address: '', loanAmount: 0, ownership: { husband: 0, wife: 100 } },
+      ownership: { husband: 0, wife: 100 },
+      detail: { isOwned: true, hasTenant: false, tenantDeposit: 0, address: '', loanAmount: 0 },
     }] as any
     const prop = realEstatePropertyBases(assets)
     expect(prop.husband.propertyTaxBase).toBe(0)
@@ -153,5 +154,19 @@ describe('pensionSim 계산', () => {
     // 와이프 건보(재산분 포함) > 0
     const wifeHI = calcHealthInsurance({ pensionAnnual: 0, dividendAnnual: 0, otherAnnual: 0, propertyTaxBase: prop.wife.propertyTaxBase, rentalDeposit: 0, carValue: 0, scorePerPoint: 208.4 })
     expect(wifeHI.grandTotal).toBeGreaterThan(0)
+  })
+
+  it('stockDividendsByOwner: 1인별 STOCK 배당 분할', () => {
+    const assets = [
+      { id: 's1', type: 'STOCK' as const, name: '삼성', currentValue: 0, disposalDate: undefined, ownership: { husband: 70, wife: 30 } },
+      { id: 's2', type: 'STOCK' as const, name: 'Apple', currentValue: 0, disposalDate: undefined, ownership: { husband: 0, wife: 100 } },
+    ] as any
+    const summary = { items: [
+      { assetId: 's1', monthlyKrw: 100_000 },
+      { assetId: 's2', monthlyKrw: 200_000 },
+    ] }
+    const d = stockDividendsByOwner(assets, summary)
+    expect(d.husband).toBe(70_000)  // 100k × 0.7
+    expect(d.wife).toBe(230_000)      // 100k × 0.3 + 200k × 1.0
   })
 })

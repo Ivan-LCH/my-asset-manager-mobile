@@ -18,6 +18,7 @@ function asset(partial: Partial<Asset>): Asset {
   return {
     id: 'a1', type: 'STOCK', name: 'A', currentValue: 0,
     acquisitionDate: '2023-01-01', acquisitionPrice: 0, quantity: 0,
+    ownership: { husband: 50, wife: 50 },
     createdAt: '', updatedAt: '', history: [],
     ...partial,
   }
@@ -53,7 +54,7 @@ describe('generateChartData — forward fill', () => {
       id: 're', type: 'REAL_ESTATE', name: '아파트',
       acquisitionPrice: 50000, quantity: 0,
       currentValue: 60000,
-      detail: { isOwned: true, hasTenant: true, tenantDeposit: 10000, address: '', loanAmount: 20000, ownership: { husband: 50, wife: 50 } },
+      detail: { isOwned: true, hasTenant: true, tenantDeposit: 10000, address: '', loanAmount: 20000 },
     })
     const rows = generateChartData([re], 'all', 'type')
     expect(valueAt(rows, RE_LABEL, '2023-01-01')).toBe(20000)  // 50000 - 30000

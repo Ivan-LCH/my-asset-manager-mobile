@@ -8,7 +8,7 @@ import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { computePensionVehiclePerPerson, EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
-import { realEstatePropertyBases } from '@/lib/healthInsurance'
+import { realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { usePensionSim } from '@/hooks/usePensionSim'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
@@ -893,6 +893,9 @@ export default function RetirementPage() {
 
   const pensionMap = calcPensionByYear(pensionLikeAssets, currentAge)
 
+  // 1인별 STOCK 배당 (실제 주식자산 배당 × 명의)
+  const stockDiv = divSummary ? stockDividendsByOwner(allAssets, divSummary) : { husband: 0, wife: 0 }
+
   // ── 연금시뮬 연동 (linkMode==='pension') ──
   const { data: rawPensionSim } = usePensionSim()
   const realEstateAssets = allAssets.filter((a) => a.type === 'REAL_ESTATE')
@@ -1094,6 +1097,33 @@ export default function RetirementPage() {
           </div>
           <p className="text-[11px] text-gray-600 mt-2">
             금융소득 2천만 한도·연금소득세·건보(부동산 명의 재산분 포함) 각자 적용. 연금·배당은 이 기준으로 현금흐름에 반영됨.
+          </p>
+        </div>
+      )}
+
+      {/* 1인별 STOCK 배당 (실제 주식자산 × 명의, 연금시뮬과 별개) */}
+      {(stockDiv.husband > 0 || stockDiv.wife > 0) && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-2">📈 STOCK 자산 배당 (1인별, 월)</h3>
+          <div className="grid grid-cols-3 gap-3 text-[11px]">
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">🧑 남편</p>
+              <p className="text-emerald-400 font-semibold">{formatManwon(stockDiv.husband)}/월</p>
+              <p className="text-gray-500">연 {formatManwon(stockDiv.husband * 12)}</p>
+            </div>
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">👩 와이프</p>
+              <p className="text-pink-400 font-semibold">{formatManwon(stockDiv.wife)}/월</p>
+              <p className="text-gray-500">연 {formatManwon(stockDiv.wife * 12)}</p>
+            </div>
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-500 mb-1">🏠 가구 합계</p>
+              <p className="text-gray-100 font-semibold">{formatManwon(stockDiv.husband + stockDiv.wife)}/월</p>
+              <p className="text-gray-500">연 {formatManwon((stockDiv.husband + stockDiv.wife) * 12)}</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-600 mt-2">
+            실제 STOCK 자산의 배당 이력/예측을 각 자산의 명의 지분으로 분할. 현금흐름 표의 배당 라인은 가구 합계(연 15.4% 근사) 유지.
           </p>
         </div>
       )}

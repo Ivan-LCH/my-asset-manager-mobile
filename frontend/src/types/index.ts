@@ -38,7 +38,6 @@ export interface RealEstateDetail {
   tenantDeposit: number
   address:       string
   loanAmount:    number
-  ownership:     Ownership   // 명의 지분 (기본 {husband:50,wife:50})
 }
 
 export interface StockDetail {
@@ -110,6 +109,7 @@ export interface Asset {
   disposalDate?:    string
   disposalPrice?:   number
   quantity:         number
+  ownership:        Ownership   // 명의 지분 (기본 50:50, 세금·건보 1인별 산정)
   createdAt:        string
   updatedAt:        string
   history:          HistoryItem[]

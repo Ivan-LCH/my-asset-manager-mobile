@@ -3,6 +3,7 @@ import { Plus, Home, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useAssets, useAssetsByType } from '@/hooks/useAssets'
 import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import AssetChart from '@/components/common/AssetChart'
+import OwnershipBadge from '@/components/common/OwnershipBadge'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import { formatMoney, formatManwon } from '@/lib/utils'
@@ -122,7 +123,10 @@ function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void 
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-100 truncate">{asset.name}</p>
-            <p className="text-xs text-gray-500 truncate mt-0.5">{d?.address ?? '-'}</p>
+            <p className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1.5">
+              {d?.address ?? '-'}
+              <OwnershipBadge ownership={asset.ownership} />
+            </p>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">

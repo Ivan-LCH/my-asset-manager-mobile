@@ -10,6 +10,7 @@ import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
+import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { EMPTY_PENSION_PLAN, sourcesFromAssets } from '@/lib/pensionSim'
 import { formatMoney, formatManwon, cn } from '@/lib/utils'
 import type { Asset, PensionDetail, StockDetail, SavingsDetail, PensionSimPlan, PensionTaxType } from '@/types'
@@ -254,7 +255,7 @@ export default function PensionPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">{a.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{d?.pensionType ?? '연금'}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">{d?.pensionType ?? '연금'}<OwnershipBadge ownership={a.ownership} /></p>
                   </div>
                 </div>
                 {/* 월 수령 */}

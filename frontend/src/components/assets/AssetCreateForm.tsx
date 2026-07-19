@@ -66,7 +66,7 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
   }, [name, type, existingStocks])
 
   const buildDetail = () => {
-    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, ownership }
+    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant }
     if (type === 'STOCK') return {
       accountName, currency, ticker: ticker || undefined, isPensionLike,
       ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
@@ -90,6 +90,7 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
       acquisitionDate,
       acquisitionPrice,
       quantity: (type === 'STOCK' || type === 'PHYSICAL') ? quantity : undefined,
+      ownership,
       detail: buildDetail(),
     }, { onSuccess: onClose })
   }
@@ -177,27 +178,15 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
               세입자 있음
             </label>
           </div>
-          {/* 명의 (건보 재산분 1인별 산정용) */}
-          <div>
-            <label className={labelCls}>명의 지분 (건보 재산분)</label>
-            <div className="flex gap-1">
-              {(['mine', 'half', 'wife', 'custom'] as OwnershipPreset[]).map((p) => (
-                <button key={p} type="button" onClick={() => setOwnership(ownershipFromPreset(p))}
-                  className={cn('flex-1 px-2 py-1 text-xs rounded transition-colors',
-                    presetFromOwnership(ownership) === p ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
-                  {p === 'mine' ? '내 100%' : p === 'half' ? '50:50' : p === 'wife' ? '와이프 100%' : '직접'}
-                </button>
-              ))}
-            </div>
-            {presetFromOwnership(ownership) === 'custom' && (
-              <div className="flex gap-3 mt-1">
-                <label className="flex items-center gap-1 text-xs text-gray-500">남편
-                  <input type="number" inputMode="decimal" className={cn(inputCls, 'w-20')} value={ownership.husband}
-                    onChange={(e) => { const h = Math.min(100, Math.max(0, +e.target.value)); setOwnership({ husband: h, wife: 100 - h }) }} />%
-                </label>
-                <span className="text-xs text-gray-500 self-center">와이프 {ownership.wife}%</span>
-              </div>
-            )}
+          <div className="flex gap-5">
+            <label className={checkCls}>
+              <input type="checkbox" checked={isOwned} onChange={(e) => setIsOwned(e.target.checked)} className="accent-blue-500" />
+              자가 거주
+            </label>
+            <label className={checkCls}>
+              <input type="checkbox" checked={hasTenant} onChange={(e) => setHasTenant(e.target.checked)} className="accent-blue-500" />
+              세입자 있음
+            </label>
           </div>
         </div>
       )}
@@ -301,6 +290,30 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
           )}
         </div>
       )}
+
+      {/* 공용 명의 (모든 자산 공통) */}
+      <div className="space-y-2 pt-2 border-t border-gray-700">
+        <p className="text-xs text-gray-500 font-medium uppercase">명의 지분 (전 자산 공통)</p>
+        <p className="text-[11px] text-gray-600">부부 가정 시 보통 50:50. 퇴직연금·국민연금 등 본인 자산은 '내 100%'. 1인별 건보·세금 산정에 활용.</p>
+        <div className="flex gap-1">
+          {(['mine', 'half', 'wife', 'custom'] as OwnershipPreset[]).map((p) => (
+            <button key={p} type="button" onClick={() => setOwnership(ownershipFromPreset(p))}
+              className={cn('flex-1 px-2 py-1 text-xs rounded transition-colors',
+                presetFromOwnership(ownership) === p ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
+              {p === 'mine' ? '내 100%' : p === 'half' ? '50:50' : p === 'wife' ? '와이프 100%' : '직접'}
+            </button>
+          ))}
+        </div>
+        {presetFromOwnership(ownership) === 'custom' && (
+          <div className="flex gap-3">
+            <label className="flex items-center gap-1 text-xs text-gray-500">남편
+              <input type="number" inputMode="decimal" className={cn(inputCls, 'w-20')} value={ownership.husband}
+                onChange={(e) => { const h = Math.min(100, Math.max(0, +e.target.value)); setOwnership({ husband: h, wife: 100 - h }) }} />%
+            </label>
+            <span className="text-xs text-gray-500 self-center">와이프 {ownership.wife}%</span>
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-2 justify-end pt-2">
         <button
