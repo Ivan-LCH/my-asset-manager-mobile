@@ -209,17 +209,23 @@ export interface PensionSource {
   yieldRate: number         // 운용 수익률(%)
 }
 
+export interface PensionInflowItem {
+  id: string
+  name: string                        // 항목명 (자유 입력)
+  amount: number                      // 금액
+  type: 'lumpsum' | 'annual'          // 일회성 / 연간반복
+  destination: 'irp' | 'stock'        // 퇴직IRP / 일반주식계좌
+}
+
 export interface PensionSimPlan {
-  sources:                  PensionSource[]
-  severancePay:             number           // 희망퇴직위로금 → IRP로 이체
-  rentalDeposit:             number           // 전세보증금 (개인 주식 계좌 투자)
-  rentalYield:               number           // 전세금 배당 투자 수익률(%), 기본 6
-  rentalOwner:              'husband' | 'wife' // 전세금 투자 명의
-  interestIncome:           number           // 기타 이자소득(연, 예금 등) — 금융소득 합산
-  otherIncome:              number           // 기타 종합소득(연, 근로/사업 등) — 은퇴 후 보통 0
-  comprehensiveDeduction:   number           // 종합소득공제 (기본 본인 1,500,000 + 부양가족)
-  withdrawalYears:          number           // 수령 기간(연)
-  startYear:                number           // 수령 개시 연도
-  pensionDeduction:         number           // 연금소득공제 (기본 12,000,000)
+  sources:                  PensionSource[]     // 기존 연금원천 (PensionPage에서 과세구분 관리)
+  inflows:                  PensionInflowItem[] // + 유입 항목 (목적지 선택)
+  stockBalance:             number              // 일반주식계좌 잔액
+  stockDividendYield:       number              // 일반주식계좌 배당률(%)
+  otherIncome:              number              // 기타 종합소득(연, 근로/사업 등)
+  comprehensiveDeduction:   number              // 종합소득공제 (기본 본인 1,500,000 + 부양가족)
+  withdrawalYears:          number              // 수령 기간(연)
+  startYear:                number              // 수령 개시 연도
+  pensionDeduction:         number              // 연금소득공제 (기본 12,000,000)
 }
 

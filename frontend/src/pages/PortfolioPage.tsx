@@ -60,7 +60,7 @@ export default function PortfolioPage() {
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-lg mx-auto">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-100">📊 투자 포트폴리오</h2>
+        <h2 className="text-lg sm:text-xl font-bold text-gray-100">📊 IRP 투자 포트폴리오</h2>
         <button
           onClick={handleSave}
           disabled={!dirty || saveMut.isPending}
@@ -72,7 +72,8 @@ export default function PortfolioPage() {
       </div>
 
       <p className="text-xs text-gray-500 leading-relaxed">
-        법인 시뮬·연금 시뮬이 공통으로 참조하는 투자 포트폴리오. 종목과 비중을 입력하고 "배당률 자동 산정"을 누르면 Yahoo에서 3년 평균 배당률을 가져와 가중평균 수익률을 계산.
+        <b>IRP 계좌</b>의 투자 포트폴리오. 법인 시뮬이 공통으로 참조하며, 종목과 비중을 입력하고 "배당률 자동 산정"을 누르면 Yahoo에서 3년 평균 배당률을 가져와 가중평균 수익률을 계산.
+        (연금 시뮬의 <b>일반주식계좌</b> 포트폴리오는 연금 시뮬 페이지에서 별도 관리)
       </p>
 
       {/* 종목 리스트 */}

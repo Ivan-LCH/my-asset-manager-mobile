@@ -18,7 +18,7 @@ const NAV_ITEMS = [
 const PLAN_ITEMS = [
   { to: '/retirement',  icon: Sunset,      label: '은퇴 계획' },
   { to: '/pension/sim', icon: Coins,       label: '연금 시뮬' },
-  { to: '/portfolio',   icon: PieChart,    label: '투자 포트폴리오' },
+  { to: '/portfolio',   icon: PieChart,    label: 'IRP 포트폴리오' },
   { to: '/corp-sim',    icon: Building2,   label: '투자법인 시뮬' },
 ]
 
