@@ -987,38 +987,54 @@ export default function RetirementPage() {
         </div>
       </div>
 
-      {/* KPI */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">월 지출</p>
-          <p className="text-[13px] sm:text-lg font-bold text-red-400">
-            {retirementRow ? formatManwon(retirementRow.totalExpense) : '-'}
-          </p>
-          <p className="text-[11px] text-gray-600 mt-0.5">생활비+여행+의료+건보 · {retirementYear}년</p>
+      {/* 월 현금흐름 카드 (대표 연도 = 은퇴 연도) */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-200">📊 월 현금흐름 ({retirementYear}년 기준)</h3>
+          <span className="text-[11px] text-gray-500">현황 뷰 — 수입·세금·건보는 시뮬에서 자동 반영</span>
         </div>
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">월 수입</p>
-          <p className="text-[13px] sm:text-lg font-bold text-emerald-400">
-            {retirementRow ? formatManwon(retirementRow.totalIncome) : '-'}
-          </p>
-          <p className="text-[11px] text-gray-600 mt-0.5 leading-tight">
-            {retirementRow ? [
-              retirementRow.pensionMonthly > 0 ? `연금 ${fmtK(retirementRow.pensionMonthly)}` : null,
-              retirementRow.dividendMonthly > 0 ? `배당 ${fmtK(retirementRow.dividendMonthly)}` : null,
-              retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtK(retirementRow.corpSalaryMonthly)}` : null,
-              retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtK(retirementRow.corpReturnMonthly)}` : null,
-              retirementRow.lumpsumMonthly > 0 ? `목돈 ${fmtK(retirementRow.lumpsumMonthly)}` : null,
-            ].filter(Boolean).join(' + ') : `${retirementYear}년 기준`}
-          </p>
-        </div>
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1">월 여유/부족</p>
-          <p className={`text-[13px] sm:text-lg font-bold ${pnlColor(retirementRow?.balance ?? 0)}`}>
-            {retirementRow
-              ? `${retirementRow.balance >= 0 ? '+' : ''}${formatManwon(retirementRow.balance)}`
-              : '-'}
-          </p>
-          <p className="text-[11px] text-gray-600 mt-0.5">목돈 제외 기준</p>
+        <div className="grid grid-cols-3 gap-3">
+          {/* 월 수입 */}
+          <div className="bg-emerald-950/20 rounded-lg p-3">
+            <p className="text-[11px] text-gray-500 mb-1">월 수입</p>
+            <p className="text-base sm:text-xl font-bold text-emerald-400">
+              {retirementRow ? formatManwon(retirementRow.totalIncome) : '-'}
+            </p>
+            <p className="text-[10px] text-gray-600 mt-1 leading-tight">
+              {retirementRow ? [
+                retirementRow.pensionMonthly > 0 ? `연금 ${fmtK(retirementRow.pensionMonthly)}` : null,
+                retirementRow.dividendMonthly > 0 ? `배당 ${fmtK(retirementRow.dividendMonthly)}` : null,
+                retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtK(retirementRow.corpSalaryMonthly)}` : null,
+                retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtK(retirementRow.corpReturnMonthly)}` : null,
+                retirementRow.lumpsumMonthly > 0 ? `목돈 ${fmtK(retirementRow.lumpsumMonthly)}` : null,
+              ].filter(Boolean).join(' · ') : '-'}
+            </p>
+          </div>
+          {/* 월 지출 */}
+          <div className="bg-red-950/20 rounded-lg p-3">
+            <p className="text-[11px] text-gray-500 mb-1">월 지출</p>
+            <p className="text-base sm:text-xl font-bold text-red-400">
+              {retirementRow ? formatManwon(retirementRow.totalExpense) : '-'}
+            </p>
+            <p className="text-[10px] text-gray-600 mt-1 leading-tight">
+              {retirementRow ? [
+                `생활비 ${fmtK(retirementRow.expenseMonthly)}`,
+                retirementRow.travelMonthly + retirementRow.medicalMonthly > 0 ? `여행·의료 ${fmtK(retirementRow.travelMonthly + retirementRow.medicalMonthly)}` : null,
+                retirementRow.healthInsuranceMonthly > 0 ? `건보 ${fmtK(retirementRow.healthInsuranceMonthly)}` : null,
+                retirementRow.taxMonthly > 0 ? `세금 ${fmtK(retirementRow.taxMonthly)}` : null,
+              ].filter(Boolean).join(' · ') : '-'}
+            </p>
+          </div>
+          {/* 월 여유/부족 */}
+          <div className="bg-gray-900/40 rounded-lg p-3">
+            <p className="text-[11px] text-gray-500 mb-1">월 여유/부족</p>
+            <p className={`text-base sm:text-xl font-bold ${pnlColor(retirementRow?.balance ?? 0)}`}>
+              {retirementRow
+                ? `${retirementRow.balance >= 0 ? '+' : ''}${formatManwon(retirementRow.balance)}`
+                : '-'}
+            </p>
+            <p className="text-[10px] text-gray-600 mt-1">월 누적 × 12 = 연간</p>
+          </div>
         </div>
       </div>
 
@@ -1059,19 +1075,13 @@ export default function RetirementPage() {
         </div>
       </Expander>
 
-      {/* Expander 3: 건강보험료 */}
-      <Expander
-        title="✏️ 🏥 건강보험료 계산 (지역가입자)"
-        badge={`월 ${formatManwon(healthInsuranceMonthly)}`}
-      >
-        <HealthInsuranceSection
-          hi={plan.healthInsurance}
-          onChange={(v) => update('healthInsurance', v)}
-          result={hiResult}
-          pensionAutoMonthly={retirementPensionMonthly}
-          dividendAutoMonthly={stockDivMonthly}
-        />
-      </Expander>
+      {/* 건보·세금은 시뮬에서 산출 (이 페이지 입력 아님) */}
+      <div className="bg-blue-500/5 border border-blue-700/30 rounded-xl p-3">
+        <p className="text-[11px] text-blue-200/80 leading-relaxed">
+          💡 세금·건보는 위 <b>연동 설정</b>(법인/연금)에서 자동 산출됩니다.
+          {linkMode === 'none' && ' (현재 연동 안함 — 시뮬 페이지에서 설정하거나 연동하면 정확한 값이 반영됩니다.)'}
+        </p>
+      </div>
 
       {/* 연금시뮬 연동 시 1인별 세금·건보 요약 */}
       {perPerson && (

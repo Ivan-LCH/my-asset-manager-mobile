@@ -9,7 +9,7 @@ import {
   EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, computePerPersonComprehensiveDeduction,
   stockBalanceFromInflows, stockAccountYield, totalInflows, sourcesFromAssets, FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
-import { realEstatePropertyBases } from '@/lib/healthInsurance'
+import { realEstatePropertyBases, calcHealthInsurance } from '@/lib/healthInsurance'
 import { blendedYield } from '@/lib/corpSim'
 import { formatManwon, cn } from '@/lib/utils'
 import {
@@ -279,28 +279,48 @@ export default function PensionSimPage() {
 
   // 1인별 종합소득공제 자동 산정 표시
   const perPersonDed = computePerPersonComprehensiveDeduction(plan)
+
+  // 건보 소득분/재산분 분해 (지출 섹션 표시용)
+  const personHI = (p: typeof h.husband, propBase: { propertyTaxBase: number; rentalDeposit: number }) =>
+    calcHealthInsurance({
+      pensionAnnual: p.annualPensionTaxable + p.annualPensionExempt,
+      dividendAnnual: p.financialIncome,
+      otherAnnual: plan.otherIncome,
+      propertyTaxBase: propBase.propertyTaxBase,
+      rentalDeposit: propBase.rentalDeposit,
+      carValue: 0,
+      scorePerPoint: 208.4,
+    })
+  const husbandHI = personHI(h.husband, prop.husband)
+  const wifeHI = personHI(h.wife, prop.wife)
   const stockBalance = stockBalanceFromInflows(plan.inflows)
   const yieldPct = stockAccountYield(plan)
   const inflowTotal = totalInflows(plan)
   const irpInflow = plan.inflows.filter((i) => i.destination === 'irp').reduce((s, i) => s + i.amount, 0)
   const stockInflow = plan.inflows.filter((i) => i.destination === 'stock').reduce((s, i) => s + i.amount, 0)
 
-  const PersonKpi = ({ person, label, color }: { person: typeof h.husband; label: string; color: string }) => (
-    <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-300">{label}</p>
-        <span className={`text-[11px] ${color}`}>건보 {formatManwon(person.healthMonthly)}/월</span>
+  const PersonKpi = ({ person, label, color }: { person: typeof h.husband; label: string; color: string }) => {
+    const monthlyNet = Math.round(person.netAnnual / 12) - person.healthMonthly
+    return (
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-gray-300">{label}</p>
+          <span className="text-[10px] text-gray-500">건보 {formatManwon(person.healthMonthly)}/월</span>
+        </div>
+        {/* 월 순소득 강조 */}
+        <div className="bg-gray-900/60 rounded-lg p-2.5">
+          <p className="text-[10px] text-gray-500">월 순소득 (순취득÷12 − 건보)</p>
+          <p className={`text-xl font-bold ${color}`}>{formatManwon(monthlyNet)}<span className="text-xs text-gray-500 font-normal">/월</span></p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div><p className="text-gray-500">연금수령</p><p className="text-gray-100 font-semibold">{formatManwon(person.annualPensionTaxable + person.annualPensionExempt)}</p></div>
+          <div><p className="text-gray-500">금융소득</p><p className="text-gray-100 font-semibold">{formatManwon(person.financialIncome)}</p></div>
+          <div><p className="text-gray-500">총세금(연)</p><p className="text-red-400 font-semibold">{formatManwon(person.totalAnnualTax)}</p></div>
+          <div><p className="text-gray-500">순취득(연)</p><p className="text-emerald-400 font-semibold">{formatManwon(person.netAnnual)}</p></div>
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-[11px]">
-        <div><p className="text-gray-500">연금수령</p><p className="text-gray-100 font-semibold">{formatManwon(person.annualPensionTaxable + person.annualPensionExempt)}</p></div>
-        <div><p className="text-gray-500">연금소득세</p><p className="text-red-400 font-semibold">{formatManwon(person.pensionTax)}</p></div>
-        <div><p className="text-gray-500">금융소득</p><p className="text-gray-100 font-semibold">{formatManwon(person.financialIncome)}</p></div>
-        <div><p className="text-gray-500">금융소득세</p><p className="text-red-400 font-semibold">{formatManwon(person.financialTax)}</p></div>
-        <div><p className="text-gray-500">총세금</p><p className="text-red-400 font-semibold">{formatManwon(person.totalAnnualTax)}</p></div>
-        <div><p className="text-gray-500">순취득</p><p className="text-emerald-400 font-semibold">{formatManwon(person.netAnnual)}</p></div>
-      </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-xl mx-auto">
@@ -311,7 +331,7 @@ export default function PensionSimPage() {
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-100 hover:bg-gray-800 transition-colors shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h2 className="text-lg sm:text-xl font-bold text-gray-100 truncate">🪙 연금·개인 vehicle 시뮬 (1인별)</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-100 truncate">🪙 개인 투자 시뮬 (1인별)</h2>
         </div>
         <button onClick={handleSave} disabled={!dirty || saveMut.isPending}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 shrink-0">
@@ -344,43 +364,25 @@ export default function PensionSimPage() {
         </div>
       </div>
 
-      {/* 부동산 재산분(명의 가중) 정보 */}
-      {(prop.husband.propertyTaxBase > 0 || prop.wife.propertyTaxBase > 0) && (
-        <p className="text-[11px] text-gray-600">
-          🏠 부동산 재산과세표준 — 남편 {formatManwon(prop.husband.propertyTaxBase)} · 와이프 {formatManwon(prop.wife.propertyTaxBase)}
-          (지분별 건보 재산분 반영 · 자산 페이지 부동산 명의에서 설정)
-        </p>
-      )}
+      {/* 📥 수입 (들어오는 것) */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-sm font-bold text-emerald-400">📥 수입 (들어오는 것)</span>
+        <span className="text-[11px] text-gray-600">연금 수령 · 일반주식계좌 배당 · 유입 항목</span>
+      </div>
 
-      {/* + 유입 항목 */}
-      <Expander title="➕ 유입 항목 (목적지·명의 선택)" badge={`${plan.inflows.length}개 · ${formatManwon(inflowTotal)}`} defaultOpen>
-        <p className="text-[11px] text-gray-500 leading-relaxed">
-          추가 자금을 어디로·누구 명의로 굴릴지 선택. <b>퇴직IRP</b> → 연금원금(남편), <b>일반주식계좌</b> → 배당(명의별 금융소득, 각자 2천만 한도).
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {plan.inflows.map((it) => (
-            <InflowCard key={it.id} item={it}
-              onChange={(patch) => updateInflow(it.id, patch)}
-              onRemove={() => removeInflow(it.id)} />
-          ))}
+      {/* 연금 수령 요약 */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
+        <p className="text-xs font-semibold text-gray-300 mb-1">🛡️ 연금 수령 (기존 IRP·연금저축, 남편 명의)</p>
+        <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div><p className="text-gray-500">과세 연금 (연/월)</p><p className="text-gray-100 font-semibold">{formatManwon(h.husband.annualPensionTaxable)} / {formatManwon(Math.round(h.husband.annualPensionTaxable/12))}</p></div>
+          <div><p className="text-gray-500">비과세 연금 (연/월)</p><p className="text-gray-100 font-semibold">{formatManwon(h.husband.annualPensionExempt)} / {formatManwon(Math.round(h.husband.annualPensionExempt/12))}</p></div>
         </div>
-        {plan.inflows.length === 0 && (
-          <p className="text-center text-xs text-gray-600 py-4">항목이 없습니다. 아래에서 추가하세요.</p>
-        )}
-        <button onClick={addInflow}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
-          <Plus className="w-3.5 h-3.5" /> 항목 추가
-        </button>
-        {(irpInflow > 0 || stockInflow > 0) && (
-          <p className="text-[11px] text-gray-600">
-            퇴직IRP 유입 {formatManwon(irpInflow)} · 일반주식계좌 유입 {formatManwon(stockInflow)}
-          </p>
-        )}
-      </Expander>
+        <p className="text-[11px] text-gray-600 mt-1.5">과세구분·원금은 연금 자산(/pension)에서 관리. {plan.withdrawalYears}년 균등 인출 기준.</p>
+      </div>
 
-      {/* 일반주식계좌 포트폴리오 */}
-      <Expander title="📈 일반주식계좌 포트폴리오"
-        badge={`잔액 ${formatManwon(stockBalance)} · 수익률 ${yieldPct}%`}>
+      {/* 일반주식계좌 포트폴리오 (배당) */}
+      <Expander title="📈 일반주식계좌 포트폴리오 (배당)"
+        badge={`잔액 ${formatManwon(stockBalance)} · 수익률 ${yieldPct}% · 연배당 ${formatManwon(Math.round(stockBalance * yieldPct / 100))}`}>
         <p className="text-[11px] text-gray-500 leading-relaxed">
           잔액은 <b>stock 유입 합</b>에서 자동 산출(별도 입력 없음). 종목과 비중을 입력해 배당률을 자동 산정하거나 행별로 수동 입력.
         </p>
@@ -427,6 +429,79 @@ export default function PensionSimPage() {
         {plan.stockHoldings.length === 0 && (
           <Row label="수동 배당률(종목 없을 때)" hint="종목 입력이 귀찮을 때"><NumInput value={plan.stockManualYield ?? 0} onChange={(v) => update('stockManualYield', v)} suffix="%" /></Row>
         )}
+      </Expander>
+
+      {/* + 유입 항목 */}
+      <Expander title="➕ 유입 항목 (목적지·명의 선택)" badge={`${plan.inflows.length}개 · ${formatManwon(inflowTotal)}`}>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          추가 자금을 어디로·누구 명의로 굴릴지 선택. <b>퇴직IRP</b> → 연금원금(남편), <b>일반주식계좌</b> → 배당(명의별 금융소득, 각자 2천만 한도).
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {plan.inflows.map((it) => (
+            <InflowCard key={it.id} item={it}
+              onChange={(patch) => updateInflow(it.id, patch)}
+              onRemove={() => removeInflow(it.id)} />
+          ))}
+        </div>
+        {plan.inflows.length === 0 && (
+          <p className="text-center text-xs text-gray-600 py-4">항목이 없습니다. 아래에서 추가하세요.</p>
+        )}
+        <button onClick={addInflow}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
+          <Plus className="w-3.5 h-3.5" /> 항목 추가
+        </button>
+        {(irpInflow > 0 || stockInflow > 0) && (
+          <p className="text-[11px] text-gray-600">
+            퇴직IRP 유입 {formatManwon(irpInflow)} · 일반주식계좌 유입 {formatManwon(stockInflow)}
+          </p>
+        )}
+      </Expander>
+
+      {/* 📤 지출 (나가는 것) */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-sm font-bold text-red-400">📤 지출 (나가는 것)</span>
+        <span className="text-[11px] text-gray-600">세금 (연/월) · 건보 (월, 1인별)</span>
+      </div>
+
+      <Expander title="💸 세금 · 🏥 건보 (1인별)" defaultOpen>
+        {/* 세금 */}
+        <div>
+          <p className="text-xs font-semibold text-gray-300 mb-1.5">💸 세금</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+            {([
+              ['🧑 남편', h.husband],
+              ['👩 와이프', h.wife],
+              ['🏠 가구', { pensionTax: h.totals.pensionTax, financialTax: h.totals.financialTax, totalAnnualTax: h.totals.totalAnnualTax }],
+            ] as const).map(([lbl, p]) => (
+              <div key={lbl} className="bg-gray-900/50 rounded-lg p-2.5">
+                <p className="text-gray-500 mb-1">{lbl}</p>
+                <p className="text-gray-300">연금소득세 <span className="text-red-400">{formatManwon(p.pensionTax)}</span> <span className="text-gray-600">({formatManwon(Math.round(p.pensionTax/12))}/월)</span></p>
+                <p className="text-gray-300">금융소득세 <span className="text-red-400">{formatManwon(p.financialTax)}</span> <span className="text-gray-600">({formatManwon(Math.round(p.financialTax/12))}/월)</span></p>
+                <p className="text-gray-300 mt-0.5">총세금 <span className="text-red-400 font-semibold">{formatManwon(p.totalAnnualTax)}</span> <span className="text-gray-600">({formatManwon(Math.round(p.totalAnnualTax/12))}/월)</span></p>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* 건보 */}
+        <div className="pt-2">
+          <p className="text-xs font-semibold text-gray-300 mb-1.5">🏥 건강보험료 (월, 지역가입자 — 소득분+재산분)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            {([
+              ['🧑 남편', husbandHI, prop.husband.propertyTaxBase],
+              ['👩 와이프', wifeHI, prop.wife.propertyTaxBase],
+            ] as const).map(([lbl, hi, propBase]) => (
+              <div key={lbl} className="bg-gray-900/50 rounded-lg p-2.5">
+                <p className="text-gray-500 mb-1">{lbl}</p>
+                <p className="text-gray-100 font-semibold">{formatManwon(hi.grandTotal)}<span className="text-gray-500 font-normal">/월</span></p>
+                <p className="text-gray-600">소득분 {formatManwon(hi.incomeMonthly)} · 재산분 {formatManwon(hi.propertyMonthly)}{hi.carMonthly > 0 ? ` · 차량 ${formatManwon(hi.carMonthly)}` : ''}</p>
+                <p className="text-gray-600">부동산 재산과세표준 {formatManwon(propBase)}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-600 mt-1.5">
+            재산분은 부동산 명의 지분 반영 (자산 페이지 부동산 명의에서 설정). 장기요양포함.
+          </p>
+        </div>
       </Expander>
 
       {/* 수령 · 세금 설정 */}
