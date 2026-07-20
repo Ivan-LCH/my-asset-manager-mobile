@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehiclePerPerson,
-  computePensionVehicle, computePerPersonComprehensiveDeduction,
+  computePensionVehicle, computePerPersonComprehensiveDeduction, pensionSchedule,
   stockBalanceFromInflows, totalInflows, sourcesFromAssets,
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
@@ -154,6 +154,41 @@ describe('pensionSim 계산', () => {
     // 와이프 건보(재산분 포함) > 0
     const wifeHI = calcHealthInsurance({ pensionAnnual: 0, dividendAnnual: 0, otherAnnual: 0, propertyTaxBase: prop.wife.propertyTaxBase, rentalDeposit: 0, carValue: 0, scorePerPoint: 208.4 })
     expect(wifeHI.grandTotal).toBeGreaterThan(0)
+  })
+
+  it('pensionSchedule: 국민연금 65세 step-up 반영', () => {
+    // IRP 원금 3억 (과세) ÷ 30년 = 1000만/년 flat. 국민연금 2035~2055, 월 120만.
+    const p = plan({
+      sources: [
+        { id: 'irp', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' },
+        { id: 'nat', name: '국민연금', principal: 60_000_000, taxType: 'national', yieldRate: 0, owner: 'husband' },
+      ],
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const nationals = [{ expectedStartYear: 2035, expectedEndYear: 2055, expectedMonthlyPayout: 1_200_000, annualGrowthRate: 0 }]
+    const sched = pensionSchedule(p, nationals, 2029, 2058)
+    // 2029 (국민연금 전): IRP만 = 1000만/년 → 월 ~83만
+    const before = sched.find((r) => r.year === 2029)!
+    expect(before.nationalAnnual).toBe(0)
+    expect(before.drawdownAnnual).toBe(10_000_000)
+    // 2035 (국민연금 개시): + 120만×12 = 1440만 → 합 2440만
+    const at65 = sched.find((r) => r.year === 2035)!
+    expect(at65.nationalAnnual).toBe(14_400_000)
+    expect(at65.totalAnnual).toBe(10_000_000 + 14_400_000)
+  })
+
+  it('computePensionVehiclePerPerson: national을 실수령 모델로 (원금÷기간 아님)', () => {
+    const p = plan({
+      sources: [
+        { id: 'irp', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' },
+        { id: 'nat', name: '국민연금', principal: 60_000_000, taxType: 'national', yieldRate: 0, owner: 'husband' },
+      ],
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const nationals = [{ expectedStartYear: 2035, expectedEndYear: 2055, expectedMonthlyPayout: 1_200_000, annualGrowthRate: 0 }]
+    const r = computePensionVehiclePerPerson(p, { nationalPensions: nationals })
+    // peak(2035) 연금 = IRP 1000만 + 국민 1440만 = 2440만 (과세)
+    expect(r.husband.annualPensionTaxable).toBeGreaterThanOrEqual(24_000_000)
   })
 
   it('stockDividendsByOwner: 1인별 STOCK 배당 분할 (계좌 명의 우선, 자산별 폴백)', () => {

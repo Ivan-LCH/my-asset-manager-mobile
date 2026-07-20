@@ -183,11 +183,67 @@ export interface PersonProperty {
   rentalDeposit:  number
   carValue?:       number
 }
-export interface VehicleOptions {
-  husbandProperty?: PersonProperty
-  wifeProperty?:    PersonProperty
-  scorePerPoint?:   number
+/** 국민연금(확정급여) — 월 수령액·수령기간을 자산 detail에서 추출. 원금인출 아님. */
+export interface NationalPension {
+  expectedStartYear:     number
+  expectedEndYear:       number
+  expectedMonthlyPayout: number
+  annualGrowthRate:      number
 }
+export interface VehicleOptions {
+  husbandProperty?:  PersonProperty
+  wifeProperty?:     PersonProperty
+  nationalPensions?: NationalPension[]   // 국민연금 자산(월수령액 모델)
+  scorePerPoint?:    number
+}
+
+/** 연도별 연금 스케줄.
+ *  - IRP/퇴직/과세·비과세 연금저축 = 원금 ÷ 수령기간 (flat 인출, 매년 동일).
+ *  - 국민연금 = expectedStartYear~End, 월수령액 × 12 × (1+증가율)^경과년 (65세 step-up 반영).
+ *  국민연금 sources는 원금인출 합계에서 제외(이중계산 방지). */
+export interface PensionScheduleRow {
+  year:            number
+  drawdownAnnual:  number   // IRP/연금저축 인출 (과세+비과세, flat)
+  nationalAnnual:  number   // 국민연금 (과세)
+  taxableAnnual:   number   // drawdown과세 + 국민연금
+  exemptAnnual:    number   // drawdown 비과세
+  totalAnnual:     number
+}
+export function pensionSchedule(
+  plan: PensionSimPlan,
+  nationals: NationalPension[],
+  fromYear: number,
+  toYear: number,
+): PensionScheduleRow[] {
+  const years = plan.withdrawalYears || 1
+  const drawTaxable = (plan.sources
+    .filter((s) => s.taxType === 'irp' || s.taxType === 'taxable')
+    .reduce((sm, s) => sm + s.principal, 0)
+    + plan.inflows.filter((i) => i.destination === 'irp').reduce((sm, i) => sm + i.amount, 0)) / years
+  const drawExempt = plan.sources.filter((s) => s.taxType === 'taxExempt').reduce((sm, s) => sm + s.principal, 0) / years
+
+  const rows: PensionScheduleRow[] = []
+  for (let year = fromYear; year <= toYear; year++) {
+    let national = 0
+    for (const n of nationals) {
+      if (year >= n.expectedStartYear && year <= n.expectedEndYear) {
+        const elapsed = year - n.expectedStartYear
+        national += n.expectedMonthlyPayout * 12 * Math.pow(1 + (n.annualGrowthRate || 0) / 100, elapsed)
+      }
+    }
+    const taxable = drawTaxable + national
+    rows.push({
+      year,
+      drawdownAnnual: Math.round(drawTaxable + drawExempt),
+      nationalAnnual: Math.round(national),
+      taxableAnnual: Math.round(taxable),
+      exemptAnnual: Math.round(drawExempt),
+      totalAnnual: Math.round(taxable + drawExempt),
+    })
+  }
+  return rows
+}
+
 
 /** 1인별 연금·개인 vehicle 결과.
  *  - 연금(IRP/과세/비과세 원금) = 남편 100% (연금=남편 가정).
@@ -197,13 +253,21 @@ export interface VehicleOptions {
 export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: VehicleOptions): HouseholdVehicleResult {
   const years = plan.withdrawalYears || 1
 
-  // 기존 sources (남편 명의 가정) 분류
+  // 국민연금(확정급여) 분리 — 원금인출 아님, 월수령액 모델
+  const nationals = opts?.nationalPensions ?? []
+  const nationalIds = new Set(plan.sources.filter((s) => s.taxType === 'national').map((s) => s.id))
+  const hasNationalAsset = nationals.length > 0
+
+  // 인출형 연금 원금 (국민연금 제외) — 남편 명의
   const taxableSrc = plan.sources
-    .filter((s) => s.taxType === 'irp' || s.taxType === 'national' || s.taxType === 'taxable')
+    .filter((s) => (s.taxType === 'irp' || s.taxType === 'taxable') && !nationalIds.has(s.id))
     .reduce((s, src) => s + src.principal, 0)
   const exemptSrc = plan.sources
     .filter((s) => s.taxType === 'taxExempt')
     .reduce((s, src) => s + src.principal, 0)
+  // 국민연금 자산 detail이 없는 경우(legacy) 폴백: 원금÷기간
+  const nationalFallback = hasNationalAsset ? 0
+    : plan.sources.filter((s) => s.taxType === 'national').reduce((s, src) => s + src.principal, 0)
 
   // IRP 유입은 남편(퇴직) 명의로 합산
   const irpInflow = plan.inflows.filter((i) => i.destination === 'irp').reduce((s, i) => s + i.amount, 0)
@@ -228,9 +292,16 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   // 1인별 종합소득공제 자동 산정
   const perPersonDed = computePerPersonComprehensiveDeduction(plan)
 
+  // 연도별 연금 스케줄 (국민연금 step-up 반영) — 대표연도 = peak(국민연금 모두 수령 시)
+  const fromYear = plan.startYear
+  const toYear = plan.startYear + years - 1
+  const schedule = pensionSchedule(plan, nationals, fromYear, toYear)
+  const peakRow = schedule.reduce<PensionScheduleRow | undefined>(
+    (max, r) => (!max || r.totalAnnual > max.totalAnnual ? r : max), undefined)
+
   // 1인별 연금 — 남편만 (와이프 연금 0)
-  const annualPensionTaxableH = (taxableSrc + irpInflow) / years
-  const annualPensionExemptH = exemptSrc / years
+  const annualPensionTaxableH = (peakRow?.taxableAnnual ?? (taxableSrc + irpInflow + nationalFallback) / years)
+  const annualPensionExemptH = peakRow?.exemptAnnual ?? exemptSrc / years
   const pensionTaxH = pensionIncomeTax(Math.max(0, annualPensionTaxableH - plan.pensionDeduction))
 
   const computePerson = (owner: 'husband' | 'wife'): PersonVehicleResult => {

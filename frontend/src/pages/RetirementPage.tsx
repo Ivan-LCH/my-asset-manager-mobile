@@ -7,13 +7,13 @@ import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
-import { computePensionVehiclePerPerson, EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
+import { computePensionVehiclePerPerson, pensionSchedule, EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
 import { realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { usePensionSim } from '@/hooks/usePensionSim'
 import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
-  Asset, StockDetail, SavingsDetail,
+  Asset, StockDetail, SavingsDetail, PensionDetail,
   RetirementPlan, ExpenseItem, TravelItem, LumpsumItem, EmergencyItem,
   HealthInsuranceInputs,
 } from '@/types'
@@ -729,11 +729,10 @@ function buildCashFlow(
   corpLoanOutflow: number = 0,
   /** 연금시뮬 연동 시 1인별 결과에서 산출한 가구 합계 오버라이드 (세금/건보 1인별 정확). */
   linked?: {
-    startYear:       number
-    pensionMonthly:  number  // 가구 연금(남편+와이프)/12
-    dividendMonthly: number  // 가구 금융소득(명의별)/12 — useDividendSummary 풀 대체
+    pensionByYear:   Map<number, number>  // 연도별 가구 연금(월) — 국민연금 65세 step-up 반영
+    dividendMonthly: number  // 가구 금융소득(명의별)/12
     healthMonthly:   number  // 남편+와이프 건보(재산분 포함)
-    taxMonthly:      number  // 남편+와이프 세금(연금+금융, 2천만 한도 각자)/12
+    taxMonthly:      number  // 남편+와이프 세금(대표연도 기준)/12
   },
 ): CashFlowRow[] {
   const currentYear = new Date().getFullYear()
@@ -754,9 +753,9 @@ function buildCashFlow(
       return s + (times * num(t.costPerTrip)) / 12
     }, 0)
 
-    // 연금: 연동 시 pension sim 결과(수령개시 연도 이후), 아니면 자산 기반 pensionMap
+    // 연금: 연동 시 pension sim 연도별 스케줄(국민연금 step-up 반영), 아니면 자산 기반 pensionMap
     const pensionMonthly = linked
-      ? (year >= linked.startYear ? linked.pensionMonthly : 0)
+      ? (linked.pensionByYear.get(year) ?? 0)
       : (pensionMap.get(year) ?? 0)
 
     const lumpsumMonthly = plan.lumpsum.reduce((s, l) => {
@@ -777,8 +776,8 @@ function buildCashFlow(
     const corpSalaryMonthly = corpCF?.salaryMonthly ?? 0
     const corpReturnMonthly = corpCF ? (isPhase2 ? 0 : corpCF.returnP1Monthly) : 0
     const corpDiv = corpCF ? (isPhase2 ? corpCF.divP2Monthly : corpCF.divP1Monthly) : 0
-    // 배당: 연동 시 pension sim 금융소득(명의별), 아니면 실제 배당 풀 + 법인 배당
-    const dividendMonthly = linked ? (year >= linked.startYear ? linked.dividendMonthly : 0) : (stockDivMonthly + corpDiv)
+    // 배당: 연동 시 pension sim 금융소득(명의별, 정상상태 flat), 아니면 실제 배당 풀 + 법인 배당
+    const dividendMonthly = linked ? linked.dividendMonthly : (stockDivMonthly + corpDiv)
 
     // 세금: 연동 시 1인별 산정값, 아니면 근사(배당 15.4% + 급여 3%)
     const taxMonthly = linked
@@ -903,16 +902,34 @@ export default function RetirementPage() {
   const realEstateAssets = allAssets.filter((a) => a.type === 'REAL_ESTATE')
   const pensionSimPlan = rawPensionSim ? { ...EMPTY_PENSION_PLAN, ...rawPensionSim } : null
   const pensionLinked = linkMode === 'pension' && !!pensionSimPlan
+  // 국민연금 자산(확정급여) 추출
+  const pensionAssetsAll = allAssets.filter((a) => a.type === 'PENSION')
+  const nationals = (pensionSimPlan ? pensionAssetsAll
+    .filter((a) => pensionSimPlan.sources.find((s) => s.id === a.id)?.taxType === 'national')
+    .map((a) => {
+      const d = a.detail as PensionDetail | undefined
+      return d ? {
+        expectedStartYear: d.expectedStartYear,
+        expectedEndYear: d.expectedEndYear,
+        expectedMonthlyPayout: d.expectedMonthlyPayout,
+        annualGrowthRate: d.annualGrowthRate ?? 0,
+      } : null
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null) : [])
   const perPerson = (pensionLinked && pensionSimPlan)
     ? computePensionVehiclePerPerson(pensionSimPlan, {
         husbandProperty: realEstatePropertyBases(realEstateAssets).husband,
         wifeProperty: realEstatePropertyBases(realEstateAssets).wife,
+        nationalPensions: nationals,
       })
     : null
+  // 연도별 가구 연금(월) Map — 국민연금 65세 step-up 반영
+  const pensionByYear = (pensionLinked && pensionSimPlan)
+    ? new Map(pensionSchedule(pensionSimPlan, nationals, pensionSimPlan.startYear, pensionSimPlan.startYear + (pensionSimPlan.withdrawalYears || 1) - 1)
+        .map((r) => [r.year, Math.round(r.totalAnnual / 12)]))
+    : new Map<number, number>()
   const linkedOverride = perPerson ? {
-    startYear: pensionSimPlan!.startYear,
-    pensionMonthly: (perPerson.husband.annualPensionTaxable + perPerson.husband.annualPensionExempt
-      + perPerson.wife.annualPensionTaxable + perPerson.wife.annualPensionExempt) / 12,
+    pensionByYear,
     dividendMonthly: (perPerson.husband.financialIncome + perPerson.wife.financialIncome) / 12,
     healthMonthly: perPerson.husband.healthMonthly + perPerson.wife.healthMonthly,
     taxMonthly: (perPerson.husband.totalAnnualTax + perPerson.wife.totalAnnualTax) / 12,

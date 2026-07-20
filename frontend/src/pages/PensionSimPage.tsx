@@ -7,13 +7,15 @@ import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useAssetsByType } from '@/hooks/useAssets'
 import {
   EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, computePerPersonComprehensiveDeduction,
-  stockBalanceFromInflows, stockAccountYield, totalInflows, sourcesFromAssets, FINANCIAL_INCOME_LIMIT,
+  stockBalanceFromInflows, stockAccountYield, totalInflows, sourcesFromAssets, pensionSchedule,
+  FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
 import { realEstatePropertyBases, calcHealthInsurance } from '@/lib/healthInsurance'
 import { blendedYield } from '@/lib/corpSim'
 import { formatManwon, cn } from '@/lib/utils'
 import {
   type PensionSimPlan, type PensionInflowItem, type Ownership, type OwnershipPreset,
+  type PensionDetail,
   ownershipFromPreset, presetFromOwnership,
 } from '@/types'
 
@@ -272,10 +274,29 @@ export default function PensionSimPage() {
 
   // 부동산 명의 가중 → 1인별 건보 재산분
   const prop = realEstatePropertyBases(realEstateAssets)
+
+  // 국민연금 자산(확정급여) — 월수령액·수령개시연령 추출 (plan.sources에서 national로 분류된 것)
+  const nationals = pensionAssets
+    .filter((a) => plan.sources.find((s) => s.id === a.id)?.taxType === 'national')
+    .map((a) => {
+      const d = a.detail as PensionDetail | undefined
+      return d ? {
+        expectedStartYear: d.expectedStartYear,
+        expectedEndYear: d.expectedEndYear,
+        expectedMonthlyPayout: d.expectedMonthlyPayout,
+        annualGrowthRate: d.annualGrowthRate ?? 0,
+      } : null
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+
   const h = computePensionVehiclePerPerson(plan, {
     husbandProperty: prop.husband,
     wifeProperty: prop.wife,
+    nationalPensions: nationals,
   })
+
+  // 연도별 연금 스케줄 (국민연금 65세 step-up 가시)
+  const schedule = pensionSchedule(plan, nationals, plan.startYear, plan.startYear + (plan.withdrawalYears || 1) - 1)
 
   // 1인별 종합소득공제 자동 산정 표시
   const perPersonDed = computePerPersonComprehensiveDeduction(plan)
@@ -372,12 +393,38 @@ export default function PensionSimPage() {
 
       {/* 연금 수령 요약 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-        <p className="text-xs font-semibold text-gray-300 mb-1">🛡️ 연금 수령 (기존 IRP·연금저축, 남편 명의)</p>
-        <div className="grid grid-cols-2 gap-3 text-[11px]">
-          <div><p className="text-gray-500">과세 연금 (연/월)</p><p className="text-gray-100 font-semibold">{formatManwon(h.husband.annualPensionTaxable)} / {formatManwon(Math.round(h.husband.annualPensionTaxable/12))}</p></div>
-          <div><p className="text-gray-500">비과세 연금 (연/월)</p><p className="text-gray-100 font-semibold">{formatManwon(h.husband.annualPensionExempt)} / {formatManwon(Math.round(h.husband.annualPensionExempt/12))}</p></div>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs font-semibold text-gray-300">🛡️ 연금 수령 (남편 명의)</p>
+          <span className="text-[10px] text-gray-500">국민연금 65세 개시 시 상승 · 최대 수령 {formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt)/12))}/월</span>
         </div>
-        <p className="text-[11px] text-gray-600 mt-1.5">과세구분·원금은 연금 자산(/pension)에서 관리. {plan.withdrawalYears}년 균등 인출 기준.</p>
+        {/* 연도별 연금 스케줄 (국민연금 step-up) */}
+        {schedule.length > 0 && (
+          <div className="overflow-x-auto -mx-1 mt-1">
+            <table className="w-full text-[10px] text-right">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-700">
+                  <th className="py-1 px-1 text-left font-medium">연도</th>
+                  <th className="py-1 px-1 font-medium">IRP·연금저축/월</th>
+                  <th className="py-1 px-1 font-medium">국민연금/월</th>
+                  <th className="py-1 px-1 font-medium">합계/월</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.filter((_, i) => i % 3 === 0).map((r) => (
+                  <tr key={r.year} className={`border-b border-gray-800/50 ${r.nationalAnnual > 0 ? 'bg-blue-500/5' : ''}`}>
+                    <td className="py-1 px-1 text-left text-gray-400">{r.year}</td>
+                    <td className="py-1 px-1 text-gray-300">{formatManwon(Math.round(r.drawdownAnnual / 12))}</td>
+                    <td className="py-1 px-1 text-blue-300">{r.nationalAnnual > 0 ? formatManwon(Math.round(r.nationalAnnual / 12)) : '—'}</td>
+                    <td className="py-1 px-1 text-gray-100 font-semibold">{formatManwon(Math.round(r.totalAnnual / 12))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-[11px] text-gray-600 mt-1.5">
+          IRP·퇴직·연금저축 = 원금÷{plan.withdrawalYears}년 균등 인출. 국민연금 = 자산에 입력한 월 수령액({formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0) / 12)) || 0})을 65세부터 지급.
+        </p>
       </div>
 
       {/* 일반주식계좌 포트폴리오 (배당) */}
