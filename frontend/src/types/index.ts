@@ -242,9 +242,11 @@ export interface PensionInflowItem {
   name: string                        // 항목명 (자유 입력)
   amount: number                      // 금액
   type: 'lumpsum' | 'annual'          // 일회성 / 연간반복
-  destination: 'irp' | 'stock'        // 퇴직IRP / 일반주식계좌
-  year: number                        // 발생(시작) 연도 — 언제 들어오는지
+  destination: 'irp' | 'stock' | 'cash' | 'corp'  // 퇴직IRP / 일반주식계좌 / 현금수령 / 법인가수금
+  year: number                        // 발생(수령) 연도 — 언제 들어오는지
   ownership: Ownership                // 명의 지분 (destination='irp'는 남편 고정)
+  taxKind?: 'severance' | 'rental' | 'other'      // cash 처리 시 과세 성격 (위로금=severance)
+  useEndYear?: number                 // cash 처리 시 사용 종료년 (목돈 상각)
 }
 
 export interface PensionSimPlan {

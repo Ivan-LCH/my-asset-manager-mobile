@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie'
 import type {
   Asset, AssetDetail, AssetType, ChartDataPoint, ChartParams, Currency, HistoryItem,
   DividendRecord, DividendSummary, RetirementPlan, CorpSimPlan, PensionSimPlan,
-  PortfolioHolding, PortfolioSettings, Settings,
+  PortfolioHolding, PortfolioSettings, Settings, LumpsumItem,
 } from '@/types'
 import { generateChartData } from './chartData'
 
@@ -959,5 +959,37 @@ export async function migrateStockOwnershipToAccount(): Promise<void> {
     next[acct] = a.ownership ?? { husband: 50, wife: 50 }
   }
   if (Object.keys(next).length > 0) await saveStockAccountOwnership(next)
+}
+
+/** 마이그레이션: 구 은퇴계획 lumpsum → 개인투자시뮬 inflows(destination=cash)로 이전 (1회).
+ *  목돈 자금의 단일 입력처를 시뮬로 통합. 사용자가 양쪽에 넣은 항목은 수동 중복제거 필요. */
+export async function migrateLumpsumToInflows(): Promise<boolean> {
+  const s = await getSettings()
+  if ((s as Record<string, unknown>).lumpsumMigrated) return false
+  const ret = await getRetirement()
+  const lumpsum = (ret as { lumpsum?: LumpsumItem[] }).lumpsum ?? []
+  if (lumpsum.length > 0) {
+    const sim = await getPensionSim()
+    const base = (sim ?? {}) as Partial<PensionSimPlan>
+    const inflows = [...(base.inflows ?? [])]
+    for (const l of lumpsum) {
+      const name = l.name ?? ''
+      inflows.push({
+        id: `mig-${l.id}`,
+        name: name || '목돈',
+        amount: l.amount ?? 0,
+        type: 'lumpsum',
+        destination: 'cash',
+        year: l.receiveYear ?? new Date().getFullYear(),
+        ownership: { husband: 100, wife: 0 },
+        taxKind: /위로|퇴직/.test(name) ? 'severance' : /전세/.test(name) ? 'rental' : 'other',
+        useEndYear: l.useEndYear ?? l.receiveYear ?? new Date().getFullYear(),
+      })
+    }
+    await savePensionSim({ ...base, inflows } as PensionSimPlan)
+    await saveRetirement({ ...ret, lumpsum: [] })
+  }
+  await saveSettings({ lumpsumMigrated: '1' })
+  return lumpsum.length > 0
 }
 

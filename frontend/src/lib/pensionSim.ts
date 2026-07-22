@@ -16,6 +16,21 @@ export function pensionIncomeTax(taxable: number): number {
   return taxable * 0.06 - 2_480_000
 }
 
+/** 퇴직소득세(단순 추정) — 현금 수령 시 즉시 과세.
+ *  퇴직소득 = amount − 퇴직소득공제(700만, 근속연수당 공제는 생략 단순화) → 누진 6~35%.
+ *  연금소득세(3~6%)보다 가파름. 실제는 근속연수/공제에 따라 변동 → 추정치. */
+export function severanceTax(amount: number): number {
+  const taxable = Math.max(0, amount - 7_000_000)
+  if (taxable <= 0) return 0
+  if (taxable <= 14_000_000) return taxable * 0.06
+  if (taxable <= 50_000_000) return taxable * 0.15 - 1_260_000
+  if (taxable <= 88_000_000) return taxable * 0.24 - 5_760_000
+  if (taxable <= 150_000_000) return taxable * 0.35 - 15_400_000
+  if (taxable <= 300_000_000) return taxable * 0.38 - 19_900_000
+  if (taxable <= 500_000_000) return taxable * 0.40 - 25_900_000
+  return taxable * 0.42 - 31_900_000
+}
+
 /** 종합소득세 누진세율 (2024년 기준, 단순화) */
 export function comprehensiveTax(taxableIncome: number): number {
   const t = Math.max(0, taxableIncome)

@@ -120,6 +120,8 @@ function InflowCard({ item, onChange, onRemove }: {
   onRemove: () => void
 }) {
   const isIrp = item.destination === 'irp'
+  const isCash = item.destination === 'cash'
+  const isCorp = item.destination === 'corp'
   return (
     <div className="bg-gray-900/50 rounded-xl border border-gray-700 p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -146,18 +148,42 @@ function InflowCard({ item, onChange, onRemove }: {
         </div>
       </div>
       <div>
-        <p className="text-[10px] text-gray-500 mb-1">목적지</p>
-        <div className="flex gap-1">
-          {([['irp', '퇴직IRP'], ['stock', '일반주식계좌']] as const).map(([v, label]) => (
+        <p className="text-[10px] text-gray-500 mb-1">처리 방식 (목적지)</p>
+        <div className="grid grid-cols-2 gap-1">
+          {([
+            ['irp', '퇴직IRP', '연금 소득(3~6%)'],
+            ['stock', '일반주식계좌', '배당(15.4%/종합)'],
+            ['cash', '현금 수령', '목돈 수입(퇴직소득세)'],
+            ['corp', '법인 가수금', '법인시뮬에서 관리'],
+          ] as const).map(([v, label, desc]) => (
             <button key={v} onClick={() => onChange({ destination: v, ...(v === 'irp' ? { ownership: { husband: 100, wife: 0 } } : {}) })}
-              className={cn('flex-1 px-2 py-1 text-[11px] rounded transition-colors',
+              className={cn('px-2 py-1 text-[11px] rounded transition-colors text-left',
                 item.destination === v ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
-              {label}
+              {label}<span className={cn('block text-[9px]', item.destination === v ? 'text-white/70' : 'text-gray-500')}>{desc}</span>
             </button>
           ))}
         </div>
-        {isIrp && <p className="text-[10px] text-gray-600 mt-1">IRP/퇴직은 남편 명의 가정 (와이프 연금은 추후 지원)</p>}
-        {!isIrp && <p className="text-[10px] text-gray-600 mt-1">주식계좌 명의는 아래 '일반주식계좌 포트폴리오'에서 설정</p>}
+        {isIrp && <p className="text-[10px] text-gray-600 mt-1">IRP/퇴직은 남편 명의 가정. 수령 시 연금소득세.</p>}
+        {item.destination === 'stock' && <p className="text-[10px] text-gray-600 mt-1">주식계좌 명의는 아래 '일반주식계좌 포트폴리오'에서 설정.</p>}
+        {isCash && (
+          <div className="mt-1.5 space-y-1.5">
+            <div>
+              <p className="text-[10px] text-gray-500 mb-0.5">과세 성격</p>
+              <div className="flex gap-1">
+                {([['severance', '퇴직/위로금'], ['rental', '전세금'], ['other', '기타']] as const).map(([v, label]) => (
+                  <button key={v} onClick={() => onChange({ taxKind: v })}
+                    className={cn('flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors',
+                      (item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Row label="사용 종료년"><NumInput value={item.useEndYear ?? item.year} onChange={(v) => onChange({ useEndYear: v })} suffix="년" /></Row>
+            <p className="text-[10px] text-gray-600">은퇴계획 목돈 수입으로 표시. 퇴직/위로금은 {(item.taxKind === 'severance') ? '퇴직소득세' : '비과세'} 적용.</p>
+          </div>
+        )}
+        {isCorp && <p className="text-[10px] text-gray-600 mt-1">법인 가수금은 법인시뮬에서 관리 — 이 시뮬 계산에서는 제외됨.</p>}
       </div>
     </div>
   )
@@ -391,6 +417,28 @@ export default function PensionSimPage() {
         <span className="text-[11px] text-gray-600">연금 수령 · 일반주식계좌 배당 · 유입 항목</span>
       </div>
 
+      {/* 투자 원금 요약 (유입이 만든 원금) */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
+        <p className="text-xs font-semibold text-gray-300 mb-2">💼 투자 원금 요약 (유입이 더해지는 원금)</p>
+        <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div className="bg-gray-900/50 rounded-lg p-2.5">
+            <p className="text-gray-500 mb-0.5">IRP 원금 (남편)</p>
+            <p className="text-gray-100 font-semibold">{formatManwon(plan.sources.filter(s => s.taxType==='irp'||s.taxType==='taxable').reduce((s,x)=>s+x.principal,0) + irpInflow)}</p>
+            <p className="text-[10px] text-gray-600 mt-0.5">기존 연금 + IRP 유입 {formatManwon(irpInflow)}</p>
+          </div>
+          <div className="bg-gray-900/50 rounded-lg p-2.5">
+            <p className="text-gray-500 mb-0.5">일반주식계좌 원금</p>
+            <p className="text-gray-100 font-semibold">{formatManwon(stockInflow)}</p>
+            <p className="text-[10px] text-gray-600 mt-0.5">stock 유입 × {yieldPct}% = 연배당 {formatManwon(Math.round(stockInflow * yieldPct / 100))}</p>
+          </div>
+        </div>
+        {(plan.inflows.some(i => i.destination === 'cash') || plan.inflows.some(i => i.destination === 'corp')) && (
+          <p className="text-[10px] text-gray-600 mt-1.5">
+            💡 현금 수령/법인 처리 항목은 투자 원금에서 제외됨 (은퇴계획 목돈·법인시뮬로 분기).
+          </p>
+        )}
+      </div>
+
       {/* 연금 수령 요약 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
         <div className="flex items-center justify-between mb-1">
@@ -499,7 +547,7 @@ export default function PensionSimPage() {
         </button>
         {(irpInflow > 0 || stockInflow > 0) && (
           <p className="text-[11px] text-gray-600">
-            퇴직IRP 유입 {formatManwon(irpInflow)} · 일반주식계좌 유입 {formatManwon(stockInflow)}
+            퇴직IRP {formatManwon(irpInflow)} · 주식 {formatManwon(stockInflow)} · 현금(목돈) {formatManwon(plan.inflows.filter(i=>i.destination==='cash').reduce((s,i)=>s+i.amount,0))} · 법인 {formatManwon(plan.inflows.filter(i=>i.destination==='corp').reduce((s,i)=>s+i.amount,0))}
           </p>
         )}
       </Expander>

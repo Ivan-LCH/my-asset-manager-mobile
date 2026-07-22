@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehiclePerPerson,
   computePensionVehicle, computePerPersonComprehensiveDeduction, pensionSchedule,
+  severanceTax,
   stockBalanceFromInflows, totalInflows, sourcesFromAssets,
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
@@ -175,6 +176,36 @@ describe('pensionSim 계산', () => {
     const at65 = sched.find((r) => r.year === 2035)!
     expect(at65.nationalAnnual).toBe(14_400_000)
     expect(at65.totalAnnual).toBe(10_000_000 + 14_400_000)
+  })
+
+  it('severanceTax: 위로금 현금 수령 시 퇴직소득세 (연금소득세보다큼)', () => {
+    // 위로금 1.5억 현금 수령 → 퇴직소득세 (공제 700만 후 누진)
+    const tax = severanceTax(150_000_000)
+    expect(tax).toBeGreaterThan(0)
+    // 연금소득세(3~6%)보다 유의미하게 큰 효과세율이어야
+    expect(tax / 150_000_000).toBeGreaterThan(0.06)
+    expect(severanceTax(0)).toBe(0)
+  })
+
+  it('cash/corp 유입은 시뮬 소득(연금/배당)에서 제외 — 이중계산 방지', () => {
+    // 전세금 5억을 stock으로, 위로금 1.5억을 cash로. cash는 시뮬 소득에 미포함.
+    const p = plan({
+      sources: [],
+      startYear: 2029,
+      stockYields: [{ ticker: 'A', yield: 6 }],
+      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockOwnership: { husband: 100, wife: 0 },
+      inflows: [
+        { id: 's', name: '전세금', amount: 500_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 100, wife: 0 } },
+        { id: 'c', name: '위로금', amount: 150_000_000, type: 'lumpsum', destination: 'cash', year: 2029, ownership: { husband: 100, wife: 0 }, taxKind: 'severance', useEndYear: 2035 },
+      ],
+    })
+    const r = computePensionVehiclePerPerson(p, { nationalPensions: [] })
+    // 주식 잔액 = 5억만 (cash 1.5억 제외) × 6% = 3000만
+    expect(r.husband.stockBalance).toBe(500_000_000)
+    expect(r.husband.financialIncome).toBe(30_000_000)
+    // cash 1.5억은 시뮬 금융소득/원금에 없음 (은퇴계획 목돈으로)
+    expect(r.husband.financialIncome).toBeLessThan(45_000_000)
   })
 
   it('computePensionVehiclePerPerson: national을 실수령 모델로 (원금÷기간 아님)', () => {
