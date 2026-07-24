@@ -408,88 +408,52 @@ export default function PensionSimPage() {
         </p>
       </div>
 
-      {/* 1인별 결과 KPI */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-3">
-        <PersonKpi person={h.husband} label="🧑 남편" color="text-blue-400" />
-        <PersonKpi person={h.wife} label="👩 와이프" color="text-pink-400" />
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4 space-y-2">
-          <p className="text-xs font-semibold text-gray-300">🏠 가구 합계</p>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div><p className="text-gray-500">총수입</p><p className="text-gray-100 font-semibold">{formatManwon(h.totals.grossAnnual)}</p></div>
-            <div><p className="text-gray-500">총세금</p><p className="text-red-400 font-semibold">{formatManwon(h.totals.totalAnnualTax)}</p></div>
-            <div><p className="text-gray-500">순취득</p><p className="text-emerald-400 font-semibold">{formatManwon(h.totals.netAnnual)}</p></div>
-            <div><p className="text-gray-500">건보(월)</p><p className="text-gray-100 font-semibold">{formatManwon(h.totals.healthMonthly)}</p></div>
-          </div>
-        </div>
-      </div>
-
-      {/* 📥 수입 (들어오는 것) */}
+            {/* ═══ 입력 (사용자가 정하는 것) ═══ */}
       <div className="flex items-center gap-2 pt-1">
-        <span className="text-sm font-bold text-emerald-400">📥 수입 (들어오는 것)</span>
-        <span className="text-[11px] text-gray-600">연금 수령 · 일반주식계좌 배당 · 유입 항목</span>
+        <span className="text-sm font-bold text-gray-200">✏️ 입력</span>
+        <span className="text-[11px] text-gray-600">목돈 자금 처리 · 일반주식계좌 · 수령·공제 설정</span>
       </div>
 
-      {/* 투자 원금 요약 (유입이 만든 원금) */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-        <p className="text-xs font-semibold text-gray-300 mb-2">💼 투자 원금 요약 (유입이 더해지는 원금)</p>
-        <div className="grid grid-cols-2 gap-3 text-[11px]">
-          <div className="bg-gray-900/50 rounded-lg p-2.5">
-            <p className="text-gray-500 mb-0.5">IRP 원금 (남편)</p>
-            <p className="text-gray-100 font-semibold">{formatManwon(plan.sources.filter(s => s.taxType==='irp'||s.taxType==='taxable').reduce((s,x)=>s+x.principal,0) + irpInflow)}</p>
-            <p className="text-[10px] text-gray-600 mt-0.5">기존 연금 + IRP 유입 {formatManwon(irpInflow)}</p>
-          </div>
-          <div className="bg-gray-900/50 rounded-lg p-2.5">
-            <p className="text-gray-500 mb-0.5">일반주식계좌 원금</p>
-            <p className="text-gray-100 font-semibold">{formatManwon(stockInflow)}</p>
-            <p className="text-[10px] text-gray-600 mt-0.5">stock 유입 × {yieldPct}% = 연배당 {formatManwon(Math.round(stockInflow * yieldPct / 100))}</p>
-          </div>
+{/* + 유입 항목 */}
+      <Expander title="➕ 유입 항목 (목돈 자금 → 어디로 넣을지)" badge={`${plan.inflows.length}개 · ${formatManwon(inflowTotal)}`}>
+        <div className="bg-blue-500/5 border border-blue-700/30 rounded-lg p-3">
+          <p className="text-[11px] text-blue-200/90 leading-relaxed">
+            <b>유입 항목이란?</b> 퇴직위로금·전세보증금·상속금 등 <b>은퇴 전후로 들어오는 목돈 자금</b>입니다.
+            이 돈을 <b>어디로 넣을지(처리 방식)</b>를 정하면, 그 결과가 자동으로 계산됩니다.
+          </p>
+          <ul className="text-[11px] text-blue-200/80 mt-1.5 space-y-0.5 list-none">
+            <li>· <b>퇴직IRP</b> — 연금으로 굴림 → 매년 연금 수령 (연금소득세 3~6%)</li>
+            <li>· <b>일반주식계좌</b> — 배당주 투자 → 매년 배당 소득 (2천만 한도/종합과세)</li>
+            <li>· <b>현금 수령</b> — 그대로 씀 → 은퇴계획 목돈 수입 (위로금은 퇴직소득세)</li>
+            <li>· <b>법인 가수금</b> — 법인시뮬에서 관리</li>
+          </ul>
         </div>
-        {(plan.inflows.some(i => i.destination === 'cash') || plan.inflows.some(i => i.destination === 'corp')) && (
-          <p className="text-[10px] text-gray-600 mt-1.5">
-            💡 현금 수령/법인 처리 항목은 투자 원금에서 제외됨 (은퇴계획 목돈·법인시뮬로 분기).
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {plan.inflows.map((it) => (
+            <InflowCard key={it.id} item={it}
+              onChange={(patch) => updateInflow(it.id, patch)}
+              onRemove={() => removeInflow(it.id)} />
+          ))}
+        </div>
+        {plan.inflows.length === 0 && (
+          <p className="text-center text-xs text-gray-600 py-4">항목이 없습니다. 아래에서 추가하세요.</p>
+        )}
+        <button onClick={addInflow}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
+          <Plus className="w-3.5 h-3.5" /> 항목 추가
+        </button>
+        {(irpInflow > 0 || stockInflow > 0) && (
+          <p className="text-[11px] text-gray-600">
+            퇴직IRP {formatManwon(irpInflow)} · 주식 {formatManwon(stockInflow)} · 현금(목돈) {formatManwon(plan.inflows.filter(i=>i.destination==='cash').reduce((s,i)=>s+i.amount,0))} · 법인 {formatManwon(plan.inflows.filter(i=>i.destination==='corp').reduce((s,i)=>s+i.amount,0))}
           </p>
         )}
-      </div>
+      </Expander>
 
-      {/* 연금 수령 요약 */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-semibold text-gray-300">🛡️ 연금 수령 (남편 명의)</p>
-          <span className="text-[10px] text-gray-500">국민연금 65세 개시 시 상승 · 최대 수령 {formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt)/12))}/월</span>
-        </div>
-        {/* 연도별 연금 스케줄 (국민연금 step-up) */}
-        {schedule.length > 0 && (
-          <div className="overflow-x-auto -mx-1 mt-1">
-            <table className="w-full text-[10px] text-right">
-              <thead>
-                <tr className="text-gray-500 border-b border-gray-700">
-                  <th className="py-1 px-1 text-left font-medium">연도</th>
-                  <th className="py-1 px-1 font-medium">IRP·연금저축/월</th>
-                  <th className="py-1 px-1 font-medium">국민연금/월</th>
-                  <th className="py-1 px-1 font-medium">합계/월</th>
-                </tr>
-              </thead>
-              <tbody>
-                {schedule.filter((_, i) => i % 3 === 0).map((r) => (
-                  <tr key={r.year} className={`border-b border-gray-800/50 ${r.nationalAnnual > 0 ? 'bg-blue-500/5' : ''}`}>
-                    <td className="py-1 px-1 text-left text-gray-400">{r.year}</td>
-                    <td className="py-1 px-1 text-gray-300">{formatManwon(Math.round(r.drawdownAnnual / 12))}</td>
-                    <td className="py-1 px-1 text-blue-300">{r.nationalAnnual > 0 ? formatManwon(Math.round(r.nationalAnnual / 12)) : '—'}</td>
-                    <td className="py-1 px-1 text-gray-100 font-semibold">{formatManwon(Math.round(r.totalAnnual / 12))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <p className="text-[11px] text-gray-600 mt-1.5">
-          IRP·퇴직·연금저축 = 원금÷{plan.withdrawalYears}년 균등 인출. 국민연금 = 자산에 입력한 월 수령액({formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0) / 12)) || 0})을 65세부터 지급.
+{/* 일반주식계좌 포트폴리오 (배당) */}
+      <Expander title="📈 일반주식계좌 포트폴리오 (배당)">
+        <p className="text-[11px] font-semibold text-gray-300">
+          잔액 {formatManwon(stockBalance)} · 수익률 {yieldPct}% · 연배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
         </p>
-      </div>
-
-      {/* 일반주식계좌 포트폴리오 (배당) */}
-      <Expander title="📈 일반주식계좌 포트폴리오 (배당)"
-        badge={`잔액 ${formatManwon(stockBalance)} · 수익률 ${yieldPct}% · 연배당 ${formatManwon(Math.round(stockBalance * yieldPct / 100))}`}>
         <p className="text-[11px] text-gray-500 leading-relaxed">
           잔액은 <b>stock 유입 합</b>에서 자동 산출(별도 입력 없음). 종목과 비중을 입력해 배당률을 자동 산정하거나 행별로 수동 입력.
         </p>
@@ -538,33 +502,115 @@ export default function PensionSimPage() {
         )}
       </Expander>
 
-      {/* + 유입 항목 */}
-      <Expander title="➕ 유입 항목 (목적지·명의 선택)" badge={`${plan.inflows.length}개 · ${formatManwon(inflowTotal)}`}>
-        <p className="text-[11px] text-gray-500 leading-relaxed">
-          추가 자금을 어디로·누구 명의로 굴릴지 선택. <b>퇴직IRP</b> → 연금원금(남편), <b>일반주식계좌</b> → 배당(명의별 금융소득, 각자 2천만 한도).
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {plan.inflows.map((it) => (
-            <InflowCard key={it.id} item={it}
-              onChange={(patch) => updateInflow(it.id, patch)}
-              onRemove={() => removeInflow(it.id)} />
-          ))}
-        </div>
-        {plan.inflows.length === 0 && (
-          <p className="text-center text-xs text-gray-600 py-4">항목이 없습니다. 아래에서 추가하세요.</p>
-        )}
-        <button onClick={addInflow}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
-          <Plus className="w-3.5 h-3.5" /> 항목 추가
-        </button>
-        {(irpInflow > 0 || stockInflow > 0) && (
-          <p className="text-[11px] text-gray-600">
-            퇴직IRP {formatManwon(irpInflow)} · 주식 {formatManwon(stockInflow)} · 현금(목돈) {formatManwon(plan.inflows.filter(i=>i.destination==='cash').reduce((s,i)=>s+i.amount,0))} · 법인 {formatManwon(plan.inflows.filter(i=>i.destination==='corp').reduce((s,i)=>s+i.amount,0))}
+{/* 수령 · 세금 설정 */}
+      <Expander title="⚙️ 수령 · 세금 설정">
+        <Row label="수령 개시 연도"><NumInput value={plan.startYear} onChange={(v) => update('startYear', v)} /></Row>
+        <Row label="수령 기간(연)"><NumInput value={plan.withdrawalYears} onChange={(v) => update('withdrawalYears', v)} suffix="년" /></Row>
+        <Row label="기타 종합소득(연)" hint="남편 근로/사업 — 와이프 분은 추후"><AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} /></Row>
+        <p className="text-[11px] text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용됩니다.</p>
+        <div className="py-1">
+          <p className="text-sm text-gray-400 mb-1">종합소득공제 (1인별 자동)</p>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+              <input type="checkbox" checked={plan.spouseDependent} onChange={(e) => update('spouseDependent', e.target.checked)} className="accent-blue-500" />
+              배우자 부양 (부부 가정 시 ON)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+              <input type="checkbox" checked={plan.useStandardDeduction} onChange={(e) => update('useStandardDeduction', e.target.checked)} className="accent-blue-500" />
+              표준공제 100만 사용 (특별공제 없을 때)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+              부양가족 수
+              <button type="button" onClick={() => update('dependents', Math.max(0, plan.dependents - 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">−</button>
+              <span className="w-6 text-center text-gray-100">{plan.dependents}</span>
+              <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
+              <span className="text-[10px] text-gray-600">(1인당 150만)</span>
+            </label>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1.5 sm:text-right sm:mr-44">
+            1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2 = <span className="text-blue-400 font-semibold">{formatManwon(perPersonDed.husband)}</span>
           </p>
-        )}
+        </div>
       </Expander>
 
-      {/* 📤 지출 (나가는 것) */}
+      {/* ═══ 결과 (자동 계산) ═══ */}
+{/* 📥 수입 (들어오는 것) */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-sm font-bold text-emerald-400">📥 수입 (들어오는 것)</span>
+        <span className="text-[11px] text-gray-600">연금 수령 · 일반주식계좌 배당 · 유입 항목</span>
+      </div>
+
+{/* 투자 원금 요약 (유입이 만든 원금) */}
+      {(() => {
+        const irpHusband = plan.sources.filter(s => (s.taxType==='irp'||s.taxType==='taxable') && s.owner==='husband').reduce((s,x)=>s+x.principal,0) + irpInflow
+        const irpWife = plan.sources.filter(s => (s.taxType==='irp'||s.taxType==='taxable') && s.owner==='wife').reduce((s,x)=>s+x.principal,0)
+        const PrincipalCard = ({ title, husband, wife, note }: { title: string; husband: number; wife: number; note?: string }) => (
+          <div className="bg-gray-900/50 rounded-lg p-2.5">
+            <p className="text-gray-500 mb-1">{title}</p>
+            <div className="grid grid-cols-3 gap-1 text-[11px]">
+              <div><p className="text-[10px] text-blue-400">남편</p><p className="text-gray-100 font-semibold">{formatManwon(husband)}</p></div>
+              <div><p className="text-[10px] text-pink-400">와이프</p><p className="text-gray-100 font-semibold">{formatManwon(wife)}</p></div>
+              <div><p className="text-[10px] text-gray-400">합산(가족)</p><p className="text-emerald-400 font-semibold">{formatManwon(husband + wife)}</p></div>
+            </div>
+            {note && <p className="text-[10px] text-gray-600 mt-1">{note}</p>}
+          </div>
+        )
+        return (
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
+            <p className="text-xs font-semibold text-gray-300 mb-2">💼 투자 원금 요약 (남편/와이프)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+              <PrincipalCard title="IRP 원금" husband={irpHusband} wife={irpWife}
+                note={`기존 연금 + IRP 유입 ${formatManwon(irpInflow)} · 연금은 남편 명의 가정`} />
+              <PrincipalCard title="일반주식계좌 원금" husband={h.husband.stockBalance} wife={h.wife.stockBalance}
+                note={`stock 유입 × ${yieldPct}% = 연배당 ${formatManwon(Math.round((h.husband.stockBalance + h.wife.stockBalance) * yieldPct / 100))}`} />
+            </div>
+            {(plan.inflows.some(i => i.destination === 'cash') || plan.inflows.some(i => i.destination === 'corp')) && (
+              <p className="text-[10px] text-gray-600 mt-1.5">
+                💡 현금 수령/법인 처리 항목은 투자 원금에서 제외됨 (은퇴계획 목돈·법인시뮬로 분기).
+              </p>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* 연금 수령 요약 */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs font-semibold text-gray-300">🛡️ 연금 수령 (가족 합산 · 남편 기준)</p>
+          <span className="text-[10px] text-gray-500">국민연금 65세 개시 시 상승 · 최대 수령 {formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt)/12))}/월</span>
+        </div>
+        <p className="text-[10px] text-gray-600 mb-1">연금은 현재 남편 명의만 모델링 (와이프 본인 연금은 미반영 → 가족 합산 = 남편 합계와 동일)</p>
+        {/* 연도별 연금 스케줄 (국민연금 step-up) */}
+        {schedule.length > 0 && (
+          <div className="overflow-x-auto -mx-1 mt-1">
+            <table className="w-full text-[10px] text-right">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-700">
+                  <th className="py-1 px-1 text-left font-medium">연도</th>
+                  <th className="py-1 px-1 font-medium">IRP·연금저축/월</th>
+                  <th className="py-1 px-1 font-medium">국민연금/월</th>
+                  <th className="py-1 px-1 font-medium">합계/월</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.filter((_, i) => i % 3 === 0).map((r) => (
+                  <tr key={r.year} className={`border-b border-gray-800/50 ${r.nationalAnnual > 0 ? 'bg-blue-500/5' : ''}`}>
+                    <td className="py-1 px-1 text-left text-gray-400">{r.year}</td>
+                    <td className="py-1 px-1 text-gray-300">{formatManwon(Math.round(r.drawdownAnnual / 12))}</td>
+                    <td className="py-1 px-1 text-blue-300">{r.nationalAnnual > 0 ? formatManwon(Math.round(r.nationalAnnual / 12)) : '—'}</td>
+                    <td className="py-1 px-1 text-gray-100 font-semibold">{formatManwon(Math.round(r.totalAnnual / 12))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-[11px] text-gray-600 mt-1.5">
+          IRP·퇴직·연금저축 = 원금÷{plan.withdrawalYears}년 균등 인출. 국민연금 = 자산에 입력한 월 수령액({formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0) / 12)) || 0})을 65세부터 지급.
+        </p>
+      </div>
+
+{/* 📤 지출 (나가는 것) */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-red-400">📤 지출 (나가는 것)</span>
         <span className="text-[11px] text-gray-600">세금 (연/월) · 건보 (월, 1인별)</span>
@@ -611,36 +657,21 @@ export default function PensionSimPage() {
         </div>
       </Expander>
 
-      {/* 수령 · 세금 설정 */}
-      <Expander title="⚙️ 수령 · 세금 설정">
-        <Row label="수령 개시 연도"><NumInput value={plan.startYear} onChange={(v) => update('startYear', v)} /></Row>
-        <Row label="수령 기간(연)"><NumInput value={plan.withdrawalYears} onChange={(v) => update('withdrawalYears', v)} suffix="년" /></Row>
-        <Row label="기타 종합소득(연)" hint="남편 근로/사업 — 와이프 분은 추후"><AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} /></Row>
-        <p className="text-[11px] text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용됩니다.</p>
-        <div className="py-1">
-          <p className="text-sm text-gray-400 mb-1">종합소득공제 (1인별 자동)</p>
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-              <input type="checkbox" checked={plan.spouseDependent} onChange={(e) => update('spouseDependent', e.target.checked)} className="accent-blue-500" />
-              배우자 부양 (부부 가정 시 ON)
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-              <input type="checkbox" checked={plan.useStandardDeduction} onChange={(e) => update('useStandardDeduction', e.target.checked)} className="accent-blue-500" />
-              표준공제 100만 사용 (특별공제 없을 때)
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-              부양가족 수
-              <button type="button" onClick={() => update('dependents', Math.max(0, plan.dependents - 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">−</button>
-              <span className="w-6 text-center text-gray-100">{plan.dependents}</span>
-              <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
-              <span className="text-[10px] text-gray-600">(1인당 150만)</span>
-            </label>
+      {/* 💰 남는 것 (월 순소득) — 은퇴계획에서 최종 확인 */}
+{/* 1인별 결과 KPI */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-3">
+        <PersonKpi person={h.husband} label="🧑 남편" color="text-blue-400" />
+        <PersonKpi person={h.wife} label="👩 와이프" color="text-pink-400" />
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4 space-y-2">
+          <p className="text-xs font-semibold text-gray-300">🏠 가구 합계</p>
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div><p className="text-gray-500">총수입</p><p className="text-gray-100 font-semibold">{formatManwon(h.totals.grossAnnual)}</p></div>
+            <div><p className="text-gray-500">총세금</p><p className="text-red-400 font-semibold">{formatManwon(h.totals.totalAnnualTax)}</p></div>
+            <div><p className="text-gray-500">순취득</p><p className="text-emerald-400 font-semibold">{formatManwon(h.totals.netAnnual)}</p></div>
+            <div><p className="text-gray-500">건보(월)</p><p className="text-gray-100 font-semibold">{formatManwon(h.totals.healthMonthly)}</p></div>
           </div>
-          <p className="text-[11px] text-gray-500 mt-1.5 sm:text-right sm:mr-44">
-            1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2 = <span className="text-blue-400 font-semibold">{formatManwon(perPersonDed.husband)}</span>
-          </p>
         </div>
-      </Expander>
+      </div>
     </div>
   )
 }
