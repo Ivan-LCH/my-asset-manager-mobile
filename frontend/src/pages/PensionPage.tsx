@@ -119,7 +119,7 @@ export default function PensionPage() {
     if (pensionAssets.length === 0 && savedSim === null) return  // 둘 다 비어있으면 대기
     didInit.current = true
     const base = savedSim ?? EMPTY_PENSION_PLAN
-    const currentSources = base.sources
+    const currentSources = base.sources ?? []
     const auto = sourcesFromAssets(
       pensionAssets.map((a) => ({
         id: a.id, name: a.name, currentValue: a.currentValue,
