@@ -97,6 +97,8 @@ function SimTooltip({ active, payload, label }: SimTooltipProps) {
 // ── 메인 ───────────────────────────────────────────────────
 export default function PensionPage() {
   const pensionAssets = useAssetsByType('PENSION')
+  const stockAssets = useAssetsByType('STOCK')
+  const stockById = new Map(stockAssets.map((a) => [a.id, a]))
   const { data: allAssets = [], isLoading: loadPension } = useAssets()
   const { data: settings } = useSettings()
   const { data: savedSim } = usePensionSim()
@@ -269,7 +271,18 @@ export default function PensionPage() {
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <p className="text-gray-500 mb-0.5">현재 가치</p>
-                    <p className="text-gray-300">{formatManwon(a.currentValue)}</p>
+                    {(() => {
+                      const sid = (d as { linkedStockId?: string } | undefined)?.linkedStockId
+                      const linked = sid ? stockById.get(sid) : undefined
+                      return linked ? (
+                        <>
+                          <p className="text-emerald-400">{formatManwon(linked.currentValue)}</p>
+                          <p className="text-[10px] text-emerald-500/80">연동: {linked.name}</p>
+                        </>
+                      ) : (
+                        <p className="text-gray-300">{formatManwon(a.currentValue)}</p>
+                      )
+                    })()}
                   </div>
                   <div>
                     <p className="text-gray-500 mb-0.5">연 증가율</p>

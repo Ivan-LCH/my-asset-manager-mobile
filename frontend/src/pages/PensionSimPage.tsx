@@ -157,8 +157,11 @@ export default function PensionSimPage() {
   const { data: saved } = usePensionSim()
   const saveMut = useSavePensionSim()
   const pensionAssets = useAssetsByType('PENSION')
+  const stockAssets = useAssetsByType('STOCK')
   const realEstateAssets = useAssetsByType('REAL_ESTATE')
   const { data: retirement } = useRetirement()
+  // 주식계좌 현재가치 맵 (연금 자산 연동 시 그 값으로)
+  const stockById = new Map(stockAssets.map((a) => [a.id, a.currentValue]))
 
   const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [dirty, setDirty] = useState(false)
@@ -175,9 +178,13 @@ export default function PensionSimPage() {
     const auto = sourcesFromAssets(
       pensionAssets.map((a) => ({
         id: a.id, name: a.name, currentValue: a.currentValue,
-        detail: { pensionType: (a.detail as { pensionType?: string })?.pensionType },
+        detail: {
+          pensionType: (a.detail as { pensionType?: string })?.pensionType,
+          linkedStockId: (a.detail as { linkedStockId?: string })?.linkedStockId,
+        },
       })),
       base.sources,
+      stockById,
     )
     const manual = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
     setPlan({

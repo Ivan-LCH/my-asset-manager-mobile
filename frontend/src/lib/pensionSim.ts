@@ -416,19 +416,34 @@ export function computePensionVehicle(plan: PensionSimPlan) {
   }
 }
 
+/** PENSION 자산의 현재가치 — 연동(linkedStockId)된 주식계좌가 있으면 그 계좌 현재가치(주가 하락 반영). */
+export function effectivePensionValue(
+  a: { currentValue: number; detail?: { linkedStockId?: string } },
+  stockById?: Map<string, number>,
+): number {
+  const sid = a.detail?.linkedStockId
+  if (sid && stockById?.has(sid)) return stockById.get(sid) as number
+  return a.currentValue
+}
+
 /** PENSION 자산에서 PensionSource 자동 생성 */
 export function sourcesFromAssets(
-  assets: { id: string; name: string; currentValue: number; detail?: { pensionType?: string } }[],
+  assets: { id: string; name: string; currentValue: number; detail?: { pensionType?: string; linkedStockId?: string } }[],
   existing: PensionSource[],
+  stockById?: Map<string, number>,
 ): PensionSource[] {
   return assets.map((a) => {
     const pt = a.detail?.pensionType ?? ''
     const taxType = pt.includes('퇴직') ? 'irp' : pt.includes('국민') ? 'national' : pt.includes('비과세') ? 'taxExempt' : 'taxable'
     const existingSrc = existing.find((s) => s.id === a.id)
+    // 연동된 주식계좌가 있으면 그 현재가치를 원금으로 (주가 하락 반영)
+    const principal = a.detail?.linkedStockId && stockById?.has(a.detail.linkedStockId)
+      ? effectivePensionValue(a, stockById)
+      : (existingSrc?.principal ?? a.currentValue)
     return {
       id: a.id,
       name: a.name,
-      principal: existingSrc?.principal ?? a.currentValue,
+      principal,
       taxType: existingSrc?.taxType ?? taxType,
       yieldRate: existingSrc?.yieldRate ?? 4,
       owner: existingSrc?.owner ?? 'husband',

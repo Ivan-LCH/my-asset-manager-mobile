@@ -87,6 +87,7 @@ export interface PensionDetail {
   expectedMonthlyPayout:  number
   annualGrowthRate:       number
   hideInChart?:           boolean
+  linkedStockId?:         string   // 연동할 주식계좌(STOCK) id — 현재가치를 그 계좌에서 가져옴
 }
 
 export interface SavingsDetail {
