@@ -98,7 +98,14 @@ function SimTooltip({ active, payload, label }: SimTooltipProps) {
 export default function PensionPage() {
   const pensionAssets = useAssetsByType('PENSION')
   const stockAssets = useAssetsByType('STOCK')
-  const stockById = new Map(stockAssets.map((a) => [a.id, a]))
+  const stockByAccount = new Map<string, { total: number; name: string }>()
+  for (const s of stockAssets) {
+    const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? ''
+    if (acct) {
+      const cur = stockByAccount.get(acct) ?? { total: 0, name: s.name }
+      stockByAccount.set(acct, { total: cur.total + s.currentValue, name: s.name })
+    }
+  }
   const { data: allAssets = [], isLoading: loadPension } = useAssets()
   const { data: settings } = useSettings()
   const { data: savedSim } = usePensionSim()
@@ -272,12 +279,12 @@ export default function PensionPage() {
                   <div>
                     <p className="text-gray-500 mb-0.5">현재 가치</p>
                     {(() => {
-                      const sid = (d as { linkedStockId?: string } | undefined)?.linkedStockId
-                      const linked = sid ? stockById.get(sid) : undefined
+                      const acct = (d as { linkedStockId?: string } | undefined)?.linkedStockId
+                      const linked = acct ? stockByAccount.get(acct) : undefined
                       return linked ? (
                         <>
-                          <p className="text-emerald-400">{formatManwon(linked.currentValue)}</p>
-                          <p className="text-[10px] text-emerald-500/80">연동: {linked.name}</p>
+                          <p className="text-emerald-400">{formatManwon(linked.total)}</p>
+                          <p className="text-[10px] text-emerald-500/80">연동: {acct}</p>
                         </>
                       ) : (
                         <p className="text-gray-300">{formatManwon(a.currentValue)}</p>

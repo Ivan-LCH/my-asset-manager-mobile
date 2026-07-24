@@ -72,6 +72,7 @@ export interface PensionRow {
   expectedMonthlyPayout: number
   annualGrowthRate:      number
   hideInChart?:          boolean
+  linkedStockId?:        string
 }
 
 export interface SavingsRow {
@@ -227,6 +228,7 @@ async function putDetail(id: string, type: AssetType, detail: Record<string, any
         expectedMonthlyPayout: detail.expectedMonthlyPayout ?? 0,
         annualGrowthRate:      detail.annualGrowthRate ?? 0,
         hideInChart:           !!detail.hideInChart,
+        linkedStockId:         detail.linkedStockId,
       })
       break
     case 'SAVINGS':

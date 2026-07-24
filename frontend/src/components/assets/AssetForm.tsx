@@ -30,7 +30,7 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [tenantDeposit, setTenantDeposit] = useState((d?.tenantDeposit as number)  ?? 0)
   const [isOwned,       setIsOwned]       = useState((d?.isOwned       as boolean) ?? false)
   const [hasTenant,     setHasTenant]     = useState((d?.hasTenant     as boolean) ?? false)
-  const [ownership,     setOwnership]     = useState<Ownership>((d?.ownership as Ownership) ?? { husband: 50, wife: 50 })
+  const [ownership,     setOwnership]     = useState<Ownership>(asset.ownership ?? { husband: 50, wife: 50 })
 
   // 주식
   const [accountName,   setAccountName]   = useState((d?.accountName   as string)  ?? '')
@@ -225,26 +225,35 @@ export default function AssetForm({ asset, onClose }: Props) {
             <input type="checkbox" checked={hideInChart} onChange={(e) => setHideInChart(e.target.checked)} className="accent-yellow-500" />
             대시보드 차트 제외 (주식으로 이미 집계됨)
           </label>
-          {/* 연동할 주식계좌 — 현재가치를 그 계좌에서 가져옴 */}
+          {/* 연동할 주식계좌 — 계좌(accountName) 단위, 현재가치 연동 */}
           <div>
             <label className={labelCls}>연동할 주식계좌 (현재가치 연동)</label>
-            <select
-              className={cn(inputCls, 'w-full')}
-              value={linkedStockId}
-              onChange={(e) => setLinkedStockId(e.target.value)}
-            >
-              <option value="">연동 안 함 (자체 원금 기준)</option>
-              {stockAssets.map((s) => {
-                const acct = (s.detail as { accountName?: string } | undefined)?.accountName
-                return (
-                  <option key={s.id} value={s.id}>
-                    {acct ? `${acct} — ${s.name}` : s.name} ({s.currentValue.toLocaleString()}원)
-                  </option>
-                )
-              })}
-            </select>
+            {(() => {
+              // 계좌(accountName)별로 그룹화 — 총액 합산
+              const accountMap = new Map<string, { total: number; count: number }>()
+              for (const s of stockAssets) {
+                const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? '미분류'
+                const cur = accountMap.get(acct) ?? { total: 0, count: 0 }
+                accountMap.set(acct, { total: cur.total + s.currentValue, count: cur.count + 1 })
+              }
+              const accounts = Array.from(accountMap.entries()).sort((a, b) => b[1].total - a[1].total)
+              return (
+                <select
+                  className={cn(inputCls, 'w-full')}
+                  value={linkedStockId}
+                  onChange={(e) => setLinkedStockId(e.target.value)}
+                >
+                  <option value="">연동 안 함 (자체 원금 기준)</option>
+                  {accounts.map(([acct, info]) => (
+                    <option key={acct} value={acct}>
+                      {acct} ({info.count}종목 · {info.total.toLocaleString()}원)
+                    </option>
+                  ))}
+                </select>
+              )
+            })()}
             <p className="text-[11px] text-gray-600 mt-1">
-              선택 시 이 연금의 현재가치가 그 주식계좌의 현재가치로 자동 연동됩니다 (주가 하락분 반영 → 연금 수령액에 반영).
+              선택 시 이 연금의 현재가치가 그 계좌 전체의 현재가치로 자동 연동됩니다 (주가 하락분 반영 → 연금 수령액에 반영).
             </p>
           </div>
         </div>

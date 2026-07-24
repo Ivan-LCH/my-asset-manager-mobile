@@ -160,8 +160,12 @@ export default function PensionSimPage() {
   const stockAssets = useAssetsByType('STOCK')
   const realEstateAssets = useAssetsByType('REAL_ESTATE')
   const { data: retirement } = useRetirement()
-  // 주식계좌 현재가치 맵 (연금 자산 연동 시 그 값으로)
-  const stockById = new Map(stockAssets.map((a) => [a.id, a.currentValue]))
+  // 주식계좌 현재가치 맵 — 계좌명(accountName) 기준 총액 (연금 자산 연동 시)
+  const stockByAccount = new Map<string, number>()
+  for (const s of stockAssets) {
+    const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? ''
+    if (acct) stockByAccount.set(acct, (stockByAccount.get(acct) ?? 0) + s.currentValue)
+  }
 
   const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [dirty, setDirty] = useState(false)
@@ -184,7 +188,7 @@ export default function PensionSimPage() {
         },
       })),
       base.sources,
-      stockById,
+      stockByAccount,
     )
     const manual = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
     setPlan({
