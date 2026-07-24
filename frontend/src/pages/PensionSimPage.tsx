@@ -115,12 +115,15 @@ function OwnershipPreset({ value, onChange, disabled, locked }: {
 }
 
 // ── 목돈 분배 카드 ──────────────────────────────────────────
+// 퇴직IRP는 퇴직금(severance)일 때만 적용. 일반계좌는 항상. 나머지는 자동으로 현금보유.
 function AllocationCard({ lumpsum, allocation, onChange }: {
   lumpsum: { id: string; name: string; amount: number; receiveYear: number; taxKind?: string }
   allocation: { irpAmount: number; stockAmount: number }
   onChange: (patch: Partial<{ irpAmount: number; stockAmount: number }>) => void
 }) {
-  const cash = Math.max(0, lumpsum.amount - allocation.irpAmount - allocation.stockAmount)
+  const isSeverance = lumpsum.taxKind === 'severance'
+  const irp = isSeverance ? allocation.irpAmount : 0   // 퇴직금 아니면 IRP 경로 없음
+  const cash = Math.max(0, lumpsum.amount - irp - allocation.stockAmount)
   return (
     <div className="bg-gray-900/50 rounded-xl border border-gray-700 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -128,18 +131,20 @@ function AllocationCard({ lumpsum, allocation, onChange }: {
         <span className="text-sm text-gray-100 font-semibold shrink-0">{formatManwon(lumpsum.amount)}</span>
       </div>
       <p className="text-[10px] text-gray-600">{lumpsum.receiveYear}년 일회 수령{lumpsum.taxKind === 'severance' ? ' · 퇴직소득세 적용(현금분)' : ''}</p>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <p className="text-[10px] text-gray-500 mb-0.5">→ 퇴직IRP (연금으로 굴림)</p>
-          <AmountInput value={allocation.irpAmount} onChange={(v) => onChange({ irpAmount: v })} />
-        </div>
+      <div className={isSeverance ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
+        {isSeverance && (
+          <div>
+            <p className="text-[10px] text-gray-500 mb-0.5">→ 퇴직IRP (연금으로 굴림)</p>
+            <AmountInput value={allocation.irpAmount} onChange={(v) => onChange({ irpAmount: v })} />
+          </div>
+        )}
         <div>
           <p className="text-[10px] text-gray-500 mb-0.5">→ 일반주식계좌 (배당)</p>
           <AmountInput value={allocation.stockAmount} onChange={(v) => onChange({ stockAmount: v })} />
         </div>
       </div>
       <p className="text-[11px] text-gray-500">
-        나머지(현금 수령) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span>
+        나머지(현금보유) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span>
         {cash > 0 && <span className="text-gray-600"> → 은퇴계획 목돈 수입</span>}
       </p>
     </div>
@@ -371,8 +376,9 @@ export default function PensionSimPage() {
       <Expander title="➕ 목돈 분배 (은퇴계획 목돈수입 기준)" badge={`${lumpsums.length}개`} defaultOpen>
         <div className="bg-blue-500/5 border border-blue-700/30 rounded-lg p-3">
           <p className="text-[11px] text-blue-200/90 leading-relaxed">
-            은퇴계획의 <b>목돈수입</b>에 입력한 자금(퇴직위로금·전세보증금 등)을 <b>어디로 넣을지</b> 정합니다.
-            목돈 금액을 <b>퇴직IRP / 일반주식계좌</b>로 나누고, <b>남은 것은 현금 수령</b>(은퇴계획 목돈 수입)이 됩니다.
+            은퇴계획의 <b>목돈수입</b>에 입력한 자금을 <b>어디로 넣을지</b> 정합니다.
+            <b>일반주식계좌</b>는 항상 넣을 수 있고, <b>퇴직IRP</b>는 <b>퇴직금(위로금)일 때만</b> 선택 가능합니다.
+            나누고 남은 금액은 자동으로 <b>현금보유</b>(은퇴계획 목돈 수입)가 됩니다.
           </p>
           <p className="text-[10px] text-blue-200/70 mt-1">목돈 자금 추가·수정은 은퇴계획(/retirement) 목돈수입에서.</p>
         </div>
