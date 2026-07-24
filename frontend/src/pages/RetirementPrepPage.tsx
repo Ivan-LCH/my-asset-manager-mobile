@@ -4,13 +4,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, RotateCcw, Save, ChevronDown, RefreshCw } from 'lucide-react'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
+import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { usePortfolio, useSavePortfolio, DEFAULT_PORTFOLIO } from '@/hooks/usePortfolio'
 import { blendedYield } from '@/lib/corpSim'
 import { formatManwon, cn } from '@/lib/utils'
 import type {
   RetirementPlan, ExpenseItem, TravelItem, LumpsumItem, EmergencyItem,
-  PortfolioHolding, PortfolioYield,
+  PortfolioHolding, PortfolioYield, PensionSimPlan,
 } from '@/types'
+import { EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
@@ -330,6 +332,73 @@ function PortfolioSection() {
   )
 }
 
+// ── 수령 · 세금 설정 섹션 (PensionSimPlan 편집) ─────────────
+function PensionSettingsSection() {
+  const { data: saved } = usePensionSim()
+  const saveMut = useSavePensionSim()
+  const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    if (saved) setPlan({ ...EMPTY_PENSION_PLAN, ...saved })
+  }, [saved])
+
+  const update = useCallback(<K extends keyof PensionSimPlan>(key: K, val: PensionSimPlan[K]) => {
+    setPlan((p) => ({ ...p, [key]: val }))
+    setDirty(true)
+  }, [])
+
+  const setNum = (key: 'startYear' | 'withdrawalYears' | 'otherIncome') => (v: number) => update(key, v)
+
+  return (
+    <Section>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-400">⚙️ 연금 수령 · 과세 기준 (전체 공통)</p>
+        <button onClick={() => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })}
+          disabled={!dirty || saveMut.isPending}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
+          <Save className="w-3.5 h-3.5" />{saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <p className="text-[10px] text-gray-500 mb-1">수령 개시 연도</p>
+          <YearInput value={plan.startYear} onChange={setNum('startYear')} />
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-500 mb-1">수령 기간(연)</p>
+          <YearInput value={plan.withdrawalYears} onChange={setNum('withdrawalYears')} />
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-500 mb-1">기타 종합소득(연)</p>
+          <AmountInput value={plan.otherIncome} onChange={setNum('otherIncome')} placeholder="남편 근로/사업" />
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용.</p>
+      <div className="border-t border-gray-700 pt-2">
+        <p className="text-xs font-semibold text-gray-400 mb-1.5">종합소득공제 (1인별 자동)</p>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+            <input type="checkbox" checked={plan.spouseDependent} onChange={(e) => update('spouseDependent', e.target.checked)} className="accent-blue-500" />
+            배우자 부양
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+            <input type="checkbox" checked={plan.useStandardDeduction} onChange={(e) => update('useStandardDeduction', e.target.checked)} className="accent-blue-500" />
+            표준공제 100만 사용
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+            부양가족 수
+            <button type="button" onClick={() => update('dependents', Math.max(0, plan.dependents - 1))} className="w-5 h-5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">−</button>
+            <span className="w-5 text-center text-gray-100">{plan.dependents}</span>
+            <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-5 h-5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
+          </label>
+        </div>
+        <p className="text-[11px] text-gray-600 mt-1">1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2</p>
+      </div>
+    </Section>
+  )
+}
+
 // ── 메인 ───────────────────────────────────────────────────
 export default function RetirementPrepPage() {
   const { data: saved } = useRetirement()
@@ -405,6 +474,10 @@ export default function RetirementPrepPage() {
           <LumpsumSection items={plan.lumpsum} onChange={(v) => update('lumpsum', v)} />
           <EmergencySection items={plan.emergency} onChange={(v) => update('emergency', v)} />
         </div>
+      </Expander>
+
+      <Expander title="⚙️ 수령 · 세금 설정" badge="수령·공제">
+        <PensionSettingsSection />
       </Expander>
 
       <Expander title="📊 IRP 투자 포트폴리오" badge="종목·비중·배당률">

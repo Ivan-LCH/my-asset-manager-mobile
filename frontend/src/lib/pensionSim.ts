@@ -129,6 +129,7 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   useStandardDeduction: true,
   withdrawalYears: 30,
   startYear: new Date().getFullYear() + 3,
+  refYear: 2030,
   pensionDeduction: 12_000_000,
 }
 
@@ -311,16 +312,23 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   // 1인별 종합소득공제 자동 산정
   const perPersonDed = computePerPersonComprehensiveDeduction(plan)
 
-  // 연도별 연금 스케줄 (국민연금 step-up 반영) — 대표연도 = peak(국민연금 모두 수령 시)
+  // 연도별 연금 스케줄 (국민연금 step-up 반영) — 대표연도 = 기준년도(refYear, 기본 2030).
+  // refYear가 수령기간 밖이면 가장 가까운 해로, 미설정이면 peak.
   const fromYear = plan.startYear
   const toYear = plan.startYear + years - 1
   const schedule = pensionSchedule(plan, nationals, fromYear, toYear)
   const peakRow = schedule.reduce<PensionScheduleRow | undefined>(
     (max, r) => (!max || r.totalAnnual > max.totalAnnual ? r : max), undefined)
+  const refY = plan.refYear
+  const refRow = refY
+    ? (schedule.find((r) => r.year === refY)
+      ?? (refY <= fromYear ? schedule[0] : schedule[schedule.length - 1]))
+    : peakRow
 
   // 1인별 연금 — 남편만 (와이프 연금 0)
-  const annualPensionTaxableH = (peakRow?.taxableAnnual ?? (taxableSrc + irpInflow + nationalFallback) / years)
-  const annualPensionExemptH = peakRow?.exemptAnnual ?? exemptSrc / years
+  const pensionRow = refRow ?? peakRow
+  const annualPensionTaxableH = (pensionRow?.taxableAnnual ?? (taxableSrc + irpInflow + nationalFallback) / years)
+  const annualPensionExemptH = pensionRow?.exemptAnnual ?? exemptSrc / years
   const pensionTaxH = pensionIncomeTax(Math.max(0, annualPensionTaxableH - plan.pensionDeduction))
 
   const computePerson = (owner: 'husband' | 'wife'): PersonVehicleResult => {

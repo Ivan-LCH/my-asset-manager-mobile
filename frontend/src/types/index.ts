@@ -261,6 +261,7 @@ export interface PensionSimPlan {
   useStandardDeduction:     boolean             // 표준공제 100만 사용
   withdrawalYears:          number              // 수령 기간(연)
   startYear:                number              // 수령 개시 연도
+  refYear:                  number              // 기준년도 (수입·지출 스냅샷 기준, 기본 2030)
   pensionDeduction:         number              // 연금소득공제 (법정 고정 12,000,000)
 }
 

@@ -454,37 +454,6 @@ export default function PensionSimPage() {
         )}
       </Expander>
 
-{/* 수령 · 세금 설정 */}
-      <Expander title="⚙️ 수령 · 세금 설정">
-        <Row label="수령 개시 연도"><NumInput value={plan.startYear} onChange={(v) => update('startYear', v)} /></Row>
-        <Row label="수령 기간(연)"><NumInput value={plan.withdrawalYears} onChange={(v) => update('withdrawalYears', v)} suffix="년" /></Row>
-        <Row label="기타 종합소득(연)" hint="남편 근로/사업 — 와이프 분은 추후"><AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} /></Row>
-        <p className="text-[11px] text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용됩니다.</p>
-        <div className="py-1">
-          <p className="text-sm text-gray-400 mb-1">종합소득공제 (1인별 자동)</p>
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-              <input type="checkbox" checked={plan.spouseDependent} onChange={(e) => update('spouseDependent', e.target.checked)} className="accent-blue-500" />
-              배우자 부양 (부부 가정 시 ON)
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-              <input type="checkbox" checked={plan.useStandardDeduction} onChange={(e) => update('useStandardDeduction', e.target.checked)} className="accent-blue-500" />
-              표준공제 100만 사용 (특별공제 없을 때)
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-              부양가족 수
-              <button type="button" onClick={() => update('dependents', Math.max(0, plan.dependents - 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">−</button>
-              <span className="w-6 text-center text-gray-100">{plan.dependents}</span>
-              <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
-              <span className="text-[10px] text-gray-600">(1인당 150만)</span>
-            </label>
-          </div>
-          <p className="text-[11px] text-gray-500 mt-1.5 sm:text-right sm:mr-44">
-            1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2 = <span className="text-blue-400 font-semibold">{formatManwon(perPersonDed.husband)}</span>
-          </p>
-        </div>
-      </Expander>
-
       {/* ═══ 결과 (자동 계산) ═══ */}
 {/* 📥 수입 (들어오는 것) */}
       <div className="flex items-center gap-2 pt-1">
@@ -522,6 +491,43 @@ export default function PensionSimPage() {
           </div>
         )
       })()}
+
+      {/* 기준년도 수입·지출 스냅샷 (가족 합산) */}
+      <div className="bg-gray-800 border border-emerald-700/40 rounded-xl p-3 sm:p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-gray-300">📅 기준년도 수입·지출 (가족 합산)</p>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500">기준년도</span>
+            <input type="number" inputMode="decimal"
+              className="w-20 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
+              value={plan.refYear} onChange={(e) => update('refYear', Number(e.target.value))} />
+            <span className="text-[11px] text-gray-500">년</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <div className="bg-gray-900/50 rounded-lg p-2.5">
+            <p className="text-gray-500 mb-0.5">연금수령액(연)</p>
+            <p className="text-gray-100 font-semibold">{formatManwon(h.totals.grossAnnual - (h.totals.financialIncome))}</p>
+            <p className="text-[10px] text-gray-600">{formatManwon(Math.round((h.totals.grossAnnual - h.totals.financialIncome) / 12))}/월</p>
+          </div>
+          <div className="bg-gray-900/50 rounded-lg p-2.5">
+            <p className="text-gray-500 mb-0.5">배당금(연)</p>
+            <p className="text-emerald-400 font-semibold">{formatManwon(h.totals.financialIncome)}</p>
+            <p className="text-[10px] text-gray-600">{formatManwon(Math.round(h.totals.financialIncome / 12))}/월</p>
+          </div>
+          <div className="bg-gray-900/50 rounded-lg p-2.5">
+            <p className="text-gray-500 mb-0.5">지출 — 세금(연)+걸보(월)</p>
+            <p className="text-red-400 font-semibold">{formatManwon(h.totals.totalAnnualTax)} + {formatManwon(h.totals.healthMonthly)}/월</p>
+          </div>
+          <div className="bg-gray-900/50 rounded-lg p-2.5">
+            <p className="text-gray-500 mb-0.5">순소득(월)</p>
+            <p className="text-emerald-400 font-semibold">{formatManwon(Math.round(h.totals.netAnnual / 12) - h.totals.healthMonthly)}/월</p>
+          </div>
+        </div>
+        <p className="text-[10px] text-gray-600 mt-1.5">
+          {plan.refYear}년 기준. 국민연금 개시(65세) 전후에 따라 연금수령액이 달라집니다. 세금 = 연금소득세 + 금융소득세, 걸보 = 지역걸보(월).
+        </p>
+      </div>
 
       {/* 연금 수령 요약 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
