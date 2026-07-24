@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Trash2, Pencil, Check, X } from 'lucide-react'
+import { Trash2, Pencil, Check, X } from 'lucide-react'
 import KpiCard from '@/components/common/KpiCard'
 import HistoryTable from './HistoryTable'
 import AssetForm from './AssetForm'
@@ -243,12 +243,11 @@ export default function AssetDetail({ asset, chartData }: Props) {
       {/* 액션 버튼 */}
       <div className="flex gap-2 pt-1 border-t border-gray-700/50">
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => setShowForm(true)}
           className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
         >
           <Pencil className="w-3 h-3" />
-          {showForm ? '수정 닫기' : '속성 수정'}
-          {showForm ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          속성 수정
         </button>
         <button
           onClick={() => setConfirmDel(true)}
@@ -258,7 +257,25 @@ export default function AssetDetail({ asset, chartData }: Props) {
         </button>
       </div>
 
-      {showForm && <AssetForm asset={asset} onClose={() => setShowForm(false)} />}
+      {/* 속성 수정 — 모달 오버레이 */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false) }}
+        >
+          <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-gray-900 border-0 sm:border border-gray-700 rounded-none sm:rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 shrink-0">
+              <h2 className="text-base font-bold text-gray-100">✏️ {asset.name} 수정</h2>
+              <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-gray-200 hover:bg-gray-700 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              <AssetForm asset={asset} onClose={() => setShowForm(false)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmDel}
