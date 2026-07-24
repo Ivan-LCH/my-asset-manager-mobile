@@ -429,7 +429,7 @@ export function effectivePensionValue(
 /** PENSION 자산에서 PensionSource 자동 생성 */
 export function sourcesFromAssets(
   assets: { id: string; name: string; currentValue: number; detail?: { pensionType?: string; linkedStockId?: string } }[],
-  existing: PensionSource[],
+  existing: PensionSource[] = [],
   stockById?: Map<string, number>,
 ): PensionSource[] {
   return assets.map((a) => {
