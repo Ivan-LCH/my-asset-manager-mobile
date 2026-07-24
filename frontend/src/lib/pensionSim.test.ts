@@ -213,11 +213,11 @@ describe('pensionSim 계산', () => {
         { id: 'irp', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' },
         { id: 'nat', name: '국민연금', principal: 60_000_000, taxType: 'national', yieldRate: 0, owner: 'husband' },
       ],
-      startYear: 2029, withdrawalYears: 30,
+      startYear: 2029, withdrawalYears: 30, refYear: 2035,
     })
     const nationals = [{ expectedStartYear: 2035, expectedEndYear: 2055, expectedMonthlyPayout: 1_200_000, annualGrowthRate: 0 }]
     const r = computePensionVehiclePerPerson(p, { nationalPensions: nationals })
-    // peak(2035) 연금 = IRP 1000만 + 국민 1440만 = 2440만 (과세)
+    // 기준년도 2035(국민연금 개시) 연금 = IRP 1000만 + 국민 1440만 = 2440만 (과세)
     expect(r.husband.annualPensionTaxable).toBeGreaterThanOrEqual(24_000_000)
   })
 
