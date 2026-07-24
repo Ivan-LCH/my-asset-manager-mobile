@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Home, TrendingUp, Shield,
-  PiggyBank, Gem, Music, Settings, Sunset, Building2, PieChart, Coins,
+  PiggyBank, Gem, Music, Settings, Sunset, Building2, PieChart, Coins, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -16,10 +16,10 @@ const NAV_ITEMS = [
 ]
 
 const PLAN_ITEMS = [
-  { to: '/portfolio',   icon: PieChart,    label: 'IRP 포트폴리오' },
-  { to: '/pension/sim', icon: Coins,       label: '개인 투자 시뮬' },
-  { to: '/corp-sim',    icon: Building2,   label: '투자법인 시뮬' },
-  { to: '/retirement',  icon: Sunset,      label: '은퇴 계획' },
+  { to: '/prep',        icon: FileText,    label: '은퇴 준비' },
+  { to: '/pension/sim', icon: Coins,       label: '연금시뮬' },
+  { to: '/corp-sim',    icon: Building2,   label: '법인시뮬' },
+  { to: '/retirement',  icon: Sunset,      label: '현금흐름 결과' },
 ]
 
 // 데스크톱 사이드바 / 모바일 드로어 공용 링크 클래스

@@ -1014,19 +1014,23 @@ export async function migrateSettingsToBirth(): Promise<void> {
 }
 
 /** 마이그레이션: 와이프 국민연금 자산 생성 (birthWife 있고, 와이프 국민연금 자산 없으면).
- *  birthWife 비어있으면 미혼(생성 안 함). */
+ *  birthWife 비어있으면 미혼(생성 안 함). 기존 '국민연금(와이프)' 자산은 '최진숙-국민연금'으로 rename. */
+const WIFE_PENSION_NAME = '최진숙-국민연금'
 export async function migrateWifeNationalPension(): Promise<void> {
   const s = await getSettings()
   const startYear = nationalPensionStartYear(s.birthWife)
   if (!startYear) return  // 미혼(와이프 생년월 없음)
   const all = await getAllAssets()
-  const exists = all.some((a) => a.type === 'PENSION'
+  const existing = all.find((a) => a.type === 'PENSION'
     && (a.detail as { pensionType?: string } | undefined)?.pensionType?.includes('국민')
     && (a.ownership?.wife ?? 0) >= 100)
-  if (exists) return
+  if (existing) {
+    if (existing.name !== WIFE_PENSION_NAME) await updateAsset(existing.id, { name: WIFE_PENSION_NAME })
+    return
+  }
   await createAsset({
     type: 'PENSION',
-    name: '국민연금(와이프)',
+    name: WIFE_PENSION_NAME,
     acquisitionDate: `${startYear - 20}-01-01`,
     acquisitionPrice: 0,
     currentValue: 0,

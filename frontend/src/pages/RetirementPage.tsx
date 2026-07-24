@@ -1080,56 +1080,7 @@ export default function RetirementPage() {
         </div>
       </div>
 
-      {/* Expander 1: 생활비 / 여행 / 의료비 */}
-      <Expander
-        title="✏️ 💰 생활비 / 여행 / 의료비 적립"
-        badge={`월 ${formatManwon(plan.expenses.reduce((s, e) => s + num(e.amount), 0) + plan.travel.reduce((s, t) => s + (num(t.phase1Times) * num(t.costPerTrip)) / 12, 0) + num(plan.medicalMonthly))}`}
-      >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ExpensesSection items={plan.expenses} onChange={(v) => update('expenses', v)} />
-          <div className="space-y-5">
-            <TravelSection items={plan.travel} onChange={(v) => update('travel', v)} />
-            <div className="border-t border-gray-700 pt-4">
-              <p className="text-xs font-semibold text-gray-400 mb-3">🏥 의료비 적립</p>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-400">월 적립액</span>
-                <div className="w-40">
-                  <AmountInput
-                    value={plan.medicalMonthly}
-                    onChange={(v) => update('medicalMonthly', v)}
-                  />
-                </div>
-                <span className="text-xs text-gray-500">/월</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Expander>
-
-      {/* Expander 2: 목돈 수입(시뮬 cash 유입 표시) / 긴급자금 */}
-      <Expander
-        title="💎 목돈 수입(시뮬 연동) / 긴급자금"
-        badge={`${cashLumpsum.length + plan.emergency.length}건`}
-      >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 목돈 수입: 단일 소스 입력 + 투자분배 나머지 표시 */}
-          <div className="space-y-2">
-            <LumpsumSection items={plan.lumpsum ?? []} onChange={(v) => update('lumpsum', v)} />
-            {cashLumpsum.length > 0 && linkMode !== 'none' && (
-              <div className="bg-emerald-500/5 border border-emerald-700/30 rounded-lg p-2.5 space-y-1">
-                <p className="text-[10px] font-semibold text-emerald-300">투자분배 후 현금 수령분 (목돈 수입으로 반영)</p>
-                {cashLumpsum.map((l) => (
-                  <p key={l.id} className="text-[11px] text-gray-300">
-                    · {l.name || '목돈'} — 현금 {formatManwon(l.amount)}
-                    {l.taxKind === 'severance' && <span className="text-orange-400"> (퇴직소득세 {formatManwon(lumpsumTaxByYear.get(l.receiveYear) ?? 0)})</span>}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
-          <EmergencySection items={plan.emergency} onChange={(v) => update('emergency', v)} />
-        </div>
-      </Expander>
+      {/* 걸보·세금은 시뮬에서 산출 (이 페이지 입력 아님) */}
 
       {/* 건보·세금은 시뮬에서 산출 (이 페이지 입력 아님) */}
       <div className="bg-blue-500/5 border border-blue-700/30 rounded-xl p-3">
