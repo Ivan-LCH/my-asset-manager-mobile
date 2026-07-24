@@ -151,7 +151,7 @@ describe('pensionSim 계산', () => {
     }] as any
     const prop = realEstatePropertyBases(assets)
     expect(prop.husband.propertyTaxBase).toBe(0)
-    expect(prop.wife.propertyTaxBase).toBe(1_000_000_000)
+    expect(prop.wife.propertyTaxBase).toBe(600_000_000)   // 10억 × 공정시장가액 60% × 와이프 100%
     // 와이프 건보(재산분 포함) > 0
     const wifeHI = calcHealthInsurance({ pensionAnnual: 0, dividendAnnual: 0, otherAnnual: 0, propertyTaxBase: prop.wife.propertyTaxBase, rentalDeposit: 0, carValue: 0, scorePerPoint: 208.4 })
     expect(wifeHI.grandTotal).toBeGreaterThan(0)

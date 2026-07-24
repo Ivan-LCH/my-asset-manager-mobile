@@ -2,19 +2,30 @@
 // RetirementPage 에서 추출 — 법인시뮬·연금시뮬·은퇴계획 공유.
 import type { Asset, RealEstateDetail } from '@/types'
 
-// 재산 점수표: 재산세 과세표준 5,000만원 공제 후 구간별 점수 (단위: 만원)
+// 지역가입자 재산 등급별 점수표 (시행령 제42조 [별표 4], 공식 60등급).
+// 단위: 만원 (재산금액 = 재산세 과세표준 − 기본공제 1억). [하한, 점수]
 export const PROPERTY_SCORE_TABLE: [number, number][] = [
-  [0,      22],  [450,    30],  [900,    40],  [1_350,  50],
-  [1_800,  65],  [2_400,  80],  [3_000,  95],  [3_600, 113],
-  [4_800, 133],  [6_000, 165],  [9_000, 205],  [12_000, 248],
-  [15_000, 290], [18_000, 330], [21_000, 369], [24_000, 406],
-  [27_000, 441], [30_000, 484], [36_000, 530], [42_000, 571],
-  [48_000, 610], [54_000, 645],
+  [450,     22],  [900,     44],  [1_350,   66],  [1_800,   97],
+  [2_250,  122],  [2_700,  146],  [3_150,  171],  [3_600,  195],
+  [4_050,  219],  [4_500,  244],  [5_020,  268],  [5_590,  294],
+  [6_220,  320],  [6_930,  344],  [7_710,  365],  [8_590,  386],
+  [9_570,  412],  [10_700, 439],  [11_900, 465],  [13_300, 490],
+  [14_800, 516],  [16_400, 535],  [18_300, 559],  [20_400, 586],
+  [22_700, 611],  [25_300, 637],  [28_100, 659],  [31_300, 681],
+  [34_900, 706],  [38_800, 731],  [43_200, 757],  [48_100, 785],
+  [53_600, 812],  [59_700, 841],  [66_500, 881],  [74_000, 921],
+  [82_400, 961],  [91_800, 1_001],[103_000,1_091],[114_000,1_141],
+  [127_000,1_191],[142_000,1_241],[158_000,1_291],[176_000,1_341],
+  [196_000,1_391],[218_000,1_451],[242_000,1_511],[270_000,1_571],
+  [300_000,1_641],[330_000,1_711],[363_000,1_781],[399_300,1_851],
+  [439_230,1_921],[483_153,1_991],[531_468,2_061],[584_615,2_131],
+  [643_077,2_201],[707_385,2_271],[778_124,2_341],
 ]
 
 export function getPropertyScore(taxBase: number): number {
   const baseMan = taxBase / 10_000
-  const deducted = Math.max(0, baseMan - 5_000) // 5천만원 공제
+  const deducted = baseMan - 10_000 // 기본공제 1억 (구 5천만에서 정정)
+  if (deducted <= 0) return 0
   for (let i = PROPERTY_SCORE_TABLE.length - 1; i >= 0; i--) {
     if (deducted >= PROPERTY_SCORE_TABLE[i][0]) return PROPERTY_SCORE_TABLE[i][1]
   }
@@ -78,6 +89,7 @@ export function calcHealthInsurance(hi: HealthInputs): HealthResult {
  * currentValue × 명의 지분을 합산. (실제는 공시가격이나 단순화로 시가 기준.)
  * rentalDeposit(전세금)도 지분별로 합산 — 건보 재산분은 보증금의 30% 반영되므로 여기선 원금을 반환(계산측에서 ×0.3).
  */
+const ASSESSED_RATIO = 0.6  // 공정시장가액비율 (주택 60%)
 export function realEstatePropertyBases(
   assets: Asset[],
 ): { husband: { propertyTaxBase: number; rentalDeposit: number }; wife: { propertyTaxBase: number; rentalDeposit: number } } {
@@ -87,8 +99,8 @@ export function realEstatePropertyBases(
     const d = a.detail as RealEstateDetail | undefined
     if (!d) continue
     const o = a.ownership ?? { husband: 50, wife: 50 }
-    hp += a.currentValue * (o.husband / 100)
-    wp += a.currentValue * (o.wife / 100)
+    hp += a.currentValue * ASSESSED_RATIO * (o.husband / 100)
+    wp += a.currentValue * ASSESSED_RATIO * (o.wife / 100)
     hd += (d.tenantDeposit ?? 0) * (o.husband / 100)
     wd += (d.tenantDeposit ?? 0) * (o.wife / 100)
   }

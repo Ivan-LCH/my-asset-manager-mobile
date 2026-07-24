@@ -360,9 +360,21 @@ export default function PensionSimPage() {
           <p className={`text-xl font-bold ${color}`}>{formatManwon(monthlyNet)}<span className="text-xs text-gray-500 font-normal">/월</span></p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px]">
-          <div><p className="text-gray-500">연금수령</p><p className="text-gray-100 font-semibold">{formatManwon(person.annualPensionTaxable + person.annualPensionExempt)}</p></div>
-          <div><p className="text-gray-500">금융소득</p><p className="text-gray-100 font-semibold">{formatManwon(person.financialIncome)}</p></div>
-          <div><p className="text-gray-500">총세금(연)</p><p className="text-red-400 font-semibold">{formatManwon(person.totalAnnualTax)}</p></div>
+          <div>
+            <p className="text-gray-500">연금수령</p>
+            <p className="text-gray-100 font-semibold">{formatManwon(person.annualPensionTaxable + person.annualPensionExempt)}</p>
+            <p className="text-red-400/80 text-[10px]">연금소득세 {formatManwon(person.pensionTax)}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">금융소득</p>
+            <p className="text-gray-100 font-semibold">{formatManwon(person.financialIncome)}</p>
+            <p className="text-red-400/80 text-[10px]">금융소득세 {formatManwon(person.financialTax)}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">총세금(연)</p>
+            <p className="text-red-400 font-semibold">{formatManwon(person.totalAnnualTax)}</p>
+            <p className="text-gray-600 text-[10px]">연금 {formatManwon(person.pensionTax)} · 금융 {formatManwon(person.financialTax)}</p>
+          </div>
           <div><p className="text-gray-500">순취득(연)</p><p className="text-emerald-400 font-semibold">{formatManwon(person.netAnnual)}</p></div>
         </div>
       </div>
@@ -604,7 +616,7 @@ export default function PensionSimPage() {
         <Row label="수령 개시 연도"><NumInput value={plan.startYear} onChange={(v) => update('startYear', v)} /></Row>
         <Row label="수령 기간(연)"><NumInput value={plan.withdrawalYears} onChange={(v) => update('withdrawalYears', v)} suffix="년" /></Row>
         <Row label="기타 종합소득(연)" hint="남편 근로/사업 — 와이프 분은 추후"><AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} /></Row>
-        <Row label="연금소득공제"><AmountInput value={plan.pensionDeduction} onChange={(v) => update('pensionDeduction', v)} /></Row>
+        <p className="text-[11px] text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용됩니다.</p>
         <div className="py-1">
           <p className="text-sm text-gray-400 mb-1">종합소득공제 (1인별 자동)</p>
           <div className="space-y-1.5">
