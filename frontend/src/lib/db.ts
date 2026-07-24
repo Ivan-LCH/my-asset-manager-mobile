@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { nationalPensionStartYear } from '@/lib/people'
 import type {
   Asset, AssetDetail, AssetType, ChartDataPoint, ChartParams, Currency, HistoryItem,
   DividendRecord, DividendSummary, RetirementPlan, CorpSimPlan, PensionSimPlan,
@@ -995,5 +996,48 @@ export async function migrateInflowsToLumpsumAndAllocations(): Promise<boolean> 
   }
   await saveSettings({ inflowsToLumpsumMigrated: '1' })
   return inflows.length > 0
+}
+
+/** 마이그레이션: 구 currentAge/retirementAge(나이) → 생년월(YYYY.MM)+은퇴예정연도(연도).
+ *  birthHusband이 없으면 사용자 제공값 1972.03으로, birthWife는 동일하게(미혼이면 사용자가 지움). */
+export async function migrateSettingsToBirth(): Promise<void> {
+  const s = await getSettings()
+  if (s.birthHusband) return  // 이미 설정됨
+  const currentAge = s.currentAge ?? 40
+  const retirementAge = s.retirementAge ?? 65
+  const now = new Date().getFullYear()
+  await saveSettings({
+    birthHusband: '1972.03',
+    birthWife: '1972.03',   // 남편과 동일하게 기본 (미혼이면 사용자가 지움)
+    retirementYear: s.retirementYear ?? (now + Math.max(0, retirementAge - currentAge)),
+  })
+}
+
+/** 마이그레이션: 와이프 국민연금 자산 생성 (birthWife 있고, 와이프 국민연금 자산 없으면).
+ *  birthWife 비어있으면 미혼(생성 안 함). */
+export async function migrateWifeNationalPension(): Promise<void> {
+  const s = await getSettings()
+  const startYear = nationalPensionStartYear(s.birthWife)
+  if (!startYear) return  // 미혼(와이프 생년월 없음)
+  const all = await getAllAssets()
+  const exists = all.some((a) => a.type === 'PENSION'
+    && (a.detail as { pensionType?: string } | undefined)?.pensionType?.includes('국민')
+    && (a.ownership?.wife ?? 0) >= 100)
+  if (exists) return
+  await createAsset({
+    type: 'PENSION',
+    name: '국민연금(와이프)',
+    acquisitionDate: `${startYear - 20}-01-01`,
+    acquisitionPrice: 0,
+    currentValue: 0,
+    ownership: { husband: 0, wife: 100 },
+    detail: {
+      pensionType: '국민연금',
+      expectedStartYear: startYear,
+      expectedEndYear: startYear + 30,
+      expectedMonthlyPayout: 1_107_450,
+      annualGrowthRate: 2,
+    },
+  })
 }
 

@@ -136,9 +136,12 @@ export interface CategoryKpi {
 }
 
 export interface Settings {
-  currentAge:    number
-  retirementAge: number
-  [key: string]: number | string
+  currentAge:    number       // (구버전, 생년월 미입력 시 폴 백)
+  retirementAge: number       // (구버전, retirementYear 미입력 시 폴 백)
+  birthHusband?: string       // 남편 생년월 "YYYY.MM" (예: 1972.03)
+  birthWife?:    string       // 와이프 생년월 "YYYY.MM" (비우면 미혼/단독 가정)
+  retirementYear?: number     // 은퇴 예정 연도
+  [key: string]: number | string | undefined
 }
 
 // ── 은퇴 계획 ──────────────────────────────────────────────

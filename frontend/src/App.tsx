@@ -12,7 +12,7 @@ import RetirementPage from '@/pages/RetirementPage'
 import CorpSimPage from '@/pages/CorpSimPage'
 import PortfolioPage from '@/pages/PortfolioPage'
 import Settings from '@/pages/Settings'
-import { getAllAssets, getSettings, saveSettings, seedSampleData, migrateStockOwnershipToAccount, migrateInflowsToLumpsumAndAllocations } from '@/lib/db'
+import { getAllAssets, getSettings, saveSettings, seedSampleData, migrateStockOwnershipToAccount, migrateInflowsToLumpsumAndAllocations, migrateSettingsToBirth, migrateWifeNationalPension } from '@/lib/db'
 
 const qc = new QueryClient()
 
@@ -33,12 +33,16 @@ function Bootstrap() {
         // 주식 계좌 명의 마이그레이션 (구 종목별 ownership → 계좌별)
         await migrateStockOwnershipToAccount()
         c.invalidateQueries({ queryKey: ['stock_account_ownership'] })
+        // 설정 나이 → 생년월/은퇴연도 변환 + 와이프 국민연금 자산 생성
+        await migrateSettingsToBirth()
+        await migrateWifeNationalPension()
         // 시뮬 inflows → 은퇴계획 목돈 + 시뮬 allocations로 되돌림 (목돈 단일 소스화)
         const migrated = await migrateInflowsToLumpsumAndAllocations()
         if (migrated) {
           c.invalidateQueries({ queryKey: ['pension-sim'] })
           c.invalidateQueries({ queryKey: ['retirement'] })
         }
+        c.invalidateQueries()
       } catch {
         /* 무시 */
       }

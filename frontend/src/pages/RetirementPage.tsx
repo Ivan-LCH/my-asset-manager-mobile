@@ -7,6 +7,7 @@ import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
+import { resolveAge } from '@/lib/people'
 import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
 import { realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { usePensionSim } from '@/hooks/usePensionSim'
@@ -809,7 +810,7 @@ export default function RetirementPage() {
   const { data: saved }          = useRetirement()
   const saveMut                  = useSaveRetirement()
 
-  const currentAge = settings?.currentAge ?? 40
+  const currentAge = resolveAge(settings)
 
   const [plan, setPlan]   = useState<RetirementPlan>(EMPTY_PLAN)
   const [dirty, setDirty] = useState(false)

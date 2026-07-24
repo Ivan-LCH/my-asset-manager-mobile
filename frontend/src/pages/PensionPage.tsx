@@ -12,6 +12,7 @@ import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { EMPTY_PENSION_PLAN, sourcesFromAssets } from '@/lib/pensionSim'
+import { resolveAge, resolveRetirementYear } from '@/lib/people'
 import { formatMoney, formatManwon, cn } from '@/lib/utils'
 import type { Asset, PensionDetail, StockDetail, SavingsDetail, PensionSimPlan, PensionTaxType } from '@/types'
 
@@ -146,8 +147,8 @@ export default function PensionPage() {
   const handleSaveSim = () => saveSimMut.mutate(simPlan, { onSuccess: () => setSimDirty(false) })
 
   const modalAsset = allAssets.find((a) => a.id === modalId) ?? null
-  const currentAge = settings?.currentAge ?? 40
-  const retirementAge = settings?.retirementAge ?? 65
+  const currentAge = resolveAge(settings)
+  const retirementAge = resolveRetirementYear(settings) - currentAge
   const pensionLikeAssets = allAssets.filter((a) => {
     if (a.type === 'PENSION') return true
     if ((a.type === 'STOCK' || a.type === 'SAVINGS') && (a.detail as StockDetail & SavingsDetail)?.isPensionLike) return true

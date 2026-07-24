@@ -11,6 +11,7 @@ import {
   computeTwoPhase, salariedCount, comprehensiveTax, corpHealthMonthly,
 } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
+import { resolveAge } from '@/lib/people'
 import { formatManwon } from '@/lib/utils'
 import type { CorpSimPlan, CorpTaxParams } from '@/types'
 
@@ -155,7 +156,7 @@ export default function CorpSimPage() {
   const corpInflow = (plan.lumpsumCorp ?? []).reduce((s, c) => s + c.corpAmount, 0)
 
   // ── 연금 자동 연동 ──
-  const currentAge = settings?.currentAge ?? 40
+  const currentAge = resolveAge(settings)
   const retirementYear = retirementPlan?.retirementYear ?? new Date().getFullYear() + 10
   let pensionAnnual = plan.pensionIncomeAnnual
   if (plan.linkPension) {

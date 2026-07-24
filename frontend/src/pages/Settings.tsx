@@ -3,6 +3,7 @@ import { Download, Upload } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
 import { exportBackup, importBackup, clearAllData, seedSampleData, type BackupData } from '@/lib/db'
+import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
 
 export default function Settings() {
   const { data: settings, isLoading } = useSettings()
@@ -10,20 +11,22 @@ export default function Settings() {
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [currentAge,    setCurrentAge]    = useState(40)
-  const [retirementAge, setRetirementAge] = useState(65)
-  const [saved,         setSaved]         = useState(false)
-  const [backupMsg,     setBackupMsg]     = useState<{ ok: boolean; text: string } | null>(null)
+  const [birthHusband,   setBirthHusband]   = useState('1972.03')
+  const [birthWife,      setBirthWife]      = useState('')
+  const [retirementYear, setRetirementYear] = useState(new Date().getFullYear() + 10)
+  const [saved,          setSaved]          = useState(false)
+  const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     if (settings) {
-      setCurrentAge(settings.currentAge ?? 40)
-      setRetirementAge(settings.retirementAge ?? 65)
+      setBirthHusband(settings.birthHusband ?? '1972.03')
+      setBirthWife(settings.birthWife ?? '')
+      setRetirementYear(settings.retirementYear ?? new Date().getFullYear() + 10)
     }
   }, [settings])
 
   const handleSave = () => {
-    saveMut.mutate({ currentAge, retirementAge }, {
+    saveMut.mutate({ birthHusband, birthWife, retirementYear }, {
       onSuccess: () => {
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
@@ -31,7 +34,9 @@ export default function Settings() {
     })
   }
 
-  const inputCls = 'bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500 w-32'
+  const inputCls = 'bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500 w-36'
+  // 미리보기: 현재 나이 · 65세(국민연금 개시) 연도
+  const preview = { birthHusband, birthWife }
 
   // ── 데이터 백업/복원 (M-3) ──
   const handleExport = async () => {
@@ -103,23 +108,38 @@ export default function Settings() {
 
         <div className="space-y-4">
           <div>
-            <label className="text-xs text-gray-400 block mb-1">현재 나이</label>
+            <label className="text-xs text-gray-400 block mb-1">남편 생년월 (예: 1972.03)</label>
             <input
-              type="number" inputMode="decimal"
+              type="text" inputMode="decimal" placeholder="1972.03"
               className={inputCls}
-              value={currentAge}
-              min={1} max={100}
-              onChange={(e) => setCurrentAge(+e.target.value)}
+              value={birthHusband}
+              onChange={(e) => setBirthHusband(e.target.value)}
             />
+            <p className="text-[11px] text-gray-500 mt-1">
+              현재 {resolveAge(preview)}세 · 65세(국민연금 개시) {nationalPensionStartYear(birthHusband) ?? '-'}년
+            </p>
           </div>
           <div>
-            <label className="text-xs text-gray-400 block mb-1">은퇴 예정 나이</label>
+            <label className="text-xs text-gray-400 block mb-1">와이프 생년월 (비우면 미혼 가정)</label>
+            <input
+              type="text" inputMode="decimal" placeholder="비우면 미혼"
+              className={inputCls}
+              value={birthWife}
+              onChange={(e) => setBirthWife(e.target.value)}
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              {hasSpouse(preview)
+                ? `와이프 65세(국민연금) ${nationalPensionStartYear(birthWife)}년`
+                : '미혼(단독)으로 가정 — 와이프 연금·명의 없음'}
+            </p>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">은퇴 예정 연도</label>
             <input
               type="number" inputMode="decimal"
               className={inputCls}
-              value={retirementAge}
-              min={1} max={100}
-              onChange={(e) => setRetirementAge(+e.target.value)}
+              value={retirementYear}
+              onChange={(e) => setRetirementYear(+e.target.value)}
             />
           </div>
         </div>
