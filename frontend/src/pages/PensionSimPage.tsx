@@ -116,7 +116,7 @@ function OwnershipPreset({ value, onChange, disabled, locked }: {
 
 // ── 목돈 분배 카드 ──────────────────────────────────────────
 function AllocationCard({ lumpsum, allocation, onChange }: {
-  lumpsum: { id: string; name: string; amount: number; receiveYear: number; useEndYear: number; taxKind?: string }
+  lumpsum: { id: string; name: string; amount: number; receiveYear: number; taxKind?: string }
   allocation: { irpAmount: number; stockAmount: number }
   onChange: (patch: Partial<{ irpAmount: number; stockAmount: number }>) => void
 }) {
@@ -127,7 +127,7 @@ function AllocationCard({ lumpsum, allocation, onChange }: {
         <span className="text-sm text-gray-200 font-medium truncate">{lumpsum.name || '목돈'}</span>
         <span className="text-sm text-gray-100 font-semibold shrink-0">{formatManwon(lumpsum.amount)}</span>
       </div>
-      <p className="text-[10px] text-gray-600">{lumpsum.receiveYear}년 수령 · {lumpsum.useEndYear}년까지 사용{lumpsum.taxKind === 'severance' ? ' · 퇴직/위로금(현금분 퇴직소득세)' : ''}</p>
+      <p className="text-[10px] text-gray-600">{lumpsum.receiveYear}년 일회 수령{lumpsum.taxKind === 'severance' ? ' · 퇴직소득세 적용(현금분)' : ''}</p>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <p className="text-[10px] text-gray-500 mb-0.5">→ 퇴직IRP (연금으로 굴림)</p>

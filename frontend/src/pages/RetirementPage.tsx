@@ -412,43 +412,31 @@ function LumpsumSection({
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-[10px] text-gray-500 mb-1">수령 연도</p>
                 <YearInput value={item.receiveYear} onChange={(v) => update(item.id, 'receiveYear', v)} />
-              </div>
-              <div>
-                <p className="text-[10px] text-gray-500 mb-1">사용 종료 연도</p>
-                <YearInput value={item.useEndYear} onChange={(v) => update(item.id, 'useEndYear', v)} />
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 mb-1">금액</p>
                 <AmountInput value={item.amount} onChange={(v) => update(item.id, 'amount', v)} />
               </div>
             </div>
-            {/* 과세 성격 — 현금 나머지의 세금 판정용 */}
-            <div>
-              <p className="text-[10px] text-gray-500 mb-1">과세 성격 (현금 수령분 세금)</p>
-              <div className="flex gap-1">
-                {([['severance', '퇴직/위로금'], ['rental', '전세금'], ['other', '기타']] as const).map(([v, label]) => (
-                  <button key={v} type="button" onClick={() => update(item.id, 'taxKind', v)}
-                    className={`flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors ${(item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+            {/* 과세 성격 — 퇴직소득세 적용 여부만 */}
+            <div className="flex gap-1">
+              {([['other', '일반(비과세)'], ['severance', '퇴직소득세 적용']] as const).map(([v, label]) => (
+                <button key={v} type="button" onClick={() => update(item.id, 'taxKind', v)}
+                  className={`flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors ${(item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                  {label}
+                </button>
+              ))}
             </div>
-            {item.receiveYear > 0 && item.useEndYear >= item.receiveYear && item.amount > 0 && (
-              <p className="text-[11px] text-blue-400">
-                → 월 {formatManwon(item.amount / ((item.useEndYear - item.receiveYear + 1) * 12))} 환산
-                ({item.useEndYear - item.receiveYear + 1}년간)
-              </p>
-            )}
+            <p className="text-[11px] text-gray-600">{item.receiveYear}년에 {formatManwon(item.amount)} 일회 수령</p>
           </div>
         ))}
       </div>
       <button
-        onClick={() => onChange([...items, { id: uid(), name: '', receiveYear: 2030, amount: 0, useEndYear: 2040 }])}
+        onClick={() => onChange([...items, { id: uid(), name: '', receiveYear: 2030, amount: 0 }])}
         className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
       >
         <Plus className="w-3 h-3" /> 추가
@@ -714,7 +702,6 @@ interface CashFlowRow {
   medicalMonthly:          number
   healthInsuranceMonthly:  number
   totalExpense:            number
-  lumpsumMonthly:          number
   lumpsumReceived:         number
   totalIncome:             number
   balance:                 number
@@ -775,14 +762,6 @@ function buildCashFlow(
       ? (linked.pensionByYear.get(year) ?? 0)
       : (pensionMap.get(year) ?? 0)
 
-    const lumpsumMonthly = lumpsum.reduce((s, l) => {
-      const ry = num(l.receiveYear), ue = num(l.useEndYear), amt = num(l.amount)
-      if (ry > 0 && ue >= ry && year >= ry && year <= ue) {
-        return s + amt / ((ue - ry + 1) * 12)
-      }
-      return s
-    }, 0)
-
     const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
       + (year === SIM_START_YEAR ? corpLoanOutflow : 0)
 
@@ -803,10 +782,11 @@ function buildCashFlow(
       + lumpsumTaxAnnual / 12
 
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly + taxMonthly
-    const totalIncome  = pensionMonthly + lumpsumMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
+    const totalIncome  = pensionMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     const balance      = totalIncome - totalExpense
 
-    cumulative += balance * 12 - emergencyAnnual - lumpsumMonthly * 12 + lumpsumReceived
+    // 목돈은 수령 연도에 일회 수령 (월수입 나누기 없음)
+    cumulative += balance * 12 - emergencyAnnual + lumpsumReceived
 
     rows.push({
       year, age,
@@ -815,7 +795,7 @@ function buildCashFlow(
       expenseMonthly, travelMonthly,
       medicalMonthly: num(plan.medicalMonthly),
       healthInsuranceMonthly: hiMonthly,
-      totalExpense, lumpsumMonthly, lumpsumReceived, totalIncome, balance,
+      totalExpense, lumpsumReceived, totalIncome, balance,
       emergencyAnnual, cumulative,
     })
   }
@@ -841,7 +821,11 @@ export default function RetirementPage() {
         expenses:       saved.expenses       ?? DEFAULT_EXPENSES,
         travel:         saved.travel         ?? [],
         medicalMonthly: saved.medicalMonthly ?? 200_000,
-        lumpsum:        saved.lumpsum        ?? [],
+        lumpsum:        (saved.lumpsum ?? []).map((l) => ({
+          ...l,
+          // 구버전 정규화: useEndYear 제거, taxKind 'rental' → 'other'
+          taxKind: ((l as { taxKind?: string }).taxKind === 'rental' ? 'other' : (l.taxKind ?? 'other')) as LumpsumItem['taxKind'],
+        })),
         emergency:      saved.emergency      ?? [],
         retirementYear:  saved.retirementYear  ?? new Date().getFullYear() + 10,
         healthInsurance: saved.healthInsurance  ? { ...DEFAULT_HI, ...saved.healthInsurance } : DEFAULT_HI,
@@ -1064,7 +1048,6 @@ export default function RetirementPage() {
                 retirementRow.dividendMonthly > 0 ? `배당 ${fmtK(retirementRow.dividendMonthly)}` : null,
                 retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtK(retirementRow.corpSalaryMonthly)}` : null,
                 retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtK(retirementRow.corpReturnMonthly)}` : null,
-                retirementRow.lumpsumMonthly > 0 ? `목돈 ${fmtK(retirementRow.lumpsumMonthly)}` : null,
               ].filter(Boolean).join(' · ') : '-'}
             </p>
           </div>

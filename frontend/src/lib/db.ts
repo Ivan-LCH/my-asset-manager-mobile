@@ -978,7 +978,6 @@ export async function migrateInflowsToLumpsumAndAllocations(): Promise<boolean> 
     const dest = inf.destination as string
     newLumpsum.push({
       id, name, amount, receiveYear: year,
-      useEndYear: Number(inf.useEndYear) || year,
       taxKind: (inf.taxKind as LumpsumItem['taxKind']) ?? 'other',
     })
     if (dest === 'irp') newAllocations.push({ lumpsumId: id, irpAmount: amount, stockAmount: 0 })

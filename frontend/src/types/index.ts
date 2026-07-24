@@ -144,7 +144,7 @@ export interface Settings {
 // ── 은퇴 계획 ──────────────────────────────────────────────
 export interface ExpenseItem  { id: string; name: string; amount: number }
 export interface TravelItem   { id: string; name: string; costPerTrip: number; phase1Times: number; phase1Until: number; phase2Times: number }
-export interface LumpsumItem  { id: string; name: string; receiveYear: number; amount: number; useEndYear: number; taxKind?: 'severance' | 'rental' | 'other' }
+export interface LumpsumItem  { id: string; name: string; receiveYear: number; amount: number; taxKind?: 'severance' | 'other' }
 export interface EmergencyItem{ id: string; name: string; year: number; amount: number }
 
 export interface HealthInsuranceInputs {
