@@ -426,6 +426,18 @@ function LumpsumSection({
                 <AmountInput value={item.amount} onChange={(v) => update(item.id, 'amount', v)} />
               </div>
             </div>
+            {/* 과세 성격 — 현금 나머지의 세금 판정용 */}
+            <div>
+              <p className="text-[10px] text-gray-500 mb-1">과세 성격 (현금 수령분 세금)</p>
+              <div className="flex gap-1">
+                {([['severance', '퇴직/위로금'], ['rental', '전세금'], ['other', '기타']] as const).map(([v, label]) => (
+                  <button key={v} type="button" onClick={() => update(item.id, 'taxKind', v)}
+                    className={`flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors ${(item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {item.receiveYear > 0 && item.useEndYear >= item.receiveYear && item.amount > 0 && (
               <p className="text-[11px] text-blue-400">
                 → 월 {formatManwon(item.amount / ((item.useEndYear - item.receiveYear + 1) * 12))} 환산
@@ -953,17 +965,26 @@ export default function RetirementPage() {
     ? corpHealthMonthly(corpPlan)
     : hiResult.grandTotal
 
-  // 목돈 수입 = 시뮬의 cash 처리 유입 (단일 소스 — 이중 입력 방지). 항상 시뮬에서.
-  const cashInflows = (pensionSimPlan?.inflows ?? []).filter((i) => i.destination === 'cash')
-  const cashLumpsum: LumpsumItem[] = cashInflows.map((i) => ({
-    id: i.id, name: i.name, receiveYear: i.year,
-    amount: i.amount, useEndYear: i.useEndYear ?? i.year,
-  }))
-  // 위로금/퇴직(severance) 현금 수령 → 퇴직소득세 (수령년 일회)
+  // 목돈 수입 = 은퇴계획 목돈수입(단일 소스)에서 투자 분배 나머지 (이중계산 방지).
+  // linkMode=pension → 개인 분배(IRP/주식) 제외분, corp → 법인 분배 제외분, none → 전액.
+  const pensionAllocations = pensionSimPlan?.allocations ?? []
+  const corpAllocations = corpPlan?.lumpsumCorp ?? []
+  const cashLumpsum: LumpsumItem[] = (plan.lumpsum ?? []).map((l) => {
+    let allocated = 0
+    if (linkMode === 'pension') {
+      const a = pensionAllocations.find((x) => x.lumpsumId === l.id)
+      allocated = (a?.irpAmount ?? 0) + (a?.stockAmount ?? 0)
+    } else if (linkMode === 'corp') {
+      const c = corpAllocations.find((x) => x.lumpsumId === l.id)
+      allocated = c?.corpAmount ?? 0
+    }
+    return { ...l, amount: Math.max(0, l.amount - allocated) }
+  }).filter((l) => l.amount > 0)
+  // 위로금/퇴직(severance) 현금 나머지 → 퇴직소득세 (수령년 일회)
   const lumpsumTaxByYear = new Map<number, number>()
-  for (const i of cashInflows) {
-    if (i.taxKind === 'severance' && i.amount > 0) {
-      lumpsumTaxByYear.set(i.year, (lumpsumTaxByYear.get(i.year) ?? 0) + severanceTax(i.amount))
+  for (const l of cashLumpsum) {
+    if (l.taxKind === 'severance' && l.amount > 0) {
+      lumpsumTaxByYear.set(l.receiveYear, (lumpsumTaxByYear.get(l.receiveYear) ?? 0) + severanceTax(l.amount))
     }
   }
 
@@ -1107,33 +1128,20 @@ export default function RetirementPage() {
         badge={`${cashLumpsum.length + plan.emergency.length}건`}
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 목돈 수입: 시뮬의 cash 처리 유입을 read-only로 표시 */}
+          {/* 목돈 수입: 단일 소스 입력 + 투자분배 나머지 표시 */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-gray-400">💎 목돈 수입 (개인투자시뮬 cash 처리분)</p>
-            {cashLumpsum.length === 0 ? (
-              <p className="text-[11px] text-gray-600">시뮬에서 '현금 수령' 처리 항목이 없습니다. 개인투자시뮬 유입항목에서 추가하세요.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {cashLumpsum.map((l) => {
-                  const tax = lumpsumTaxByYear.get(l.receiveYear) ?? 0
-                  const inflow = cashInflows.find((i) => i.id === l.id)
-                  return (
-                    <div key={l.id} className="bg-gray-900/50 rounded-lg p-2.5 text-[11px]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-200 font-medium">{inflow?.name || l.name}</span>
-                        <span className="text-gray-100 font-semibold">{formatManwon(l.amount)}</span>
-                      </div>
-                      <p className="text-gray-500 mt-0.5">
-                        {l.receiveYear}년 수령 · {l.useEndYear}년까지 사용
-                        {inflow?.taxKind === 'severance' && <span className="text-orange-400"> · 퇴직소득세 {formatManwon(tax)}</span>}
-                        {inflow?.taxKind === 'rental' && <span className="text-gray-500"> · 전세금(비과세)</span>}
-                      </p>
-                    </div>
-                  )
-                })}
+            <LumpsumSection items={plan.lumpsum ?? []} onChange={(v) => update('lumpsum', v)} />
+            {cashLumpsum.length > 0 && linkMode !== 'none' && (
+              <div className="bg-emerald-500/5 border border-emerald-700/30 rounded-lg p-2.5 space-y-1">
+                <p className="text-[10px] font-semibold text-emerald-300">투자분배 후 현금 수령분 (목돈 수입으로 반영)</p>
+                {cashLumpsum.map((l) => (
+                  <p key={l.id} className="text-[11px] text-gray-300">
+                    · {l.name || '목돈'} — 현금 {formatManwon(l.amount)}
+                    {l.taxKind === 'severance' && <span className="text-orange-400"> (퇴직소득세 {formatManwon(lumpsumTaxByYear.get(l.receiveYear) ?? 0)})</span>}
+                  </p>
+                ))}
               </div>
             )}
-            <p className="text-[11px] text-gray-600">목돈 자금은 개인투자시뮬(/pension/sim) 유입항목에서 '현금 수령' 처리로 입력합니다.</p>
           </div>
           <EmergencySection items={plan.emergency} onChange={(v) => update('emergency', v)} />
         </div>

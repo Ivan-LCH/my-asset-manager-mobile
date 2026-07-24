@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Save, ChevronDown, AlertTriangle, Trash2, ArrowLeft, Plus } from 'lucide-react'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
+import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
 import {
   EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, computePerPersonComprehensiveDeduction,
@@ -14,7 +15,7 @@ import { realEstatePropertyBases, calcHealthInsurance } from '@/lib/healthInsura
 import { blendedYield } from '@/lib/corpSim'
 import { formatManwon, cn } from '@/lib/utils'
 import {
-  type PensionSimPlan, type PensionInflowItem, type Ownership, type OwnershipPreset,
+  type PensionSimPlan, type Ownership, type OwnershipPreset,
   type PensionDetail,
   ownershipFromPreset, presetFromOwnership,
 } from '@/types'
@@ -113,78 +114,34 @@ function OwnershipPreset({ value, onChange, disabled, locked }: {
   )
 }
 
-// ── 유입 항목 카드 ──────────────────────────────────────────
-function InflowCard({ item, onChange, onRemove }: {
-  item: PensionInflowItem
-  onChange: (patch: Partial<PensionInflowItem>) => void
-  onRemove: () => void
+// ── 목돈 분배 카드 ──────────────────────────────────────────
+function AllocationCard({ lumpsum, allocation, onChange }: {
+  lumpsum: { id: string; name: string; amount: number; receiveYear: number; useEndYear: number; taxKind?: string }
+  allocation: { irpAmount: number; stockAmount: number }
+  onChange: (patch: Partial<{ irpAmount: number; stockAmount: number }>) => void
 }) {
-  const isIrp = item.destination === 'irp'
-  const isCash = item.destination === 'cash'
-  const isCorp = item.destination === 'corp'
+  const cash = Math.max(0, lumpsum.amount - allocation.irpAmount - allocation.stockAmount)
   return (
     <div className="bg-gray-900/50 rounded-xl border border-gray-700 p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <input type="text" placeholder="항목명 (예: 희망퇴직위로금)"
-          className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
-          value={item.name} onChange={(e) => onChange({ name: e.target.value })} />
-        <button onClick={onRemove} className="text-gray-600 hover:text-red-400 shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-gray-200 font-medium truncate">{lumpsum.name || '목돈'}</span>
+        <span className="text-sm text-gray-100 font-semibold shrink-0">{formatManwon(lumpsum.amount)}</span>
       </div>
-      <AmountInput value={item.amount} onChange={(v) => onChange({ amount: v })} />
-      <div>
-        <p className="text-[10px] text-gray-500 mb-1">{item.type === 'annual' ? '시작 연도' : '발생 연도'}</p>
-        <NumInput value={item.year} onChange={(v) => onChange({ year: v })} suffix="년" />
-      </div>
-      <div>
-        <p className="text-[10px] text-gray-500 mb-1">유형</p>
-        <div className="flex gap-1">
-          {([['lumpsum', '일회성'], ['annual', '연간반복']] as const).map(([v, label]) => (
-            <button key={v} onClick={() => onChange({ type: v })}
-              className={cn('flex-1 px-2 py-1 text-[11px] rounded transition-colors',
-                item.type === v ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
-              {label}
-            </button>
-          ))}
+      <p className="text-[10px] text-gray-600">{lumpsum.receiveYear}년 수령 · {lumpsum.useEndYear}년까지 사용{lumpsum.taxKind === 'severance' ? ' · 퇴직/위로금(현금분 퇴직소득세)' : ''}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <p className="text-[10px] text-gray-500 mb-0.5">→ 퇴직IRP (연금으로 굴림)</p>
+          <AmountInput value={allocation.irpAmount} onChange={(v) => onChange({ irpAmount: v })} />
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-500 mb-0.5">→ 일반주식계좌 (배당)</p>
+          <AmountInput value={allocation.stockAmount} onChange={(v) => onChange({ stockAmount: v })} />
         </div>
       </div>
-      <div>
-        <p className="text-[10px] text-gray-500 mb-1">처리 방식 (목적지)</p>
-        <div className="grid grid-cols-2 gap-1">
-          {([
-            ['irp', '퇴직IRP', '연금 소득(3~6%)'],
-            ['stock', '일반주식계좌', '배당(15.4%/종합)'],
-            ['cash', '현금 수령', '목돈 수입(퇴직소득세)'],
-            ['corp', '법인 가수금', '법인시뮬에서 관리'],
-          ] as const).map(([v, label, desc]) => (
-            <button key={v} onClick={() => onChange({ destination: v, ...(v === 'irp' ? { ownership: { husband: 100, wife: 0 } } : {}) })}
-              className={cn('px-2 py-1 text-[11px] rounded transition-colors text-left',
-                item.destination === v ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
-              {label}<span className={cn('block text-[9px]', item.destination === v ? 'text-white/70' : 'text-gray-500')}>{desc}</span>
-            </button>
-          ))}
-        </div>
-        {isIrp && <p className="text-[10px] text-gray-600 mt-1">IRP/퇴직은 남편 명의 가정. 수령 시 연금소득세.</p>}
-        {item.destination === 'stock' && <p className="text-[10px] text-gray-600 mt-1">주식계좌 명의는 아래 '일반주식계좌 포트폴리오'에서 설정.</p>}
-        {isCash && (
-          <div className="mt-1.5 space-y-1.5">
-            <div>
-              <p className="text-[10px] text-gray-500 mb-0.5">과세 성격</p>
-              <div className="flex gap-1">
-                {([['severance', '퇴직/위로금'], ['rental', '전세금'], ['other', '기타']] as const).map(([v, label]) => (
-                  <button key={v} onClick={() => onChange({ taxKind: v })}
-                    className={cn('flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors',
-                      (item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Row label="사용 종료년"><NumInput value={item.useEndYear ?? item.year} onChange={(v) => onChange({ useEndYear: v })} suffix="년" /></Row>
-            <p className="text-[10px] text-gray-600">은퇴계획 목돈 수입으로 표시. 퇴직/위로금은 {(item.taxKind === 'severance') ? '퇴직소득세' : '비과세'} 적용.</p>
-          </div>
-        )}
-        {isCorp && <p className="text-[10px] text-gray-600 mt-1">법인 가수금은 법인시뮬에서 관리 — 이 시뮬 계산에서는 제외됨.</p>}
-      </div>
+      <p className="text-[11px] text-gray-500">
+        나머지(현금 수령) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span>
+        {cash > 0 && <span className="text-gray-600"> → 은퇴계획 목돈 수입</span>}
+      </p>
     </div>
   )
 }
@@ -196,6 +153,7 @@ export default function PensionSimPage() {
   const saveMut = useSavePensionSim()
   const pensionAssets = useAssetsByType('PENSION')
   const realEstateAssets = useAssetsByType('REAL_ESTATE')
+  const { data: retirement } = useRetirement()
 
   const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [dirty, setDirty] = useState(false)
@@ -217,16 +175,10 @@ export default function PensionSimPage() {
       base.sources,
     )
     const manual = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
-    // 구버전 방어: inflows.ownership / sources.owner 누락 보정
-    const startY = base.startYear ?? EMPTY_PENSION_PLAN.startYear
-    const inflows = (base.inflows ?? []).map((i) => ({
-      ...i, year: i.year ?? startY,
-      ownership: i.ownership ?? (i.destination === 'irp' ? { husband: 100, wife: 0 } : { husband: 50, wife: 50 }),
-    }))
     setPlan({
       ...EMPTY_PENSION_PLAN, ...base,
       sources: [...auto, ...manual],
-      inflows,
+      allocations: base.allocations ?? [],
       stockHoldings: base.stockHoldings ?? [],
       stockYields: base.stockYields ?? [],
       stockOwnership: base.stockOwnership ?? { husband: 50, wife: 50 },
@@ -238,16 +190,15 @@ export default function PensionSimPage() {
     setDirty(true)
   }, [])
 
-  const updateInflow = (id: string, patch: Partial<PensionInflowItem>) => {
-    setPlan((p) => ({ ...p, inflows: p.inflows.map((i) => i.id === id ? { ...i, ...patch } : i) }))
-    setDirty(true)
-  }
-  const addInflow = () => {
-    setPlan((p) => ({ ...p, inflows: [...p.inflows, { id: uid(), name: '', amount: 0, type: 'lumpsum', destination: 'irp', year: p.startYear, ownership: { husband: 100, wife: 0 } }] }))
-    setDirty(true)
-  }
-  const removeInflow = (id: string) => {
-    setPlan((p) => ({ ...p, inflows: p.inflows.filter((i) => i.id !== id) }))
+  // 목돈 분배 (lumpsumId 단위 upsert: 퇴직IRP/일반주식계좌 금액)
+  const setAllocation = (lumpsumId: string, patch: Partial<{ irpAmount: number; stockAmount: number }>) => {
+    setPlan((p) => {
+      const exists = p.allocations.some((a) => a.lumpsumId === lumpsumId)
+      const allocations = exists
+        ? p.allocations.map((a) => a.lumpsumId === lumpsumId ? { ...a, ...patch } : a)
+        : [...p.allocations, { lumpsumId, irpAmount: 0, stockAmount: 0, ...patch }]
+      return { ...p, allocations }
+    })
     setDirty(true)
   }
 
@@ -340,11 +291,13 @@ export default function PensionSimPage() {
     })
   const husbandHI = personHI(h.husband, prop.husband)
   const wifeHI = personHI(h.wife, prop.wife)
-  const stockBalance = stockBalanceFromInflows(plan.inflows)
+  const stockBalance = stockBalanceFromInflows(plan.allocations)
   const yieldPct = stockAccountYield(plan)
   const inflowTotal = totalInflows(plan)
-  const irpInflow = plan.inflows.filter((i) => i.destination === 'irp').reduce((s, i) => s + i.amount, 0)
-  const stockInflow = plan.inflows.filter((i) => i.destination === 'stock').reduce((s, i) => s + i.amount, 0)
+  const irpInflow = plan.allocations.reduce((s, a) => s + a.irpAmount, 0)
+  const stockInflow = plan.allocations.reduce((s, a) => s + a.stockAmount, 0)
+  // 은퇴계획 목돈수입 (분배 대상, 단일 소스)
+  const lumpsums = retirement?.lumpsum ?? []
 
   const PersonKpi = ({ person, label, color }: { person: typeof h.husband; label: string; color: string }) => {
     const monthlyNet = Math.round(person.netAnnual / 12) - person.healthMonthly
@@ -414,39 +367,32 @@ export default function PensionSimPage() {
         <span className="text-[11px] text-gray-600">목돈 자금 처리 · 일반주식계좌 · 수령·공제 설정</span>
       </div>
 
-{/* + 유입 항목 */}
-      <Expander title="➕ 유입 항목 (목돈 자금 → 어디로 넣을지)" badge={`${plan.inflows.length}개 · ${formatManwon(inflowTotal)}`}>
+{/* + 목돈 분배 (은퇴계획 목돈수입 → 어디로) */}
+      <Expander title="➕ 목돈 분배 (은퇴계획 목돈수입 기준)" badge={`${lumpsums.length}개`} defaultOpen>
         <div className="bg-blue-500/5 border border-blue-700/30 rounded-lg p-3">
           <p className="text-[11px] text-blue-200/90 leading-relaxed">
-            <b>유입 항목이란?</b> 퇴직위로금·전세보증금·상속금 등 <b>은퇴 전후로 들어오는 목돈 자금</b>입니다.
-            이 돈을 <b>어디로 넣을지(처리 방식)</b>를 정하면, 그 결과가 자동으로 계산됩니다.
+            은퇴계획의 <b>목돈수입</b>에 입력한 자금(퇴직위로금·전세보증금 등)을 <b>어디로 넣을지</b> 정합니다.
+            목돈 금액을 <b>퇴직IRP / 일반주식계좌</b>로 나누고, <b>남은 것은 현금 수령</b>(은퇴계획 목돈 수입)이 됩니다.
           </p>
-          <ul className="text-[11px] text-blue-200/80 mt-1.5 space-y-0.5 list-none">
-            <li>· <b>퇴직IRP</b> — 연금으로 굴림 → 매년 연금 수령 (연금소득세 3~6%)</li>
-            <li>· <b>일반주식계좌</b> — 배당주 투자 → 매년 배당 소득 (2천만 한도/종합과세)</li>
-            <li>· <b>현금 수령</b> — 그대로 씀 → 은퇴계획 목돈 수입 (위로금은 퇴직소득세)</li>
-            <li>· <b>법인 가수금</b> — 법인시뮬에서 관리</li>
-          </ul>
+          <p className="text-[10px] text-blue-200/70 mt-1">목돈 자금 추가·수정은 은퇴계획(/retirement) 목돈수입에서.</p>
         </div>
+        {lumpsums.length === 0 && (
+          <p className="text-center text-xs text-gray-600 py-4">
+            목돈수입이 없습니다. 은퇴계획(/retirement)의 목돈수입에서 먼저 추가하세요.
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {plan.inflows.map((it) => (
-            <InflowCard key={it.id} item={it}
-              onChange={(patch) => updateInflow(it.id, patch)}
-              onRemove={() => removeInflow(it.id)} />
-          ))}
+          {lumpsums.map((l) => {
+            const alloc = plan.allocations.find((a) => a.lumpsumId === l.id) ?? { irpAmount: 0, stockAmount: 0 }
+            return (
+              <AllocationCard key={l.id} lumpsum={l} allocation={alloc}
+                onChange={(patch) => setAllocation(l.id, patch)} />
+            )
+          })}
         </div>
-        {plan.inflows.length === 0 && (
-          <p className="text-center text-xs text-gray-600 py-4">항목이 없습니다. 아래에서 추가하세요.</p>
-        )}
-        <button onClick={addInflow}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
-          <Plus className="w-3.5 h-3.5" /> 항목 추가
-        </button>
-        {(irpInflow > 0 || stockInflow > 0) && (
-          <p className="text-[11px] text-gray-600">
-            퇴직IRP {formatManwon(irpInflow)} · 주식 {formatManwon(stockInflow)} · 현금(목돈) {formatManwon(plan.inflows.filter(i=>i.destination==='cash').reduce((s,i)=>s+i.amount,0))} · 법인 {formatManwon(plan.inflows.filter(i=>i.destination==='corp').reduce((s,i)=>s+i.amount,0))}
-          </p>
-        )}
+        <p className="text-[11px] text-gray-600">
+          분배된 투자 원금 — 퇴직IRP {formatManwon(irpInflow)} · 일반주식계좌 {formatManwon(stockInflow)}
+        </p>
       </Expander>
 
 {/* 일반주식계좌 포트폴리오 (배당) */}
@@ -564,11 +510,9 @@ export default function PensionSimPage() {
               <PrincipalCard title="일반주식계좌 원금" husband={h.husband.stockBalance} wife={h.wife.stockBalance}
                 note={`stock 유입 × ${yieldPct}% = 연배당 ${formatManwon(Math.round((h.husband.stockBalance + h.wife.stockBalance) * yieldPct / 100))}`} />
             </div>
-            {(plan.inflows.some(i => i.destination === 'cash') || plan.inflows.some(i => i.destination === 'corp')) && (
-              <p className="text-[10px] text-gray-600 mt-1.5">
-                💡 현금 수령/법인 처리 항목은 투자 원금에서 제외됨 (은퇴계획 목돈·법인시뮬로 분기).
-              </p>
-            )}
+            <p className="text-[10px] text-gray-600 mt-1.5">
+              💡 분배하지 않은 나머지는 현금 수령(은퇴계획 목돈)으로, 투자 원금에서 제외됨.
+            </p>
           </div>
         )
       })()}

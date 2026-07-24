@@ -3,7 +3,7 @@
 // 기존 연금원천(sources)은 그대로 가정(연금=남편 명의), + 유입 항목의 목적지·명의에
 // 따라 1인별 세금·건보를 산출 → 가구 총계.
 // 모든 수치는 사용자 가정에 기반한 추정치.
-import type { PensionSimPlan, PensionSource, PensionInflowItem, Ownership, PortfolioHolding, PortfolioYield } from '@/types'
+import type { PensionSimPlan, PensionSource, PensionAllocation, Ownership, PortfolioHolding, PortfolioYield } from '@/types'
 import { blendedYield } from '@/lib/corpSim'
 import { calcHealthInsurance } from '@/lib/healthInsurance'
 
@@ -94,11 +94,9 @@ export function estimateHealthInsurance(
   return Math.round(healthMonthly) + Math.round(healthMonthly * LONG_TERM)
 }
 
-/** 일반주식계좌 잔액 = stock 유입 합 (일회성 + 연간). 수동 입력 아님. */
-export function stockBalanceFromInflows(inflows: PensionInflowItem[]): number {
-  return inflows
-    .filter((i) => i.destination === 'stock')
-    .reduce((s, i) => s + i.amount, 0)
+/** 일반주식계좌 잔액 = Σ allocations.stockAmount (목돈 분배로 주식에 넣은 원금). */
+export function stockBalanceFromInflows(allocations: PensionAllocation[]): number {
+  return allocations.reduce((s, a) => s + a.stockAmount, 0)
 }
 
 /** 종목별 배당률 → 가중평균. 수동 > 자동조회 > 0. */
@@ -109,13 +107,19 @@ export function blendedYieldWithFallback(
   return blendedYield(yields, holdings)
 }
 
+/** 목돈별 현금 나머지 = 목돈 금액 − (퇴직IRP + 주식 분배). 0 미만 방지. */
+export function cashRemainder(lumpsumAmount: number, allocations: { irpAmount: number; stockAmount: number }[]): number {
+  const allocated = allocations.reduce((s, a) => s + a.irpAmount + a.stockAmount, 0)
+  return Math.max(0, lumpsumAmount - allocated)
+}
+
 /** 기본 입력값 (샘플) */
 export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   sources: [
     { id: 'irp1', name: '퇴직연금(DC) → IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 4, owner: 'husband' },
     { id: 'pen1', name: '연금저축(98년 비과세)', principal: 100_000_000, taxType: 'taxExempt', yieldRate: 4, owner: 'husband' },
   ],
-  inflows: [],
+  allocations: [],
   stockHoldings: [],
   stockYields: [],
   stockOwnership: { husband: 50, wife: 50 },
@@ -132,9 +136,9 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
 export const totalPrincipal = (plan: PensionSimPlan): number =>
   plan.sources.reduce((s, src) => s + src.principal, 0)
 
-/** + 유입 항목 합계 */
+/** + 분배된 투자 원금 합계 (IRP + 주식) */
 export const totalInflows = (plan: PensionSimPlan): number =>
-  plan.inflows.reduce((s, it) => s + it.amount, 0)
+  plan.allocations.reduce((s, a) => s + a.irpAmount + a.stockAmount, 0)
 
 /** 1인별 종합소득공제 자동 계산 (법정 한도, 단순화).
  *  본인 150만 + (배우자 150만 + 부양가족 150만×N + 표준공제 100만) ÷ 2
@@ -234,7 +238,7 @@ export function pensionSchedule(
   const drawTaxable = (plan.sources
     .filter((s) => s.taxType === 'irp' || s.taxType === 'taxable')
     .reduce((sm, s) => sm + s.principal, 0)
-    + plan.inflows.filter((i) => i.destination === 'irp').reduce((sm, i) => sm + i.amount, 0)) / years
+    + plan.allocations.reduce((sm, a) => sm + a.irpAmount, 0)) / years
   const drawExempt = plan.sources.filter((s) => s.taxType === 'taxExempt').reduce((sm, s) => sm + s.principal, 0) / years
 
   const rows: PensionScheduleRow[] = []
@@ -284,14 +288,14 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   const nationalFallback = hasNationalAsset ? 0
     : plan.sources.filter((s) => s.taxType === 'national').reduce((s, src) => s + src.principal, 0)
 
-  // IRP 유입은 남편(퇴직) 명의로 합산
-  const irpInflow = plan.inflows.filter((i) => i.destination === 'irp').reduce((s, i) => s + i.amount, 0)
+  // IRP 유입은 남편(퇴직) 명의로 합산 (목돈 분배 → 퇴직IRP)
+  const irpInflow = plan.allocations.reduce((s, a) => s + a.irpAmount, 0)
 
-  // 일반주식계좌: 잔액은 stock 유입에서, 명의는 stockOwnership
-  const stockTotal = stockBalanceFromInflows(plan.inflows)
+  // 일반주식계좌: 잔액은 목돈 분배(주식) 합에서, 명의는 stockOwnership
+  const stockTotal = stockBalanceFromInflows(plan.allocations)
   const yieldPct = stockAccountYield(plan)
   const annualDividendTotal = Math.round(stockTotal * (yieldPct / 100))
-  const stockAnnual = plan.inflows.filter((i) => i.destination === 'stock' && i.type === 'annual').reduce((s, i) => s + i.amount, 0)
+  const stockAnnual = 0
 
   // 주식 소득 1인 분할 (배당 + 연간 유입 모두 동일 지분 적용)
   const husbandShare = plan.stockOwnership.husband / 100

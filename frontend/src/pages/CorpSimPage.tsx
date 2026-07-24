@@ -140,6 +140,20 @@ export default function CorpSimPage() {
   }, [])
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
+  // 목돈 분배 → 가수금 (은퇴계획 목돈수입을 가수금으로)
+  const setLumpsumCorp = (lumpsumId: string, amount: number) => {
+    setPlan((p) => {
+      const list = p.lumpsumCorp ?? []
+      const exists = list.some((c) => c.lumpsumId === lumpsumId)
+      const lumpsumCorp = exists
+        ? list.map((c) => (c.lumpsumId === lumpsumId ? { ...c, corpAmount: amount } : c))
+        : [...list, { lumpsumId, corpAmount: amount }]
+      return { ...p, lumpsumCorp }
+    })
+    setDirty(true)
+  }
+  const corpInflow = (plan.lumpsumCorp ?? []).reduce((s, c) => s + c.corpAmount, 0)
+
   // ── 연금 자동 연동 ──
   const currentAge = settings?.currentAge ?? 40
   const retirementYear = retirementPlan?.retirementYear ?? new Date().getFullYear() + 10
@@ -151,7 +165,7 @@ export default function CorpSimPage() {
   // 포트폴리오 blendedYield가 있으면 dividendYield override
   const portfolioYield = portfolioData?.blendedYield ?? 0
   const effectiveYield = portfolioYield > 0 ? portfolioYield : plan.dividendYield
-  const effectivePlan: CorpSimPlan = { ...plan, pensionIncomeAnnual: pensionAnnual, dividendYield: effectiveYield }
+  const effectivePlan: CorpSimPlan = { ...plan, pensionIncomeAnnual: pensionAnnual, dividendYield: effectiveYield, loanAmount: plan.loanAmount + corpInflow }
 
   const corp = computeCorp(effectivePlan)
   const personal = computePersonal(effectivePlan)
@@ -202,6 +216,38 @@ export default function CorpSimPage() {
           color={firstNet >= 0 ? 'text-emerald-400' : 'text-red-400'}
         />
       </div>
+
+      {/* 목돈 분배 → 가수금 */}
+      {(retirementPlan?.lumpsum ?? []).length > 0 && (
+        <Expander title="➕ 목돈 분배 → 가수금" badge={`${corpInflow > 0 ? formatManwon(corpInflow) : '0'}`}>
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            은퇴계획의 <b>목돈수입</b>에 입력한 자금을 <b>가수금(주주 대여금)</b>으로 넣을 금액을 정합니다.
+            나머지는 현금 수령(은퇴계획 목돈 수입). 목돈 자금 추가는 은퇴계획(/retirement) 목돈수입에서.
+          </p>
+          <div className="space-y-2">
+            {(retirementPlan?.lumpsum ?? []).map((l) => {
+              const corp = (plan.lumpsumCorp ?? []).find((c) => c.lumpsumId === l.id)?.corpAmount ?? 0
+              const cash = Math.max(0, l.amount - corp)
+              return (
+                <div key={l.id} className="bg-gray-900/50 rounded-xl border border-gray-700 p-3 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-gray-200 font-medium truncate">{l.name || '목돈'}</span>
+                    <span className="text-sm text-gray-100 font-semibold shrink-0">{formatManwon(l.amount)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 items-end">
+                    <div>
+                      <p className="text-[10px] text-gray-500 mb-0.5">→ 가수금(법인)</p>
+                      <AmountInput value={corp} onChange={(v) => setLumpsumCorp(l.id, v)} />
+                    </div>
+                    <p className="text-[11px] text-gray-500">나머지(현금) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span></p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-gray-600">가수금 총계 = 기존 {formatManwon(plan.loanAmount)} + 목돈 분배 {formatManwon(corpInflow)} = {formatManwon(plan.loanAmount + corpInflow)}</p>
+        </Expander>
+      )}
 
       {/* 입력① 자산·운용 */}
       <Expander title="✏️ 입력 ① 자산 · 운용" badge={`총운용 ${formatManwon(totalInvest(plan))}`} defaultOpen>

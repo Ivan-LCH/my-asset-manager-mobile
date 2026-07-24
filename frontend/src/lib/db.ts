@@ -872,22 +872,9 @@ export async function getPensionSim(): Promise<PensionSimPlan | null> {
   if (!row) return null
   try {
     const parsed = JSON.parse(row.value) as Record<string, unknown>
-    // 마이그레이션: 구 stockBalance/stockDividendYield → holdings/yields/ownership + 합성 stock inflow
+    // 마이그레이션: 구 stockBalance/stockDividendYield → holdings/yields/ownership
     const legacy = parsed as { stockBalance?: number; stockDividendYield?: number; stockHoldings?: unknown }
     if (legacy.stockBalance !== undefined && legacy.stockHoldings === undefined) {
-      const inflows = Array.isArray(parsed.inflows) ? parsed.inflows as PensionSimPlan['inflows'] : []
-      if ((legacy.stockBalance ?? 0) > 0) {
-        inflows.push({
-          id: `migrated-stock-${Date.now()}`,
-          name: '기존 일반주식계좌 잔액',
-          amount: legacy.stockBalance ?? 0,
-          type: 'lumpsum',
-          destination: 'stock',
-          year: (parsed.startYear as number) ?? new Date().getFullYear(),
-          ownership: { husband: 100, wife: 0 },
-        })
-      }
-      parsed.inflows = inflows
       parsed.stockHoldings = []
       parsed.stockYields = []
       parsed.stockOwnership = { husband: 50, wife: 50 }
@@ -902,6 +889,8 @@ export async function getPensionSim(): Promise<PensionSimPlan | null> {
       parsed.useStandardDeduction = true
       delete (parsed as { comprehensiveDeduction?: number }).comprehensiveDeduction
     }
+    // 구 inflows(PensionInflowItem)는 migrateInflowsToLumpsumAndAllocations에서 목돈+분배로 이전됨.
+    if (parsed.allocations === undefined) parsed.allocations = []
     return parsed as unknown as PensionSimPlan
   } catch {
     return null
@@ -961,35 +950,51 @@ export async function migrateStockOwnershipToAccount(): Promise<void> {
   if (Object.keys(next).length > 0) await saveStockAccountOwnership(next)
 }
 
-/** 마이그레이션: 구 은퇴계획 lumpsum → 개인투자시뮬 inflows(destination=cash)로 이전 (1회).
- *  목돈 자금의 단일 입력처를 시뮬로 통합. 사용자가 양쪽에 넣은 항목은 수동 중복제거 필요. */
-export async function migrateLumpsumToInflows(): Promise<boolean> {
+/** 마이그레이션: 개인투자시뮬 inflows → 은퇴계획 lumpsum(단일 소스) + 시뮬 allocations로 되돌림 (1회).
+ *  목돈 입력은 은퇴계획, 시뮬은 그 목돈을 분배만. destination=irp→irpAmount, stock→stockAmount,
+ *  corp→lumpsumCorp(법인시뮬), cash→분배없음(전액 현금). */
+export async function migrateInflowsToLumpsumAndAllocations(): Promise<boolean> {
   const s = await getSettings()
-  if ((s as Record<string, unknown>).lumpsumMigrated) return false
+  if ((s as Record<string, unknown>).inflowsToLumpsumMigrated) return false
+  const row = await db.settings.get(PENSION_SIM_KEY)
+  const parsed = row ? (JSON.parse(row.value) as Record<string, unknown>) : null
+  const inflows = Array.isArray(parsed?.inflows) ? (parsed!.inflows as Array<Record<string, unknown>>) : []
+
   const ret = await getRetirement()
-  const lumpsum = (ret as { lumpsum?: LumpsumItem[] }).lumpsum ?? []
-  if (lumpsum.length > 0) {
-    const sim = await getPensionSim()
-    const base = (sim ?? {}) as Partial<PensionSimPlan>
-    const inflows = [...(base.inflows ?? [])]
-    for (const l of lumpsum) {
-      const name = l.name ?? ''
-      inflows.push({
-        id: `mig-${l.id}`,
-        name: name || '목돈',
-        amount: l.amount ?? 0,
-        type: 'lumpsum',
-        destination: 'cash',
-        year: l.receiveYear ?? new Date().getFullYear(),
-        ownership: { husband: 100, wife: 0 },
-        taxKind: /위로|퇴직/.test(name) ? 'severance' : /전세/.test(name) ? 'rental' : 'other',
-        useEndYear: l.useEndYear ?? l.receiveYear ?? new Date().getFullYear(),
-      })
-    }
-    await savePensionSim({ ...base, inflows } as PensionSimPlan)
-    await saveRetirement({ ...ret, lumpsum: [] })
+  const existingLumpsum = [...((ret as { lumpsum?: LumpsumItem[] }).lumpsum ?? [])]
+  const sim = await getPensionSim()
+  const base = (sim ?? {}) as Partial<PensionSimPlan>
+  const corp = await getCorpSim()
+
+  const newLumpsum: LumpsumItem[] = []
+  const newAllocations: PensionSimPlan['allocations'] = [...(base.allocations ?? [])]
+  const newLumpsumCorp = [...((corp as { lumpsumCorp?: { lumpsumId: string; corpAmount: number }[] } | null)?.lumpsumCorp ?? [])]
+
+  for (const inf of inflows) {
+    const id = (inf.id as string) ?? `mig-${Math.random().toString(36).slice(2, 8)}`
+    const name = (inf.name as string) ?? '목돈'
+    const amount = Number(inf.amount) || 0
+    const year = Number(inf.year) || new Date().getFullYear()
+    const dest = inf.destination as string
+    newLumpsum.push({
+      id, name, amount, receiveYear: year,
+      useEndYear: Number(inf.useEndYear) || year,
+      taxKind: (inf.taxKind as LumpsumItem['taxKind']) ?? 'other',
+    })
+    if (dest === 'irp') newAllocations.push({ lumpsumId: id, irpAmount: amount, stockAmount: 0 })
+    else if (dest === 'stock') newAllocations.push({ lumpsumId: id, irpAmount: 0, stockAmount: amount })
+    else if (dest === 'corp') newLumpsumCorp.push({ lumpsumId: id, corpAmount: amount })
   }
-  await saveSettings({ lumpsumMigrated: '1' })
-  return lumpsum.length > 0
+
+  await saveRetirement({ ...ret, lumpsum: [...existingLumpsum, ...newLumpsum] })
+  await savePensionSim({ ...base, allocations: newAllocations } as PensionSimPlan)
+  if (corp) await saveCorpSim({ ...corp, lumpsumCorp: newLumpsumCorp } as CorpSimPlan)
+
+  if (parsed) {
+    delete parsed.inflows
+    await db.settings.put({ key: PENSION_SIM_KEY, value: JSON.stringify(parsed) })
+  }
+  await saveSettings({ inflowsToLumpsumMigrated: '1' })
+  return inflows.length > 0
 }
 

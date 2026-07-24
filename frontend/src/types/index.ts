@@ -144,7 +144,7 @@ export interface Settings {
 // ── 은퇴 계획 ──────────────────────────────────────────────
 export interface ExpenseItem  { id: string; name: string; amount: number }
 export interface TravelItem   { id: string; name: string; costPerTrip: number; phase1Times: number; phase1Until: number; phase2Times: number }
-export interface LumpsumItem  { id: string; name: string; receiveYear: number; amount: number; useEndYear: number }
+export interface LumpsumItem  { id: string; name: string; receiveYear: number; amount: number; useEndYear: number; taxKind?: 'severance' | 'rental' | 'other' }
 export interface EmergencyItem{ id: string; name: string; year: number; amount: number }
 
 export interface HealthInsuranceInputs {
@@ -203,6 +203,7 @@ export interface PortfolioYield {
 export interface CorpSimPlan {
   capitalContribution:     number             // 출자금(자본금) 총액 — 3인 지분율로 분할
   loanAmount:              number             // 가수금(주주 대여금) 총액 — 부부 50/50
+  lumpsumCorp:             { lumpsumId: string; corpAmount: number }[]  // 은퇴계획 목돈을 가수금으로 분배 (나머지=현금)
   dividendYield:           number             // 예상 배당수익률(%)
   targetDividendTotal:     number             // 연 배당총액(0 = 수익률 자동)
   shareHusband:            number             // 지분 %(부)
@@ -237,21 +238,16 @@ export interface PensionSource {
   owner: 'husband' | 'wife' // 명의 (기본 husband — 연금=남편 가정)
 }
 
-export interface PensionInflowItem {
-  id: string
-  name: string                        // 항목명 (자유 입력)
-  amount: number                      // 금액
-  type: 'lumpsum' | 'annual'          // 일회성 / 연간반복
-  destination: 'irp' | 'stock' | 'cash' | 'corp'  // 퇴직IRP / 일반주식계좌 / 현금수령 / 법인가수금
-  year: number                        // 발생(수령) 연도 — 언제 들어오는지
-  ownership: Ownership                // 명의 지분 (destination='irp'는 남편 고정)
-  taxKind?: 'severance' | 'rental' | 'other'      // cash 처리 시 과세 성격 (위로금=severance)
-  useEndYear?: number                 // cash 처리 시 사용 종료년 (목돈 상각)
+export interface PensionAllocation {
+  lumpsumId: string       // RetirementPlan.lumpsum 참조
+  irpAmount: number       // → 퇴직IRP 원금
+  stockAmount: number     // → 일반주식계좌 원금
+  // 현금 = lumpsum.amount - irpAmount - stockAmount (나머지, 은퇴계획 목돈)
 }
 
 export interface PensionSimPlan {
   sources:                  PensionSource[]     // 기존 연금원천 (PensionPage에서 과세구분 관리)
-  inflows:                  PensionInflowItem[] // + 유입 항목 (목적지 선택)
+  allocations:              PensionAllocation[] // 은퇴계획 목돈을 퇴직IRP/일반주식계좌로 분배
   stockHoldings:            PortfolioHolding[]  // 일반주식계좌 종목 (배당률 자동산정용)
   stockYields:              PortfolioYield[]    // 종목별 배당률(조회+수동 폴백)
   stockOwnership:           Ownership           // 일반주식계좌 명의 지분

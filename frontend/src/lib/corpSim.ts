@@ -18,6 +18,7 @@ export const DEFAULT_CORP_TAX: CorpTaxParams = {
 export const EMPTY_CORP_PLAN: CorpSimPlan = {
   capitalContribution:     1_000_000,
   loanAmount:              600_000_000,
+  lumpsumCorp:             [],
   dividendYield:           8,
   targetDividendTotal:     0,
   shareHusband:            40,

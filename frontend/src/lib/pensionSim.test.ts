@@ -26,14 +26,14 @@ describe('pensionSim 계산', () => {
     expect(comprehensiveTaxBreakdown(30_000_000, 0, 1_500_000).consolidatedFinancial).toBe(10_000_000)
   })
 
-  it('stockBalanceFromInflows: stock 유입만 합산', () => {
-    const inflows = [
-      { id: 'a', name: '위로금', amount: 100_000_000, type: 'lumpsum' as const, destination: 'irp' as const, year: 2029, ownership: { husband: 100, wife: 0 } },
-      { id: 'b', name: '전세금', amount: 200_000_000, type: 'lumpsum' as const, destination: 'stock' as const, year: 2029, ownership: { husband: 50, wife: 50 } },
-      { id: 'c', name: '배당', amount: 5_000_000, type: 'annual' as const, destination: 'stock' as const, year: 2029, ownership: { husband: 50, wife: 50 } },
+  it('stockBalanceFromInflows / totalInflows: 분배된 IRP·주식 합산', () => {
+    const allocations = [
+      { lumpsumId: 'a', irpAmount: 100_000_000, stockAmount: 0 },
+      { lumpsumId: 'b', irpAmount: 0, stockAmount: 200_000_000 },
+      { lumpsumId: 'c', irpAmount: 0, stockAmount: 5_000_000 },
     ]
-    expect(stockBalanceFromInflows(inflows)).toBe(205_000_000) // stock만
-    expect(totalInflows(plan({ inflows }))).toBe(305_000_000)
+    expect(stockBalanceFromInflows(allocations)).toBe(205_000_000) // stockAmount만
+    expect(totalInflows(plan({ allocations }))).toBe(305_000_000)
   })
 
   it('blendedYield: 종목 가중평균', () => {
@@ -63,7 +63,7 @@ describe('pensionSim 계산', () => {
       stockHoldings: [{ ticker: 'A', weight: 1 }],
       stockYields: [{ ticker: 'A', yield: 6 }],
       stockOwnership: { husband: 50, wife: 50 },
-      inflows: [{ id: 's', name: '전세금', amount: 600_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 50, wife: 50 } }],
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 600_000_000 }],
     })
     const r = computePensionVehiclePerPerson(p)
     expect(r.husband.financialIncome).toBeCloseTo(18_000_000, -4)
@@ -81,7 +81,7 @@ describe('pensionSim 계산', () => {
       stockYields: [{ ticker: 'A', yield: 6 }],
       stockHoldings: [{ ticker: 'A', weight: 1 }],
       stockOwnership: { husband: 100, wife: 0 },
-      inflows: [{ id: 's', name: '전세금', amount: 300_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 100, wife: 0 } }],
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 300_000_000 }],
     })
     const r = computePensionVehiclePerPerson(p)
     expect(r.husband.financialIncome).toBeCloseTo(18_000_000, -4)
@@ -95,7 +95,7 @@ describe('pensionSim 계산', () => {
       stockHoldings: [{ ticker: 'X', weight: 1 }],
       stockYields: [{ ticker: 'X', yield: 5, manual: true }],  // 수동 5%
       stockOwnership: { husband: 100, wife: 0 },
-      inflows: [{ id: 's', name: '잔액', amount: 100_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 100, wife: 0 } }],
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 100_000_000 }],
     })
     const r = computePensionVehiclePerPerson(p)
     expect(r.husband.financialIncome).toBeCloseTo(5_000_000, -4) // 1억 × 5%
@@ -132,7 +132,7 @@ describe('pensionSim 계산', () => {
       stockYields: [{ ticker: 'A', yield: 6 }],
       stockHoldings: [{ ticker: 'A', weight: 1 }],
       stockOwnership: { husband: 50, wife: 50 },
-      inflows: [{ id: 's', name: '전세금', amount: 600_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 50, wife: 50 } }],
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 600_000_000 }],
     })
     const r = computePensionVehiclePerPerson(p)
     expect(r.husband.financialIncome).toBeCloseTo(18_000_000, -4)
@@ -195,16 +195,15 @@ describe('pensionSim 계산', () => {
       stockYields: [{ ticker: 'A', yield: 6 }],
       stockHoldings: [{ ticker: 'A', weight: 1 }],
       stockOwnership: { husband: 100, wife: 0 },
-      inflows: [
-        { id: 's', name: '전세금', amount: 500_000_000, type: 'lumpsum', destination: 'stock', year: 2029, ownership: { husband: 100, wife: 0 } },
-        { id: 'c', name: '위로금', amount: 150_000_000, type: 'lumpsum', destination: 'cash', year: 2029, ownership: { husband: 100, wife: 0 }, taxKind: 'severance', useEndYear: 2035 },
+      // 목돈 분배: 전세금 5억 → 주식, 위로금 1.5억은 분배 없음(현금=나머지, allocations에 없음)
+      allocations: [
+        { lumpsumId: 's', irpAmount: 0, stockAmount: 500_000_000 },
       ],
     })
     const r = computePensionVehiclePerPerson(p, { nationalPensions: [] })
-    // 주식 잔액 = 5억만 (cash 1.5억 제외) × 6% = 3000만
+    // 주식 잔액 = 5억 × 6% = 3000만. 위로금(분배 없음)은 시뮬 금융소득/원금에 미포함.
     expect(r.husband.stockBalance).toBe(500_000_000)
     expect(r.husband.financialIncome).toBe(30_000_000)
-    // cash 1.5억은 시뮬 금융소득/원금에 없음 (은퇴계획 목돈으로)
     expect(r.husband.financialIncome).toBeLessThan(45_000_000)
   })
 
