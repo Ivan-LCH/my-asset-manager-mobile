@@ -734,7 +734,7 @@ function buildCashFlow(
   linked?: {
     nationalByYear:  Map<number, number>  // 연도별 국민연금(월)
     privateByYear:  Map<number, number>  // 연도별 개인연금(IRP·퇴직·연금저축)(월)
-    dividendMonthly: number  // 가구 금융소득(명의별)/12
+    dividendByYear:  Map<number, number>  // 연도별 배당(월) — 성장률 반영, 매년 증가
     healthMonthly:   number  // 남편+와이프 건보(재산분 포함)
     taxMonthly:      number  // 남편+와이프 세금(대표연도 기준)/12
   },
@@ -782,10 +782,10 @@ function buildCashFlow(
     const corpSalaryMonthly = corpCF?.salaryMonthly ?? 0
     const corpReturnMonthly = corpCF ? (isPhase2 ? 0 : corpCF.returnP1Monthly) : 0
     const corpDiv = corpCF ? (isPhase2 ? corpCF.divP2Monthly : corpCF.divP1Monthly) : 0
-    // 배당: pension 연동 시 linked.dividendMonthly, 법인 연동(corpCF 있음) 시 corpDiv만
-    // (실제 주식 배당 제외 — 법인 가수금과 같은 돈의 이중계산 방지), 미연동 시 둘 다
+    // 배당: pension 연동 시 연도별 배당(성장률 반영, 매년 증가), 법인 연동 시 corpDiv만,
+    // 미연동 시 실제 배당 풀
     const dividendMonthly = linked
-      ? linked.dividendMonthly
+      ? (linked.dividendByYear.get(year) ?? 0)
       : (corpCF ? corpDiv : (stockDivMonthly + corpDiv))
 
     // 세금: 연동 시 1인별 산정값, 아니면 근사(배당 15.4% + 급여 3%) + 목돈 퇴직소득세
@@ -942,15 +942,20 @@ export default function RetirementPage() {
       })
     : null
   // 연도별 가구 연금(월) Map — 국민연금·개인연금 분리, 65세 step-up 반영
+  // buildCashFlow의 전체 범위(SIM_START_YEAR ~ 100세)를 커버하도록 넓게 생성
+  const schedFromYear = SIM_START_YEAR
+  const schedToYear = new Date().getFullYear() + (100 - resolveAge(settings))
   const sched = (pensionLinked && pensionSimPlan)
-    ? pensionSchedule(pensionSimPlan, nationals, pensionSimPlan.startYear, pensionSimPlan.startYear + (pensionSimPlan.withdrawalYears || 1) - 1)
+    ? pensionSchedule(pensionSimPlan, nationals, schedFromYear, schedToYear)
     : []
   const nationalByYear = new Map(sched.map((r) => [r.year, Math.round(r.nationalAnnual / 12)]))
   const privateByYear  = new Map(sched.map((r) => [r.year, Math.round(r.drawdownAnnual / 12)]))
+  // 배당도 연도별 (성장률 반영) — financialAnnual를 월로 변환
+  const dividendByYear = new Map(sched.map((r) => [r.year, Math.round(r.financialAnnual / 12)]))
   const linkedOverride = perPerson ? {
     nationalByYear,
     privateByYear,
-    dividendMonthly: (perPerson.husband.financialIncome + perPerson.wife.financialIncome) / 12,
+    dividendByYear,
     healthMonthly: perPerson.husband.healthMonthly + perPerson.wife.healthMonthly,
     taxMonthly: (perPerson.husband.totalAnnualTax + perPerson.wife.totalAnnualTax) / 12,
   } : undefined
@@ -993,8 +998,7 @@ export default function RetirementPage() {
   const cashFlow = buildCashFlow(plan, pensionMap, currentAge, stockDivMonthly, healthInsuranceMonthly, corpCF, linked && corpPlan ? corpPlan.loanAmount : 0, linkedOverride, cashLumpsum, lumpsumTaxByYear)
 
   // 계좌 잔액 추적 (IRP + 일반주식계좌) — 연도별 시장가치 변화
-  const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate
-    && (a.detail as PensionDetail | undefined)?.pensionType?.includes('퇴직'))
+  const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate)
   const irpInitial = irpAssets.reduce((s, a) => s + a.currentValue, 0)
   // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서)
   const { data: portfolio } = usePortfolio()
@@ -1297,7 +1301,7 @@ export default function RetirementPage() {
       </div>
 
       {/* 계좌 잔액 추이 (IRP + 일반주식계좌) */}
-      {accountSim.length > 0 && irpInitial > 0 && (
+      {accountSim.length > 0 && (
         <div className="bg-gray-800 border border-cyan-700/40 rounded-xl p-5">
           <h3 className="text-sm font-semibold text-gray-300 mb-1">💎 계좌 잔액 추이 <span className="text-[11px] font-normal text-gray-500">(IRP 상승률 {irpGrowthRate.toFixed(1)}% · 배당률 {irpDivYield}% / 주식 상승률 {stockGrowthRate.toFixed(1)}% · 배당률 {stockYieldPct}%)</span></h3>
           <div className="overflow-x-auto">
