@@ -775,8 +775,11 @@ function buildCashFlow(
     const corpSalaryMonthly = corpCF?.salaryMonthly ?? 0
     const corpReturnMonthly = corpCF ? (isPhase2 ? 0 : corpCF.returnP1Monthly) : 0
     const corpDiv = corpCF ? (isPhase2 ? corpCF.divP2Monthly : corpCF.divP1Monthly) : 0
-    // 배당: 연동 시 pension sim 금융소득(명의별, 정상상태 flat), 아니면 실제 배당 풀 + 법인 배당
-    const dividendMonthly = linked ? linked.dividendMonthly : (stockDivMonthly + corpDiv)
+    // 배당: pension 연동 시 linked.dividendMonthly, 법인 연동(corpCF 있음) 시 corpDiv만
+    // (실제 주식 배당 제외 — 법인 가수금과 같은 돈의 이중계산 방지), 미연동 시 둘 다
+    const dividendMonthly = linked
+      ? linked.dividendMonthly
+      : (corpCF ? corpDiv : (stockDivMonthly + corpDiv))
 
     // 세금: 연동 시 1인별 산정값, 아니면 근사(배당 15.4% + 급여 3%) + 목돈 퇴직소득세
     const taxMonthly = (linked ? linked.taxMonthly : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03))
@@ -866,8 +869,11 @@ export default function RetirementPage() {
   // ── 투자법인 연동 ──
   const { data: rawCorpPlan } = useCorpSim()
   // 구버전 저장 데이터 방어: EMPTY_CORP_PLAN + DEFAULT_CORP_TAX 로 머지
+  // + 목돈 분배(corpInflow)를 가수금(loanAmount)에 합산 — CorpSimPage와 일치
+  const corpAllocTotal = (rawCorpPlan?.lumpsumCorp ?? []).reduce((s, c) => s + c.corpAmount, 0)
   const corpPlan = rawCorpPlan
-    ? { ...EMPTY_CORP_PLAN, ...rawCorpPlan, tax: { ...DEFAULT_CORP_TAX, ...(rawCorpPlan.tax ?? {}) } }
+    ? { ...EMPTY_CORP_PLAN, ...rawCorpPlan, tax: { ...DEFAULT_CORP_TAX, ...(rawCorpPlan.tax ?? {}) },
+        loanAmount: (rawCorpPlan.loanAmount ?? EMPTY_CORP_PLAN.loanAmount) + corpAllocTotal }
     : null
   const linked = plan.linkCorpSim && !!corpPlan
 
