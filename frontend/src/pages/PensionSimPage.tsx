@@ -573,50 +573,59 @@ export default function PensionSimPage() {
       {/* ═══ 지출 상세 ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-red-400">지출 상세</span>
-        <span className="text-[11px] text-gray-600">세금 (연/월) · 걸보 (월)</span>
+        <span className="text-[11px] text-gray-600">세금 + 건보료 (1인별)</span>
       </div>
 
-
-      <Expander title="💸 세금 · 🏥 건보 (1인별)" defaultOpen>
-        {/* 세금 */}
-        <div>
-          <p className="text-xs font-semibold text-gray-300 mb-1.5">💸 세금</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-            {([
-              ['🧑 남편', h.husband],
-              ['👩 와이프', h.wife],
-              ['🏠 가구', { pensionTax: h.totals.pensionTax, financialTax: h.totals.financialTax, totalAnnualTax: h.totals.totalAnnualTax }],
-            ] as const).map(([lbl, p]) => (
-              <div key={lbl} className="bg-gray-900/50 rounded-lg p-2.5">
-                <p className="text-gray-500 mb-1">{lbl}</p>
-                <p className="text-gray-300">연금소득세 <span className="text-red-400">{formatManwon(p.pensionTax)}</span> <span className="text-gray-600">({formatManwon(Math.round(p.pensionTax/12))}/월)</span></p>
-                <p className="text-gray-300">금융소득세 <span className="text-red-400">{formatManwon(p.financialTax)}</span> <span className="text-gray-600">({formatManwon(Math.round(p.financialTax/12))}/월)</span></p>
-                <p className="text-gray-300 mt-0.5">총세금 <span className="text-red-400 font-semibold">{formatManwon(p.totalAnnualTax)}</span> <span className="text-gray-600">({formatManwon(Math.round(p.totalAnnualTax/12))}/월)</span></p>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* 건보 */}
-        <div className="pt-2">
-          <p className="text-xs font-semibold text-gray-300 mb-1.5">🏥 건강보험료 (월, 지역가입자 — 소득분+재산분)</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-            {([
-              ['🧑 남편', husbandHI, prop.husband.propertyTaxBase],
-              ['👩 와이프', wifeHI, prop.wife.propertyTaxBase],
-            ] as const).map(([lbl, hi, propBase]) => (
-              <div key={lbl} className="bg-gray-900/50 rounded-lg p-2.5">
-                <p className="text-gray-500 mb-1">{lbl}</p>
-                <p className="text-gray-100 font-semibold">{formatManwon(hi.grandTotal)}<span className="text-gray-500 font-normal">/월</span></p>
-                <p className="text-gray-600">소득분 {formatManwon(hi.incomeMonthly)} · 재산분 {formatManwon(hi.propertyMonthly)}{hi.carMonthly > 0 ? ` · 차량 ${formatManwon(hi.carMonthly)}` : ''}</p>
-                <p className="text-gray-600">부동산 재산과세표준 {formatManwon(propBase)}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-[11px] text-gray-600 mt-1.5">
-            재산분은 부동산 명의 지분 반영 (자산 페이지 부동산 명의에서 설정). 장기요양포함.
-          </p>
-        </div>
-      </Expander>
+      <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="text-gray-500 border-b border-gray-700">
+              <th className="text-left py-2 px-3 font-medium"></th>
+              <th className="text-right py-2 px-3 font-medium">💸 세금 (연 / 월)</th>
+              <th className="text-right py-2 px-3 font-medium">🏥 건보료 (월)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-gray-700/50">
+              <td className="py-2 px-3 text-blue-400 font-medium">🧑 남편</td>
+              <td className="py-2 px-3 text-right">
+                <span className="text-red-400 font-semibold">{formatManwon(h.husband.totalAnnualTax)}</span>
+                <span className="text-gray-600 ml-1">({formatManwon(Math.round(h.husband.totalAnnualTax / 12))})</span>
+                <p className="text-[10px] text-gray-600">연금 {formatManwon(h.husband.pensionTax)} · 금융 {formatManwon(h.husband.financialTax)}</p>
+              </td>
+              <td className="py-2 px-3 text-right">
+                <span className="text-gray-100 font-semibold">{formatManwon(husbandHI.grandTotal)}</span>
+                <p className="text-[10px] text-gray-600">소득분 {formatManwon(husbandHI.incomeMonthly)} · 재산분 {formatManwon(husbandHI.propertyMonthly)}</p>
+              </td>
+            </tr>
+            <tr className="border-b border-gray-700/50">
+              <td className="py-2 px-3 text-pink-400 font-medium">👩 와이프</td>
+              <td className="py-2 px-3 text-right">
+                <span className="text-red-400 font-semibold">{formatManwon(h.wife.totalAnnualTax)}</span>
+                <span className="text-gray-600 ml-1">({formatManwon(Math.round(h.wife.totalAnnualTax / 12))})</span>
+                <p className="text-[10px] text-gray-600">연금 {formatManwon(h.wife.pensionTax)} · 금융 {formatManwon(h.wife.financialTax)}</p>
+              </td>
+              <td className="py-2 px-3 text-right">
+                <span className="text-gray-100 font-semibold">{formatManwon(wifeHI.grandTotal)}</span>
+                <p className="text-[10px] text-gray-600">소득분 {formatManwon(wifeHI.incomeMonthly)} · 재산분 {formatManwon(wifeHI.propertyMonthly)}</p>
+              </td>
+            </tr>
+            <tr className="bg-gray-900/40">
+              <td className="py-2 px-3 text-gray-300 font-semibold">🏠 가족</td>
+              <td className="py-2 px-3 text-right">
+                <span className="text-red-400 font-bold">{formatManwon(h.totals.totalAnnualTax)}</span>
+                <span className="text-gray-600 ml-1">({formatManwon(Math.round(h.totals.totalAnnualTax / 12))})</span>
+              </td>
+              <td className="py-2 px-3 text-right">
+                <span className="text-gray-100 font-bold">{formatManwon(h.totals.healthMonthly)}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="text-[10px] text-gray-600 px-3 py-2 border-t border-gray-700">
+          세금 = 연금소득세 + 금융소득세. 건보 = 소득분 + 재산분(부동산 명의 지분 반영) + 장기요양. {plan.refYear}년 기준.
+        </p>
+      </div>
     </div>
   )
 }
