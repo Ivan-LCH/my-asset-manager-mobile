@@ -359,7 +359,7 @@ export default function PensionSimPage() {
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-100 hover:bg-gray-800 transition-colors shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h2 className="text-lg sm:text-xl font-bold text-gray-100 truncate">🪙 개인 투자 시뮬 (1인별)</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-100 truncate">🪙 개인투자시뮬 (가족)</h2>
         </div>
         <button onClick={handleSave} disabled={!dirty || saveMut.isPending}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 shrink-0">
@@ -466,10 +466,10 @@ export default function PensionSimPage() {
       </Expander>
 
       {/* ═══ 결과 (자동 계산) ═══ */}
-{/* 📥 수입 (들어오는 것) */}
+      {/* ═══ 개요 (한눈에 보기) ═══ */}
       <div className="flex items-center gap-2 pt-1">
-        <span className="text-sm font-bold text-emerald-400">📥 수입 (들어오는 것)</span>
-        <span className="text-[11px] text-gray-600">연금 수령 · 일반주식계좌 배당 · 유입 항목</span>
+        <span className="text-sm font-bold text-emerald-400">개요</span>
+        <span className="text-[11px] text-gray-600">투자 원금 · 기준년도 수입·지출 (가족 합산)</span>
       </div>
 
 {/* 투자 원금 요약 (유입이 만든 원금) */}
@@ -540,48 +540,42 @@ export default function PensionSimPage() {
         </p>
       </div>
 
-      {/* 연금 수령 요약 */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-semibold text-gray-300">🛡️ 연금 수령 (가족 합산 · 남편 기준)</p>
-          <span className="text-[10px] text-gray-500">국민연금 65세 개시 시 상승 · 최대 수령 {formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt)/12))}/월</span>
-        </div>
-        <p className="text-[10px] text-gray-600 mb-1">연금은 현재 남편 명의만 모델링 (와이프 본인 연금은 미반영 → 가족 합산 = 남편 합계와 동일)</p>
-        {/* 연도별 연금 스케줄 (국민연금 step-up) */}
-        {schedule.length > 0 && (
-          <div className="overflow-x-auto -mx-1 mt-1">
-            <table className="w-full text-[10px] text-right">
-              <thead>
-                <tr className="text-gray-500 border-b border-gray-700">
-                  <th className="py-1 px-1 text-left font-medium">연도</th>
-                  <th className="py-1 px-1 font-medium">IRP·연금저축/월</th>
-                  <th className="py-1 px-1 font-medium">국민연금/월</th>
-                  <th className="py-1 px-1 font-medium">합계/월</th>
-                </tr>
-              </thead>
-              <tbody>
-                {schedule.filter((_, i) => i % 3 === 0).map((r) => (
-                  <tr key={r.year} className={`border-b border-gray-800/50 ${r.nationalAnnual > 0 ? 'bg-blue-500/5' : ''}`}>
-                    <td className="py-1 px-1 text-left text-gray-400">{r.year}</td>
-                    <td className="py-1 px-1 text-gray-300">{formatManwon(Math.round(r.drawdownAnnual / 12))}</td>
-                    <td className="py-1 px-1 text-blue-300">{r.nationalAnnual > 0 ? formatManwon(Math.round(r.nationalAnnual / 12)) : '—'}</td>
-                    <td className="py-1 px-1 text-gray-100 font-semibold">{formatManwon(Math.round(r.totalAnnual / 12))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* ═══ 수입 상세 ═══ */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-sm font-bold text-emerald-400">수입 상세</span>
+        <span className="text-[11px] text-gray-600">연금수입 + 배당수입</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* 연금수입 */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
+          <p className="text-xs font-semibold text-gray-300 mb-2">🛡️ 연금수입 (연)</p>
+          <div className="space-y-1.5 text-[11px]">
+            <div className="flex justify-between"><span className="text-gray-500">과세 연금 (IRP·연금저축)</span><span className="text-gray-100 font-semibold">{formatManwon(h.husband.annualPensionTaxable)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">비과세 연금 (98년)</span><span className="text-gray-100 font-semibold">{formatManwon(h.husband.annualPensionExempt)}</span></div>
+            <div className="flex justify-between"><span className="text-blue-400">국민연금 ({plan.refYear}년)</span><span className="text-blue-300 font-semibold">{formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0)))}</span></div>
+            <div className="flex justify-between border-t border-gray-700 pt-1.5"><span className="text-gray-400 font-semibold">연금수입 합계</span><span className="text-emerald-400 font-bold">{formatManwon(h.husband.annualPensionTaxable + h.husband.annualPensionExempt)}</span></div>
+            <p className="text-[10px] text-gray-600">{formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt) / 12))}/월 · 과세연금 = 원금÷{plan.withdrawalYears}년 균등 인출 · 국민연금 = 65세부터 월 {formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0) / 12))}</p>
           </div>
-        )}
-        <p className="text-[11px] text-gray-600 mt-1.5">
-          IRP·퇴직·연금저축 = 원금÷{plan.withdrawalYears}년 균등 인출. 국민연금 = 자산에 입력한 월 수령액({formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0) / 12)) || 0})을 65세부터 지급.
-        </p>
+        </div>
+        {/* 배당수입 */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
+          <p className="text-xs font-semibold text-gray-300 mb-2">📈 배당수입 (연)</p>
+          <div className="space-y-1.5 text-[11px]">
+            <div className="flex justify-between"><span className="text-gray-500">일반주식계좌 배당</span><span className="text-emerald-400 font-semibold">{formatManwon(h.totals.financialIncome)}</span></div>
+            <div className="flex justify-between"><span className="text-[10px] text-gray-600">— 남편</span><span className="text-gray-300">{formatManwon(h.husband.financialIncome)}</span></div>
+            <div className="flex justify-between"><span className="text-[10px] text-gray-600">— 와이프</span><span className="text-gray-300">{formatManwon(h.wife.financialIncome)}</span></div>
+            <p className="text-[10px] text-gray-600">잔액 {formatManwon(stockBalance)} × {yieldPct}% = 연 {formatManwon(Math.round(stockBalance * yieldPct / 100))} · {formatManwon(Math.round(h.totals.financialIncome / 12))}/월</p>
+            <p className="text-[10px] text-gray-600 mt-1 pt-1 border-t border-gray-700/50">※ 연금저축의 배당수입은 <b>배당재투자</b>로 들어가 별도 수입으로 잡지 않습니다.</p>
+          </div>
+        </div>
       </div>
 
-{/* 📤 지출 (나가는 것) */}
+      {/* ═══ 지출 상세 ═══ */}
       <div className="flex items-center gap-2 pt-1">
-        <span className="text-sm font-bold text-red-400">📤 지출 (나가는 것)</span>
-        <span className="text-[11px] text-gray-600">세금 (연/월) · 건보 (월, 1인별)</span>
+        <span className="text-sm font-bold text-red-400">지출 상세</span>
+        <span className="text-[11px] text-gray-600">세금 (연/월) · 걸보 (월)</span>
       </div>
+
 
       <Expander title="💸 세금 · 🏥 건보 (1인별)" defaultOpen>
         {/* 세금 */}
@@ -623,22 +617,6 @@ export default function PensionSimPage() {
           </p>
         </div>
       </Expander>
-
-      {/* 💰 남는 것 (월 순소득) — 은퇴계획에서 최종 확인 */}
-{/* 1인별 결과 KPI */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-3">
-        <PersonKpi person={h.husband} label="🧑 남편" color="text-blue-400" />
-        <PersonKpi person={h.wife} label="👩 와이프" color="text-pink-400" />
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4 space-y-2">
-          <p className="text-xs font-semibold text-gray-300">🏠 가구 합계</p>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div><p className="text-gray-500">총수입</p><p className="text-gray-100 font-semibold">{formatManwon(h.totals.grossAnnual)}</p></div>
-            <div><p className="text-gray-500">총세금</p><p className="text-red-400 font-semibold">{formatManwon(h.totals.totalAnnualTax)}</p></div>
-            <div><p className="text-gray-500">순취득</p><p className="text-emerald-400 font-semibold">{formatManwon(h.totals.netAnnual)}</p></div>
-            <div><p className="text-gray-500">건보(월)</p><p className="text-gray-100 font-semibold">{formatManwon(h.totals.healthMonthly)}</p></div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
