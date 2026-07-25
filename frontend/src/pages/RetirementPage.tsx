@@ -8,9 +8,11 @@ import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { resolveAge } from '@/lib/people'
-import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
+import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountYield } from '@/lib/pensionSim'
 import { realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
+import { simulateAccounts } from '@/lib/accountSim'
 import { usePensionSim } from '@/hooks/usePensionSim'
+import { usePortfolio } from '@/hooks/usePortfolio'
 import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { formatMoney, formatManwon } from '@/lib/utils'
 import type {
@@ -990,6 +992,40 @@ export default function RetirementPage() {
 
   const cashFlow = buildCashFlow(plan, pensionMap, currentAge, stockDivMonthly, healthInsuranceMonthly, corpCF, linked && corpPlan ? corpPlan.loanAmount : 0, linkedOverride, cashLumpsum, lumpsumTaxByYear)
 
+  // 계좌 잔액 추적 (IRP + 일반주식계좌) — 연도별 시장가치 변화
+  const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate
+    && (a.detail as PensionDetail | undefined)?.pensionType?.includes('퇴직'))
+  const irpInitial = irpAssets.reduce((s, a) => s + a.currentValue, 0)
+  // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서)
+  const { data: portfolio } = usePortfolio()
+  const irpHoldings = portfolio?.holdings ?? []
+  const irpTotalW = irpHoldings.reduce((s, h) => s + Math.max(0, h.weight), 0)
+  const irpGrowthRate = irpTotalW > 0
+    ? irpHoldings.filter((h) => (h.growthRate ?? 0) > 0).reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpTotalW), 0)
+    : 0
+  const irpDivYield = portfolio?.blendedYield ?? 0
+  // 일반주식계좌 (시뮬에서)
+  const stockTotal = (pensionSimPlan?.allocations ?? []).reduce((s, a) => s + a.stockAmount, 0)
+  const stockYieldPct = pensionSimPlan ? stockAccountYield(pensionSimPlan) : 0
+  const simHoldings = pensionSimPlan?.stockHoldings ?? []
+  const simTotalW = simHoldings.reduce((s, h) => s + Math.max(0, h.weight), 0)
+  const stockGrowthRate = simTotalW > 0
+    ? simHoldings.filter((h) => (h.growthRate ?? 0) > 0).reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / simTotalW), 0)
+    : 0
+  const startYear = pensionSimPlan?.startYear ?? plan.retirementYear
+  const withYears = pensionSimPlan?.withdrawalYears ?? 30
+  const accountSim = simulateAccounts({
+    irpInitial,
+    irpGrowthRate,
+    irpDividendYield: irpDivYield,
+    irpMonthlyPension: irpInitial / withYears / 12,
+    stockInitial: stockTotal,
+    stockGrowthRate: stockGrowthRate,
+    stockDividendYield: stockYieldPct,
+    fromYear: startYear,
+    toYear: startYear + withYears - 1,
+  })
+
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
   const totalExpenseMonthly = (plan.expenses.reduce((s, e) => s + num(e.amount), 0))
@@ -1259,6 +1295,46 @@ export default function RetirementPage() {
           </table>
         </div>
       </div>
+
+      {/* 계좌 잔액 추이 (IRP + 일반주식계좌) */}
+      {accountSim.length > 0 && irpInitial > 0 && (
+        <div className="bg-gray-800 border border-cyan-700/40 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-gray-300 mb-1">💎 계좌 잔액 추이 <span className="text-[11px] font-normal text-gray-500">(IRP 상승률 {irpGrowthRate.toFixed(1)}% · 배당률 {irpDivYield}% / 주식 상승률 {stockGrowthRate.toFixed(1)}% · 배당률 {stockYieldPct}%)</span></h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-700">
+                  <th className="text-left py-2 pr-2 font-medium whitespace-nowrap">연도</th>
+                  <th className="text-right py-2 px-1 font-medium">IRP 잔액</th>
+                  <th className="hidden sm:table-cell text-right py-2 px-1 font-medium">IRP 성장</th>
+                  <th className="hidden sm:table-cell text-right py-2 px-1 font-medium">IRP 배당</th>
+                  <th className="hidden sm:table-cell text-right py-2 px-1 font-medium">IRP 연금</th>
+                  <th className="text-right py-2 px-1 font-medium">주식 잔액</th>
+                  <th className="hidden sm:table-cell text-right py-2 px-1 font-medium">주식 배당</th>
+                  <th className="text-right py-2 px-1 font-medium">총자산</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accountSim.filter((_, i) => i % 3 === 0).map((r) => (
+                  <tr key={r.year} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                    <td className="py-2 pr-2 text-gray-400 whitespace-nowrap">{r.year}</td>
+                    <td className="text-right py-2 px-1 text-blue-300 font-semibold">{r.irpEnd > 0 ? formatManwon(r.irpEnd) : '소진'}</td>
+                    <td className="hidden sm:table-cell text-right py-2 px-1 text-cyan-400/70">{formatManwon(r.irpGrowth)}</td>
+                    <td className="hidden sm:table-cell text-right py-2 px-1 text-emerald-400/70">{formatManwon(r.irpDividend)}</td>
+                    <td className="hidden sm:table-cell text-right py-2 px-1 text-orange-400/70">{formatManwon(r.irpPension)}</td>
+                    <td className="text-right py-2 px-1 text-emerald-300 font-semibold">{formatManwon(r.stockEnd)}</td>
+                    <td className="hidden sm:table-cell text-right py-2 px-1 text-emerald-400/70">{formatManwon(r.stockDividend)}</td>
+                    <td className="text-right py-2 px-1 text-gray-100 font-bold">{formatManwon(r.totalEnd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-gray-600 mt-2">
+            IRP: 매년 주가상승 + 배당(연금 우선 충당, 남으면 재투자). 일반주식계좌: 매년 주가상승, 배당은 전액 수입(재투자 X). 총자산 = IRP + 주식 잔액 (현금·부동산 제외).
+          </p>
+        </div>
+      )}
     </div>
   )
 }

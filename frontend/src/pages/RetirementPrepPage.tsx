@@ -312,6 +312,11 @@ function PortfolioSection() {
                 value={effective ?? ''}
                 onChange={(e) => h.ticker && setManualYield(h.ticker, Number(e.target.value))}
                 title="조회 실패 시 수동 배당률 입력" />
+              <input type="number" inputMode="decimal" placeholder="상승%"
+                className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
+                value={h.growthRate ?? ''}
+                onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], growthRate: Number(e.target.value) }; setHoldings(p); setDirty(true) }}
+                title="연평균 주가상승률(%)" />
               <button onClick={() => { setHoldings(holdings.filter((_, j) => j !== i)); setDirty(true) }} className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0 text-xs">삭제</button>
             </div>
           )
