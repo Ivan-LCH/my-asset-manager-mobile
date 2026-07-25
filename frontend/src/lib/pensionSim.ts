@@ -122,6 +122,7 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   allocations: [],
   stockHoldings: [],
   stockYields: [],
+  stockGrowthRate: 0,
   stockOwnership: { husband: 50, wife: 50 },
   otherIncome: 0,
   spouseDependent: true,
@@ -223,11 +224,12 @@ export interface VehicleOptions {
  *  국민연금 sources는 원금인출 합계에서 제외(이중계산 방지). */
 export interface PensionScheduleRow {
   year:            number
-  drawdownAnnual:  number   // IRP/연금저축 인출 (과세+비과세, flat)
+  drawdownAnnual:  number   // IRP/연금저축 인출 (과세+비과세, 성장률 적용)
   nationalAnnual:  number   // 국민연금 (과세)
+  financialAnnual: number   // 일반주식계좌 배당 (성장률 적용, 매년 증가)
   taxableAnnual:   number   // drawdown과세 + 국민연금
   exemptAnnual:    number   // drawdown 비과세
-  totalAnnual:     number
+  totalAnnual:     number   // 연금 + 배당 합계
 }
 export function pensionSchedule(
   plan: PensionSimPlan,
@@ -236,19 +238,32 @@ export function pensionSchedule(
   toYear: number,
 ): PensionScheduleRow[] {
   const years = plan.withdrawalYears || 1
-  const drawTaxable = (plan.sources
+  const growthRate = (plan.stockGrowthRate || 0) / 100
+  // 기본 인출액 (수령개시 시점 기준)
+  const drawTaxableBase = (plan.sources
     .filter((s) => s.taxType === 'irp' || s.taxType === 'taxable')
     .reduce((sm, s) => sm + s.principal, 0)
     + plan.allocations.reduce((sm, a) => sm + a.irpAmount, 0)) / years
-  const drawExempt = plan.sources.filter((s) => s.taxType === 'taxExempt').reduce((sm, s) => sm + s.principal, 0) / years
+  const drawExemptBase = plan.sources.filter((s) => s.taxType === 'taxExempt').reduce((sm, s) => sm + s.principal, 0) / years
+  // 주식 배당 기준 (수령개시 시점 잔액 × 배당률)
+  const stockTotal = plan.allocations.reduce((sm, a) => sm + a.stockAmount, 0)
+  const yieldPct = stockAccountYield(plan)
+  const dividendBase = Math.round(stockTotal * (yieldPct / 100))
 
   const rows: PensionScheduleRow[] = []
   for (let year = fromYear; year <= toYear; year++) {
+    const elapsed = year - fromYear  // 수령개시 경과년수
+    const growthFactor = Math.pow(1 + growthRate, elapsed)
+    // 인출액·배당에 성장률 적용 (매년 증가)
+    const drawTaxable = drawTaxableBase * growthFactor
+    const drawExempt = drawExemptBase * growthFactor
+    const financial = dividendBase * growthFactor
+
     let national = 0
     for (const n of nationals) {
       if (year >= n.expectedStartYear && year <= n.expectedEndYear) {
-        const elapsed = year - n.expectedStartYear
-        national += n.expectedMonthlyPayout * 12 * Math.pow(1 + (n.annualGrowthRate || 0) / 100, elapsed)
+        const natElapsed = year - n.expectedStartYear
+        national += n.expectedMonthlyPayout * 12 * Math.pow(1 + (n.annualGrowthRate || 0) / 100, natElapsed)
       }
     }
     const taxable = drawTaxable + national
@@ -256,9 +271,10 @@ export function pensionSchedule(
       year,
       drawdownAnnual: Math.round(drawTaxable + drawExempt),
       nationalAnnual: Math.round(national),
+      financialAnnual: Math.round(financial),
       taxableAnnual: Math.round(taxable),
       exemptAnnual: Math.round(drawExempt),
-      totalAnnual: Math.round(taxable + drawExempt),
+      totalAnnual: Math.round(taxable + drawExempt + financial),
     })
   }
   return rows
@@ -295,16 +311,11 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   // 일반주식계좌: 잔액은 목돈 분배(주식) 합에서, 명의는 stockOwnership
   const stockTotal = stockBalanceFromInflows(plan.allocations)
   const yieldPct = stockAccountYield(plan)
-  const annualDividendTotal = Math.round(stockTotal * (yieldPct / 100))
-  const stockAnnual = 0
+  const annualDividendBase = Math.round(stockTotal * (yieldPct / 100))
 
-  // 주식 소득 1인 분할 (배당 + 연간 유입 모두 동일 지분 적용)
+  // 주식 소득 1인 분할 — 기준년도의 성장률 적용된 배당은 아래 pensionRow에서 가져옴
   const husbandShare = plan.stockOwnership.husband / 100
   const wifeShare = plan.stockOwnership.wife / 100
-  const fin = {
-    husband: annualDividendTotal * husbandShare + stockAnnual * husbandShare,
-    wife: annualDividendTotal * wifeShare + stockAnnual * wifeShare,
-  }
 
   // 기타소득은 남편 근로 가정(연금시뮬에선 남편에 배정; 은퇴계획에서 1인별 처리)
   const other = { husband: plan.otherIncome, wife: 0 }
@@ -330,6 +341,13 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   const annualPensionTaxableH = (pensionRow?.taxableAnnual ?? (taxableSrc + irpInflow + nationalFallback) / years)
   const annualPensionExemptH = pensionRow?.exemptAnnual ?? exemptSrc / years
   const pensionTaxH = pensionIncomeTax(Math.max(0, annualPensionTaxableH - plan.pensionDeduction))
+
+  // 기준년도 주식 배당 (성장률 적용) — pensionRow의 financialAnnual 사용
+  const refDividend = pensionRow?.financialAnnual ?? annualDividendBase
+  const fin = {
+    husband: refDividend * husbandShare,
+    wife: refDividend * wifeShare,
+  }
 
   const computePerson = (owner: 'husband' | 'wife'): PersonVehicleResult => {
     const isHusband = owner === 'husband'

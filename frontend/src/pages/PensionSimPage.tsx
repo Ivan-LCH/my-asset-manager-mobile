@@ -463,6 +463,7 @@ export default function PensionSimPage() {
         {plan.stockHoldings.length === 0 && (
           <Row label="수동 배당률(종목 없을 때)" hint="종목 입력이 귀찮을 때"><NumInput value={plan.stockManualYield ?? 0} onChange={(v) => update('stockManualYield', v)} suffix="%" /></Row>
         )}
+        <Row label="연평균 주가상승률" hint="종목별 상승률 가중평균 또는 수동 입력. 매년 원금이 이율로 증가"><NumInput value={plan.stockGrowthRate} onChange={(v) => update('stockGrowthRate', v)} suffix="%" /></Row>
       </Expander>
 
       {/* ═══ 결과 (자동 계산) ═══ */}

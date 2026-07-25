@@ -190,6 +190,7 @@ export interface CorpTaxParams {
 export interface PortfolioHolding {
   ticker: string
   weight: number                 // 비중(정규화 전, 예: 1:1:1 → 각 1)
+  growthRate?: number            // 연평균 주가상승률(%) — 수동 또는 자동산정
 }
 
 // ── 공통 투자 포트폴리오 (법인·연금 시뮬 공유) ─────────────
@@ -254,6 +255,7 @@ export interface PensionSimPlan {
   allocations:              PensionAllocation[] // 은퇴계획 목돈을 퇴직IRP/일반주식계좌로 분배
   stockHoldings:            PortfolioHolding[]  // 일반주식계좌 종목 (배당률 자동산정용)
   stockYields:              PortfolioYield[]    // 종목별 배당률(조회+수동 폴백)
+  stockGrowthRate:          number              // 일반주식계좌 연평균 주가상승률(%) — 종목별 가중평균
   stockOwnership:           Ownership           // 일반주식계좌 명의 지분
   stockManualYield?:        number              // 종목 없을 때 수동 배당률(%) 오버라이드
   otherIncome:              number              // 기타 종합소득(연, 근로/사업 등)
