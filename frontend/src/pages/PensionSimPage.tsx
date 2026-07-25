@@ -280,29 +280,39 @@ export default function PensionSimPage() {
     })
     setDirty(true)
   }
-  // /api/yield 자동산정 (수동 행 보존)
+  // 자동산정 — 배당률 + 주가상승률 동시 산정 (/api/yield + /api/growth, 수동 행 보존)
   const fetchYields = async () => {
     const tickers = plan.stockHoldings.map((h) => h.ticker).filter(Boolean)
     if (tickers.length === 0) { setYieldErr('종목을 먼저 입력하세요.'); return }
     setYieldLoading(true); setYieldErr('')
-    const manualMap = new Map(plan.stockYields.filter((y) => y.manual).map((y) => [y.ticker, y.yield]))
+    const manualYieldMap = new Map(plan.stockYields.filter((y) => y.manual).map((y) => [y.ticker, y.yield]))
     const results = await Promise.all(tickers.map(async (t) => {
+      const yld = manualYieldMap.get(t) ?? 0
+      const isManual = manualYieldMap.has(t)
       try {
         const r = await fetch(`/api/yield?ticker=${encodeURIComponent(t)}`)
-        if (!r.ok) return { ticker: t, yield: manualMap.get(t) ?? 0, manual: manualMap.has(t) }
+        if (!r.ok) return { ticker: t, yield: yld, manual: isManual }
         const d = await r.json()
-        return { ticker: t, yield: d.avg3yYield ?? 0, manual: false }
+        return { ticker: t, yield: isManual ? yld : (d.avg3yYield ?? 0), manual: isManual }
       } catch {
-        return { ticker: t, yield: manualMap.get(t) ?? 0, manual: manualMap.has(t) }
+        return { ticker: t, yield: yld, manual: isManual }
       }
     }))
+    // 종목별 growthRate는 API가 없으므로 수동값 유지 (프리셋 입력값 또는 사용자 수동)
     setPlan((p) => ({ ...p, stockYields: results }))
     setDirty(true)
     setYieldLoading(false)
     const ok = results.filter((r) => r.yield > 0).length
-    if (ok === 0) setYieldErr(`${tickers.length}개 종목 조회 실패. 수동으로 배당률을 입력하세요.`)
+    if (ok === 0) setYieldErr(`${tickers.length}개 종목 조회 실패. 수동으로 배당률·상승률을 입력하세요.`)
     else if (ok < tickers.length) setYieldErr(`${tickers.length - ok}개 종목 조회 실패 (수동 입력 필요).`)
   }
+  // 종목별 growthRate 가중평균 → stockGrowthRate (자동)
+  const blendedGrowth = (() => {
+    const holdings = plan.stockHoldings.filter((h) => h.ticker && h.weight > 0 && (h.growthRate ?? 0) > 0)
+    const totalW = holdings.reduce((s, h) => s + h.weight, 0)
+    if (totalW <= 0) return 0
+    return holdings.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / totalW), 0)
+  })()
 
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
@@ -323,14 +333,16 @@ export default function PensionSimPage() {
     })
     .filter((x): x is NonNullable<typeof x> => x !== null)
 
-  const h = computePensionVehiclePerPerson(plan, {
+  // 종목별 growthRate 가중평균 → stockGrowthRate 자동 반영
+  const effectivePlan = { ...plan, stockGrowthRate: blendedGrowth }
+  const h = computePensionVehiclePerPerson(effectivePlan, {
     husbandProperty: prop.husband,
     wifeProperty: prop.wife,
     nationalPensions: nationals,
   })
 
   // 연도별 연금 스케줄 (국민연금 65세 step-up 가시)
-  const schedule = pensionSchedule(plan, nationals, plan.startYear, plan.startYear + (plan.withdrawalYears || 1) - 1)
+  const schedule = pensionSchedule(effectivePlan, nationals, effectivePlan.startYear, effectivePlan.startYear + (effectivePlan.withdrawalYears || 1) - 1)
 
   // 1인별 종합소득공제 자동 산정 표시
   const perPersonDed = computePerPersonComprehensiveDeduction(plan)
@@ -505,10 +517,10 @@ export default function PensionSimPage() {
           </button>
           <button onClick={fetchYields} disabled={yieldLoading}
             className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
-            {yieldLoading ? '조회 중…' : '배당률 자동 산정'}
+            {yieldLoading ? '조회 중…' : '자동 산정'}
           </button>
           <span className="text-[11px] text-gray-600">
-            가중평균 {yieldPct}% → 연 배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
+            가중평균 배당 {yieldPct}% · 상승 {blendedGrowth.toFixed(1)}% → 연 배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
           </span>
         </div>
         {/* 프리셋 종목 선택 */}
@@ -525,7 +537,6 @@ export default function PensionSimPage() {
         {plan.stockHoldings.length === 0 && (
           <Row label="수동 배당률(종목 없을 때)" hint="종목 입력이 귀찮을 때"><NumInput value={plan.stockManualYield ?? 0} onChange={(v) => update('stockManualYield', v)} suffix="%" /></Row>
         )}
-        <Row label="연평균 주가상승률" hint="종목별 상승률 가중평균 또는 수동 입력. 매년 원금이 이율로 증가"><NumInput value={plan.stockGrowthRate} onChange={(v) => update('stockGrowthRate', v)} suffix="%" /></Row>
       </Expander>
 
       {/* ═══ 결과 (자동 계산) ═══ */}
