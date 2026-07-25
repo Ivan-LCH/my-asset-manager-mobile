@@ -56,6 +56,13 @@ function yieldProxyDev(): PluginOption {
           const ts = entries.map(([t]) => Number(t))
           const latest = ts.length > 0 ? Math.max(...ts) : 0
           const ttm = entries.filter(([t]) => Number(t) > latest - 365 * 24 * 3600).reduce((s, [, v]) => s + (v.amount || 0), 0)
+          // 3년 주가상승률 — 종가 배열에서 첫값 vs 현재가
+          const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
+          const validCloses = closes.filter((c: number) => typeof c === 'number' && c > 0)
+          const firstClose = validCloses.length > 0 ? validCloses[0] : 0
+          const avg3yGrowth = (price && firstClose > 0)
+            ? Math.round((Math.pow(price / firstClose, 1 / 3) - 1) * 10000) / 100
+            : null
           res.setHeader('Content-Type', 'application/json')
           res.setHeader('Cache-Control', 'public, max-age=3600')
           res.statusCode = 200
@@ -66,6 +73,7 @@ function yieldProxyDev(): PluginOption {
             ttmYield: price > 0 ? Math.round((ttm / price) * 10000) / 100 : null,
             avg3yDividend: Math.round(avg3y * 100) / 100,
             avg3yYield: price > 0 ? Math.round((avg3y / price) * 10000) / 100 : null,
+            avg3yGrowth,
             count3y: amounts.length,
           }))
         } catch {
