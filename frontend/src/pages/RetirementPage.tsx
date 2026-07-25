@@ -1047,8 +1047,10 @@ export default function RetirementPage() {
               {retirementRow ? [
                 retirementRow.pensionMonthly > 0 ? `연금 ${fmtK(retirementRow.pensionMonthly)}` : null,
                 retirementRow.dividendMonthly > 0 ? `배당 ${fmtK(retirementRow.dividendMonthly)}` : null,
-                retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtK(retirementRow.corpSalaryMonthly)}` : null,
-                retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtK(retirementRow.corpReturnMonthly)}` : null,
+                ...(linkMode === 'corp' ? [
+                  retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtK(retirementRow.corpSalaryMonthly)}` : null,
+                  retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtK(retirementRow.corpReturnMonthly)}` : null,
+                ] : []),
               ].filter(Boolean).join(' · ') : '-'}
             </p>
           </div>
@@ -1159,8 +1161,8 @@ export default function RetirementPage() {
                 {/* 수입 그룹 (연한 초록 배경) */}
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">연금/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">배당/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">급여/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">가수금/월</th>
+                {linkMode === 'corp' && <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">급여/월</th>}
+                {linkMode === 'corp' && <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">가수금/월</th>}
                 <th className="text-right py-2 px-1 font-medium bg-emerald-950/30">월수입</th>
                 {/* 지출 그룹 (연한 빨강 배경) */}
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">생활비/월</th>
@@ -1196,12 +1198,12 @@ export default function RetirementPage() {
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-emerald-400 bg-emerald-950/30">
                       {row.dividendMonthly > 0 ? fmtK(row.dividendMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-400 bg-emerald-950/30">
+                    {linkMode === 'corp' && <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-400 bg-emerald-950/30">
                       {row.corpSalaryMonthly > 0 ? fmtK(row.corpSalaryMonthly) : '—'}
-                    </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-cyan-400 bg-emerald-950/30">
+                    </td>}
+                    {linkMode === 'corp' && <td className="hidden landscape:table-cell text-right py-2 px-1 text-cyan-400 bg-emerald-950/30">
                       {row.corpReturnMonthly > 0 ? fmtK(row.corpReturnMonthly) : '—'}
-                    </td>
+                    </td>}
                     <td className="text-right py-2 px-1 font-semibold text-gray-100 bg-emerald-950/30">
                       {fmtK(row.totalIncome)}
                     </td>
