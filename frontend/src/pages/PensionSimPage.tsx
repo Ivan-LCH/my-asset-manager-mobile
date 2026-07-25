@@ -580,14 +580,14 @@ export default function PensionSimPage() {
         <table className="w-full text-[11px]">
           <thead>
             <tr className="text-gray-500 border-b border-gray-700">
-              <th className="text-left py-2 px-3 font-medium"></th>
+              <th className="text-left py-2 px-3 font-medium whitespace-nowrap"></th>
               <th className="text-right py-2 px-3 font-medium">💸 세금 (연 / 월)</th>
               <th className="text-right py-2 px-3 font-medium">🏥 건보료 (월)</th>
             </tr>
           </thead>
           <tbody>
             <tr className="border-b border-gray-700/50">
-              <td className="py-2 px-3 text-blue-400 font-medium">🧑 남편</td>
+              <td className="py-2 px-3 text-blue-400 font-medium whitespace-nowrap">🧑 남편</td>
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(h.husband.totalAnnualTax)}</span>
                 <span className="text-gray-600 ml-1">({formatManwon(Math.round(h.husband.totalAnnualTax / 12))})</span>
@@ -599,7 +599,7 @@ export default function PensionSimPage() {
               </td>
             </tr>
             <tr className="border-b border-gray-700/50">
-              <td className="py-2 px-3 text-pink-400 font-medium">👩 와이프</td>
+              <td className="py-2 px-3 text-pink-400 font-medium whitespace-nowrap">👩 와이프</td>
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(h.wife.totalAnnualTax)}</span>
                 <span className="text-gray-600 ml-1">({formatManwon(Math.round(h.wife.totalAnnualTax / 12))})</span>
@@ -611,7 +611,7 @@ export default function PensionSimPage() {
               </td>
             </tr>
             <tr className="bg-gray-900/40">
-              <td className="py-2 px-3 text-gray-300 font-semibold">🏠 가족</td>
+              <td className="py-2 px-3 text-gray-300 font-semibold whitespace-nowrap">🏠 가족</td>
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-bold">{formatManwon(h.totals.totalAnnualTax)}</span>
                 <span className="text-gray-600 ml-1">({formatManwon(Math.round(h.totals.totalAnnualTax / 12))})</span>
