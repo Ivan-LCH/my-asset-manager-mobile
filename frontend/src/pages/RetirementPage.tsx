@@ -999,25 +999,25 @@ export default function RetirementPage() {
             />
             <span className="text-xs sm:text-sm text-gray-500">년</span>
           </div>
-          <fieldset className="flex items-center gap-3">
-            <legend className="sr-only">연동 소득원</legend>
+          <div className="flex items-center gap-1.5">
             {([
               ['none', '연동 안함'],
-              ['corp', '🏛️ 법인 연동'],
-              ['pension', '🪙 연금(IRP) 연동'],
+              ['corp', '🏛️ 법인'],
+              ['pension', '🪙 연금'],
             ] as const).map(([v, label]) => (
-              <label key={v} className={`flex items-center gap-1.5 text-xs cursor-pointer ${linkMode === v ? 'text-blue-400' : 'text-gray-500'}`}>
-                <input
-                  type="radio"
-                  name="retireLinkMode"
-                  checked={linkMode === v}
-                  onChange={() => setLinkMode(v)}
-                  className="accent-blue-500"
-                />
+              <button
+                key={v}
+                onClick={() => setLinkMode(v)}
+                className={`px-2.5 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
+                  linkMode === v
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
                 {label}
-              </label>
+              </button>
             ))}
-          </fieldset>
+          </div>
           <button
             onClick={handleSave}
             disabled={!dirty || saveMut.isPending}
