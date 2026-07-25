@@ -784,6 +784,8 @@ function buildCashFlow(
 
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly + taxMonthly
     const totalIncome  = pensionMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
+    // 목돈(현금 나머지)은 해당 연도에 일회 수령 — totalIncome에 가산하지 않고
+    // cumulative에만 반영 (월수입과 분리 — 일회성이므로 월환산하지 않음)
     const balance      = totalIncome - totalExpense
 
     // 목돈은 수령 연도에 일회 수령 (월수입 나누기 없음)
