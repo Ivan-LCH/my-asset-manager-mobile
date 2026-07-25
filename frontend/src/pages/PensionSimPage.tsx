@@ -223,7 +223,7 @@ export default function PensionSimPage() {
     setPlan((p) => ({ ...p, stockHoldings: [...p.stockHoldings, { ticker: '', weight: 1 }] }))
     setDirty(true)
   }
-  const updateHolding = (idx: number, patch: Partial<{ ticker: string; weight: number }>) => {
+  const updateHolding = (idx: number, patch: Partial<{ ticker: string; weight: number; growthRate: number }>) => {
     setPlan((p) => ({ ...p, stockHoldings: p.stockHoldings.map((h, i) => i === idx ? { ...h, ...patch } : h) }))
     setDirty(true)
   }
@@ -236,6 +236,47 @@ export default function PensionSimPage() {
     setPlan((p) => {
       const others = p.stockYields.filter((yld) => yld.ticker !== ticker)
       return { ...p, stockYields: [...others, { ticker, yield: y, manual: true }] }
+    })
+    setDirty(true)
+  }
+  // 프리셋 종목 추가 (티커·배당률·상승률 자동 채움)
+  const PRESETS: Record<string, { ticker: string; yield: number; growth: number }[]> = {
+    'div-us': [
+      { ticker: 'SCHD', yield: 3.5, growth: 9 },
+      { ticker: 'VYM',  yield: 2.8, growth: 8 },
+      { ticker: 'JEPI', yield: 7.5, growth: 5 },
+    ],
+    'div-kr': [
+      { ticker: '005930.KS', yield: 2.5, growth: 7 },   // 삼성전자
+      { ticker: '105560.KS', yield: 5.0, growth: 6 },   // KB금융
+      { ticker: '033780.KS', yield: 6.0, growth: 4 },   // SK텔레콤
+    ],
+    growth: [
+      { ticker: 'QQQ',  yield: 0.5, growth: 13 },
+      { ticker: 'AAPL', yield: 0.5, growth: 14 },
+      { ticker: 'MSFT', yield: 0.7, growth: 12 },
+      { ticker: 'NVDA', yield: 0.03, growth: 25 },
+    ],
+    mixed: [
+      { ticker: 'SCHD',  yield: 3.5, growth: 9 },
+      { ticker: 'AAPL',  yield: 0.5, growth: 14 },
+      { ticker: '005930.KS', yield: 2.5, growth: 7 },
+      { ticker: 'JEPI',  yield: 7.5, growth: 5 },
+    ],
+  }
+  const addPreset = (key: string) => {
+    const stocks = PRESETS[key] ?? []
+    setPlan((p) => {
+      const existing = new Set(p.stockHoldings.map((h) => h.ticker))
+      const toAdd = stocks.filter((s) => !existing.has(s.ticker))
+      const newHoldings = [...p.stockHoldings, ...toAdd.map((s) => ({ ticker: s.ticker, weight: 1, growthRate: s.growth }))]
+      const newYields = [...p.stockYields]
+      for (const s of toAdd) {
+        if (!newYields.some((y) => y.ticker === s.ticker)) {
+          newYields.push({ ticker: s.ticker, yield: s.yield, manual: true })
+        }
+      }
+      return { ...p, stockHoldings: newHoldings, stockYields: newYields }
     })
     setDirty(true)
   }
@@ -425,23 +466,34 @@ export default function PensionSimPage() {
           <OwnershipPreset value={plan.stockOwnership} onChange={(o) => update('stockOwnership', o)} />
         </Row>
         {/* 종목 리스트 */}
+        <div className="grid grid-cols-12 gap-1 text-[9px] text-gray-500 px-1 mb-1">
+          <span className="col-span-4">종목</span>
+          <span className="col-span-2 text-right">비중</span>
+          <span className="col-span-2 text-right">배당%</span>
+          <span className="col-span-2 text-right">상승%</span>
+          <span className="col-span-2"></span>
+        </div>
         <div className="space-y-2">
           {plan.stockHoldings.map((hd, i) => {
             const yld = plan.stockYields.find((y) => y.ticker === hd.ticker && hd.ticker)
             return (
               <div key={i} className="grid grid-cols-12 gap-2 items-center">
                 <input type="text" placeholder="종목(SCHD…)"
-                  className="col-span-5 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
+                  className="col-span-4 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
                   value={hd.ticker} onChange={(e) => updateHolding(i, { ticker: e.target.value.toUpperCase() })} />
                 <input type="number" placeholder="비중" inputMode="decimal"
-                  className="col-span-3 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 text-right focus:outline-none focus:border-blue-500"
+                  className="col-span-2 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 text-right focus:outline-none focus:border-blue-500"
                   value={hd.weight || ''} onChange={(e) => updateHolding(i, { weight: Number(e.target.value) })} />
-                <input type="number" placeholder="배당률" inputMode="decimal"
-                  className={cn('col-span-3 bg-gray-700 border rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-blue-500',
+                <input type="number" placeholder="배당%" inputMode="decimal"
+                  className={cn('col-span-2 bg-gray-700 border rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-blue-500',
                     yld?.manual ? 'border-emerald-600 text-emerald-300' : 'border-gray-600 text-gray-100')}
                   value={yld?.yield ?? ''}
                   onChange={(e) => hd.ticker && setManualYield(hd.ticker, Number(e.target.value))} />
-                <button onClick={() => removeHolding(i)} className="col-span-1 text-gray-600 hover:text-red-400 flex justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                <input type="number" placeholder="상승%" inputMode="decimal"
+                  className="col-span-2 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
+                  value={hd.growthRate ?? ''}
+                  onChange={(e) => updateHolding(i, { growthRate: Number(e.target.value) })} />
+                <button onClick={() => removeHolding(i)} className="col-span-2 text-gray-600 hover:text-red-400 flex justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             )
           })}
@@ -458,6 +510,16 @@ export default function PensionSimPage() {
           <span className="text-[11px] text-gray-600">
             가중평균 {yieldPct}% → 연 배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
           </span>
+        </div>
+        {/* 프리셋 종목 선택 */}
+        <div className="pt-2 border-t border-gray-700/50">
+          <p className="text-[10px] text-gray-500 mb-1.5">📦 프리셋 종목 (원클릭 추가)</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button onClick={() => addPreset('div-us')} className="px-2 py-1 text-[10px] rounded-lg bg-emerald-700/30 hover:bg-emerald-700/50 text-emerald-300 border border-emerald-700/40 transition-colors">🇺🇸 고배당 (SCHD·VYM·JEPI)</button>
+            <button onClick={() => addPreset('div-kr')} className="px-2 py-1 text-[10px] rounded-lg bg-blue-700/30 hover:bg-blue-700/50 text-blue-300 border border-blue-700/40 transition-colors">🇰🇷 고배당 (삼성전자·KB금융·SK텔레콤)</button>
+            <button onClick={() => addPreset('growth')} className="px-2 py-1 text-[10px] rounded-lg bg-purple-700/30 hover:bg-purple-700/50 text-purple-300 border border-purple-700/40 transition-colors">📈 IT대형주 (QQQ·AAPL·MSFT·NVDA)</button>
+            <button onClick={() => addPreset('mixed')} className="px-2 py-1 text-[10px] rounded-lg bg-orange-700/30 hover:bg-orange-700/50 text-orange-300 border border-orange-700/40 transition-colors">🎯 배당+성장 혼합</button>
+          </div>
         </div>
         {yieldErr && <p className="text-[11px] text-orange-400/80">{yieldErr}</p>}
         {plan.stockHoldings.length === 0 && (
