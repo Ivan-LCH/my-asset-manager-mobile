@@ -280,29 +280,37 @@ export default function PensionSimPage() {
     })
     setDirty(true)
   }
-  // 자동산정 — 배당률 + 주가상승률 동시 산정 (/api/yield + /api/growth, 수동 행 보존)
+  // 자동산정 — 배당률 + 주가상승률 동시 산정 (/api/yield, 수동 행 보존)
   const fetchYields = async () => {
     const tickers = plan.stockHoldings.map((h) => h.ticker).filter(Boolean)
     if (tickers.length === 0) { setYieldErr('종목을 먼저 입력하세요.'); return }
     setYieldLoading(true); setYieldErr('')
     const manualYieldMap = new Map(plan.stockYields.filter((y) => y.manual).map((y) => [y.ticker, y.yield]))
-    const results = await Promise.all(tickers.map(async (t) => {
+    // 배당률 + 상승률 동시 fetch
+    const fetched: { ticker: string; yield: number; manual: boolean; growth: number | null }[] = await Promise.all(tickers.map(async (t) => {
       const yld = manualYieldMap.get(t) ?? 0
       const isManual = manualYieldMap.has(t)
       try {
         const r = await fetch(`/api/yield?ticker=${encodeURIComponent(t)}`)
-        if (!r.ok) return { ticker: t, yield: yld, manual: isManual }
+        if (!r.ok) return { ticker: t, yield: yld, manual: isManual, growth: null }
         const d = await r.json()
-        return { ticker: t, yield: isManual ? yld : (d.avg3yYield ?? 0), manual: isManual }
+        return { ticker: t, yield: isManual ? yld : (d.avg3yYield ?? 0), manual: isManual, growth: d.avg3yGrowth ?? null }
       } catch {
-        return { ticker: t, yield: yld, manual: isManual }
+        return { ticker: t, yield: yld, manual: isManual, growth: null }
       }
     }))
-    // 종목별 growthRate는 API가 없으므로 수동값 유지 (프리셋 입력값 또는 사용자 수동)
-    setPlan((p) => ({ ...p, stockYields: results }))
+    // stockYields + stockHoldings.growthRate 업데이트
+    setPlan((p) => {
+      const newYields = fetched.map((f) => ({ ticker: f.ticker, yield: f.yield, manual: f.manual }))
+      const newHoldings = p.stockHoldings.map((h) => {
+        const f = fetched.find((x) => x.ticker === h.ticker)
+        return (f && f.growth != null) ? { ...h, growthRate: f.growth } : h
+      })
+      return { ...p, stockYields: newYields, stockHoldings: newHoldings }
+    })
     setDirty(true)
     setYieldLoading(false)
-    const ok = results.filter((r) => r.yield > 0).length
+    const ok = fetched.filter((r) => r.yield > 0).length
     if (ok === 0) setYieldErr(`${tickers.length}개 종목 조회 실패. 수동으로 배당률·상승률을 입력하세요.`)
     else if (ok < tickers.length) setYieldErr(`${tickers.length - ok}개 종목 조회 실패 (수동 입력 필요).`)
   }

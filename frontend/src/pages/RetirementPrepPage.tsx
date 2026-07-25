@@ -268,18 +268,33 @@ function PortfolioSection() {
         return { ticker: t, yield: d.avg3yYield ?? 0 }
       } catch { return { ticker: t, yield: 0 } }
     }))
+    // growthRate도 자동 산정
+    const newHoldings = [...holdings]
+    for (let i = 0; i < tickers.length; i++) {
+      try {
+        const r = await fetch(`/api/yield?ticker=${encodeURIComponent(tickers[i])}`)
+        if (r.ok) {
+          const d = await r.json()
+          if (d.avg3yGrowth != null) {
+            const idx = newHoldings.findIndex((h) => h.ticker === tickers[i])
+            if (idx >= 0) newHoldings[idx] = { ...newHoldings[idx], growthRate: d.avg3yGrowth }
+          }
+        }
+      } catch { /* growth 폴백: 수동값 유지 */ }
+    }
+    setHoldings(newHoldings)
     setYields(results)
     setYieldVal(Math.round(blendedYield(results, holdings) * 100) / 100)
     setDirty(true); setLoading(false)
     const ok = results.filter((r) => r.yield > 0).length
-    if (ok === 0) setError(`${tickers.length}개 종목 조회 실패. 행별 수동 배당률을 입력하세요.`)
+    if (ok === 0) setError(`${tickers.length}개 종목 조회 실패. 행별 수동 입력하세요.`)
     else if (ok < tickers.length) setError(`${tickers.length - ok}개 종목 조회 실패 (수동 입력 필요).`)
   }
 
   return (
     <Section>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (종목·비중·배당률)</p>
+        <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (종목·비중·배당률·상승률)</p>
         <button onClick={() => saveMut.mutate({ holdings, blendedYield: yieldVal, manualYields: manual }, { onSuccess: () => setDirty(false) })}
           disabled={!dirty || saveMut.isPending}
           className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
@@ -328,7 +343,7 @@ function PortfolioSection() {
         <button onClick={() => void fetchYields()} disabled={loading}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50">
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? '조회 중...' : '배당률 자동 산정'}
+          {loading ? '조회 중...' : '자동 산정'}
         </button>
         <span className="text-xs text-blue-400 font-semibold">가중평균 {yieldVal > 0 ? `${yieldVal}%` : '-'}</span>
       </div>

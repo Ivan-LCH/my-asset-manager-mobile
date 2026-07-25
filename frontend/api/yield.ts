@@ -40,6 +40,14 @@ export default async function handler(req: any, res: any) {
       .filter(([t]) => Number(t) > latest - 365 * 24 * 3600)
       .reduce((s, [, v]) => s + (v.amount || 0), 0)
 
+    // 3년 주가상승률 — 종가 배열에서 첫값 vs 현재가
+    const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
+    const validCloses = closes.filter((c) => typeof c === 'number' && c > 0)
+    const firstClose = validCloses.length > 0 ? validCloses[0] : 0
+    const avg3yGrowth = (price && firstClose > 0)
+      ? Math.round((Math.pow(price / firstClose, 1 / 3) - 1) * 10000) / 100  // 연평균 복리 상승률(%)
+      : null
+
     res.setHeader('Content-Type', 'application/json')
     if (!r.ok || !price) { res.statusCode = 502; res.end(JSON.stringify({ error: 'no data' })); return }
     res.statusCode = 200
@@ -50,6 +58,7 @@ export default async function handler(req: any, res: any) {
       ttmYield: pct(ttm, price),
       avg3yDividend: round2(avg3y),
       avg3yYield: pct(avg3y, price),
+      avg3yGrowth,
       count3y: amounts.length,
     }))
   } catch {

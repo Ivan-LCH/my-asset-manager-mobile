@@ -1040,7 +1040,7 @@ export async function migrateWifeNationalPension(): Promise<void> {
     detail: {
       pensionType: '국민연금',
       expectedStartYear: startYear,
-      expectedEndYear: startYear + 30,
+      expectedEndYear: startYear + 50,
       expectedMonthlyPayout: 1_107_450,
       annualGrowthRate: 2,
     },
