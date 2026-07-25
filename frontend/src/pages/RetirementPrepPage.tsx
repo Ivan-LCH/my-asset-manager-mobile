@@ -332,7 +332,7 @@ function PortfolioSection() {
   )
 }
 
-// ── 수령 · 세금 설정 섹션 (PensionSimPlan 편집) ─────────────
+// ── 과세 기준 설정 섹션 (PensionSimPlan 편집) ─────────────
 function PensionSettingsSection() {
   const { data: saved } = usePensionSim()
   const saveMut = useSavePensionSim()
@@ -348,30 +348,21 @@ function PensionSettingsSection() {
     setDirty(true)
   }, [])
 
-  const setNum = (key: 'startYear' | 'withdrawalYears' | 'otherIncome') => (v: number) => update(key, v)
-
   return (
     <Section>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-400">⚙️ 연금 수령 · 과세 기준 (전체 공통)</p>
+        <p className="text-xs font-semibold text-gray-400">⚙️ 과세 기준 (종합소득공제 등)</p>
         <button onClick={() => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })}
           disabled={!dirty || saveMut.isPending}
           className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
           <Save className="w-3.5 h-3.5" />{saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
         </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <p className="text-[10px] text-gray-500 mb-1">수령 개시 연도</p>
-          <YearInput value={plan.startYear} onChange={setNum('startYear')} />
-        </div>
-        <div>
-          <p className="text-[10px] text-gray-500 mb-1">수령 기간(연)</p>
-          <YearInput value={plan.withdrawalYears} onChange={setNum('withdrawalYears')} />
-        </div>
+      <p className="text-[11px] text-gray-600">수령개시연도·기간·월수령액은 연금 자산(/pension)에서 개별 설정. 아래는 과세 계산 공통 기준.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <p className="text-[10px] text-gray-500 mb-1">기타 종합소득(연)</p>
-          <AmountInput value={plan.otherIncome} onChange={setNum('otherIncome')} placeholder="남편 근로/사업" />
+          <AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} placeholder="남편 근로/사업" />
         </div>
       </div>
       <p className="text-[11px] text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용.</p>
@@ -476,7 +467,7 @@ export default function RetirementPrepPage() {
         </div>
       </Expander>
 
-      <Expander title="⚙️ 수령 · 세금 설정" badge="수령·공제">
+      <Expander title="⚙️ 과세 기준 설정" badge="공제">
         <PensionSettingsSection />
       </Expander>
 
