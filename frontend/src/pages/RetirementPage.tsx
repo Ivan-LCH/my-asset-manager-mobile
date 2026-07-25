@@ -693,7 +693,8 @@ function HealthInsuranceSection({
 interface CashFlowRow {
   year:                    number
   age:                     number
-  pensionMonthly:          number
+  nationalPensionMonthly:  number  // 국민연금/월
+  pensionMonthly:          number  // 개인연금(IRP·퇴직·연금저축)/월
   dividendMonthly:         number
   corpSalaryMonthly:       number
   corpReturnMonthly:       number
@@ -729,7 +730,8 @@ function buildCashFlow(
   corpLoanOutflow: number = 0,
   /** 연금시뮬 연동 시 1인별 결과에서 산출한 가구 합계 오버라이드 (세금/건보 1인별 정확). */
   linked?: {
-    pensionByYear:   Map<number, number>  // 연도별 가구 연금(월) — 국민연금 65세 step-up 반영
+    nationalByYear:  Map<number, number>  // 연도별 국민연금(월)
+    privateByYear:  Map<number, number>  // 연도별 개인연금(IRP·퇴직·연금저축)(월)
     dividendMonthly: number  // 가구 금융소득(명의별)/12
     healthMonthly:   number  // 남편+와이프 건보(재산분 포함)
     taxMonthly:      number  // 남편+와이프 세금(대표연도 기준)/12
@@ -758,9 +760,12 @@ function buildCashFlow(
       return s + (times * num(t.costPerTrip)) / 12
     }, 0)
 
-    // 연금: 연동 시 pension sim 연도별 스케줄(국민연금 step-up 반영), 아니면 자산 기반 pensionMap
+    // 연금 분리: 국민연금 + 개인연금(IRP·퇴직·연금저축)
+    const nationalPensionMonthly = linked
+      ? (linked.nationalByYear.get(year) ?? 0)
+      : 0
     const pensionMonthly = linked
-      ? (linked.pensionByYear.get(year) ?? 0)
+      ? (linked.privateByYear.get(year) ?? 0)
       : (pensionMap.get(year) ?? 0)
 
     const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
@@ -786,7 +791,7 @@ function buildCashFlow(
       + lumpsumTaxAnnual / 12
 
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly + taxMonthly
-    const totalIncome  = pensionMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
+    const totalIncome  = nationalPensionMonthly + pensionMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     // 목돈(현금 나머지)은 해당 연도에 일회 수령 — totalIncome에 가산하지 않고
     // cumulative에만 반영 (월수입과 분리 — 일회성이므로 월환산하지 않음)
     const balance      = totalIncome - totalExpense
@@ -796,7 +801,7 @@ function buildCashFlow(
 
     rows.push({
       year, age,
-      pensionMonthly, dividendMonthly, corpSalaryMonthly, corpReturnMonthly,
+      nationalPensionMonthly, pensionMonthly, dividendMonthly, corpSalaryMonthly, corpReturnMonthly,
       taxMonthly,
       expenseMonthly, travelMonthly,
       medicalMonthly: num(plan.medicalMonthly),
@@ -934,13 +939,15 @@ export default function RetirementPage() {
         nationalPensions: nationals,
       })
     : null
-  // 연도별 가구 연금(월) Map — 국민연금 65세 step-up 반영
-  const pensionByYear = (pensionLinked && pensionSimPlan)
-    ? new Map(pensionSchedule(pensionSimPlan, nationals, pensionSimPlan.startYear, pensionSimPlan.startYear + (pensionSimPlan.withdrawalYears || 1) - 1)
-        .map((r) => [r.year, Math.round(r.totalAnnual / 12)]))
-    : new Map<number, number>()
+  // 연도별 가구 연금(월) Map — 국민연금·개인연금 분리, 65세 step-up 반영
+  const sched = (pensionLinked && pensionSimPlan)
+    ? pensionSchedule(pensionSimPlan, nationals, pensionSimPlan.startYear, pensionSimPlan.startYear + (pensionSimPlan.withdrawalYears || 1) - 1)
+    : []
+  const nationalByYear = new Map(sched.map((r) => [r.year, Math.round(r.nationalAnnual / 12)]))
+  const privateByYear  = new Map(sched.map((r) => [r.year, Math.round(r.drawdownAnnual / 12)]))
   const linkedOverride = perPerson ? {
-    pensionByYear,
+    nationalByYear,
+    privateByYear,
     dividendMonthly: (perPerson.husband.financialIncome + perPerson.wife.financialIncome) / 12,
     healthMonthly: perPerson.husband.healthMonthly + perPerson.wife.healthMonthly,
     taxMonthly: (perPerson.husband.totalAnnualTax + perPerson.wife.totalAnnualTax) / 12,
@@ -1053,6 +1060,7 @@ export default function RetirementPage() {
             </p>
             <p className="text-[10px] text-gray-600 mt-1 leading-tight">
               {retirementRow ? [
+                retirementRow.nationalPensionMonthly > 0 ? `국민 ${fmtK(retirementRow.nationalPensionMonthly)}` : null,
                 retirementRow.pensionMonthly > 0 ? `연금 ${fmtK(retirementRow.pensionMonthly)}` : null,
                 retirementRow.dividendMonthly > 0 ? `배당 ${fmtK(retirementRow.dividendMonthly)}` : null,
                 ...(linkMode === 'corp' ? [
@@ -1167,6 +1175,7 @@ export default function RetirementPage() {
               <tr className="text-gray-500 border-b border-gray-700">
                 <th className="text-left py-2 pr-2 font-medium whitespace-nowrap">연도(나이)</th>
                 {/* 수입 그룹 (연한 초록 배경) */}
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">국민/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">연금/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">배당/월</th>
                 {linkMode === 'corp' && <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">급여/월</th>}
@@ -1199,6 +1208,9 @@ export default function RetirementPage() {
                     <td className={`py-2 pr-2 font-medium whitespace-nowrap ${isRetirementYear ? 'text-blue-400' : 'text-gray-300'}`}>
                       {row.year}<span className="text-gray-500">({row.age})</span>
                       {isRetirementYear && <span className="ml-1 text-[10px] text-blue-500">은퇴</span>}
+                    </td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-300 bg-emerald-950/30">
+                      {row.nationalPensionMonthly > 0 ? fmtK(row.nationalPensionMonthly) : '—'}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-300 bg-emerald-950/30">
                       {row.pensionMonthly > 0 ? fmtK(row.pensionMonthly) : '—'}
