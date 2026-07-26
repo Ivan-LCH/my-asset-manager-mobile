@@ -138,11 +138,11 @@ export default function AssetForm({ asset, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>대출금</label>
-              <input type="number" inputMode="decimal" className={inputCls} value={loanAmount} onChange={(e) => setLoanAmount(+e.target.value)} />
+              <input type="text" inputMode="numeric" className={inputCls} value={loanAmount > 0 ? loanAmount.toLocaleString() : ''} onChange={(e) => setLoanAmount(Number(e.target.value.replace(/,/g, '')) || 0)} placeholder="0" />
             </div>
             <div>
               <label className={labelCls}>보증금</label>
-              <input type="number" inputMode="decimal" className={inputCls} value={tenantDeposit} onChange={(e) => setTenantDeposit(+e.target.value)} />
+              <input type="text" inputMode="numeric" className={inputCls} value={tenantDeposit > 0 ? tenantDeposit.toLocaleString() : ''} onChange={(e) => setTenantDeposit(Number(e.target.value.replace(/,/g, '')) || 0)} placeholder="0" />
             </div>
           </div>
           <div className="flex gap-5">
@@ -161,7 +161,7 @@ export default function AssetForm({ asset, onClose }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>입주 후 예상 가치</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={futureValue || ''} onChange={(e) => setFutureValue(+e.target.value)} placeholder="0 (미입력 시 현재 가치 유지)" />
+                <input type="text" inputMode="numeric" className={inputCls} value={futureValue > 0 ? futureValue.toLocaleString() : ''} onChange={(e) => setFutureValue(Number(e.target.value.replace(/,/g, '')) || 0)} placeholder="0 (미입력 시 현재 가치 유지)" />
               </div>
               <div>
                 <label className={labelCls}>입주 예정 연도</label>
