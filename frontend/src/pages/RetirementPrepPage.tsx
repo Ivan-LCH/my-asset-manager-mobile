@@ -3,6 +3,7 @@
 // 결과는 연금시뮬 / 법인시뮬 / 현금흐름(은퇴계획)에서 확인.
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, RotateCcw, Save, ChevronDown, RefreshCw } from 'lucide-react'
+import StockSearch from '@/components/common/StockSearch'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { usePortfolio, useSavePortfolio, DEFAULT_PORTFOLIO } from '@/hooks/usePortfolio'
@@ -360,8 +361,25 @@ function PortfolioSection() {
         </button>
       </div>
       <p className="text-[11px] text-gray-500 leading-relaxed">
-        IRP 계좌의 종목·비중. 티커 입력 후 Enter → 배당률·상승률 자동 산정 (Yahoo 3년 평균). 수동 수정 가능.
+        IRP 계좌 (한국장만). 종목명/티커 검색 → 배당률·상승률 자동 산정.
       </p>
+      {/* 종목 검색으로 추가 */}
+      <StockSearch koreanOnly
+        onSelect={(r) => {
+          const exists = holdings.some((h) => h.ticker === r.ticker)
+          if (exists) return
+          const newHoldings = [...holdings, { ticker: r.ticker, weight: 1, growthRate: r.growth ?? 0, name: r.name }]
+          setHoldings(newHoldings)
+          const yv = r.yield ?? 0
+          if (yv > 0) {
+            setManual((prev) => [...prev.filter((m) => m.ticker !== r.ticker), { ticker: r.ticker, yield: yv }])
+          }
+          setYields((prev) => [...prev.filter((y) => y.ticker !== r.ticker), { ticker: r.ticker, yield: yv }])
+          const blended = blendedYield([...yields.filter((y) => y.ticker !== r.ticker), { ticker: r.ticker, yield: yv }], newHoldings)
+          setYieldVal(Math.round(blended * 100) / 100)
+          setDirty(true)
+        }}
+      />
       <div className="space-y-2">
         {holdings.map((h, i) => {
           const m = manualYieldOf(h.ticker)
@@ -369,29 +387,25 @@ function PortfolioSection() {
           const effective = typeof m === 'number' ? m : y
           return (
             <div key={i} className="flex items-center gap-2">
-              <div className="w-28 shrink-0">
+              <div className="w-36 shrink-0">
                 <input type="text"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
-                  value={h.ticker}
-                  onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], ticker: e.target.value.toUpperCase() }; setHoldings(p); setDirty(true) }}
-                  onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchOne(t, i) }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
-                  placeholder="TICKER" />
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                  value={h.ticker} readOnly />
                 {h.name && h.name !== h.ticker && (
                   <p className="text-[9px] text-gray-500 truncate mt-0.5">{h.name}</p>
                 )}
               </div>
               <input type="number" inputMode="decimal"
-                className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
+                className="w-14 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
                 value={h.weight || ''}
                 onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], weight: Number(e.target.value) }; setHoldings(p); setDirty(true) }} />
               <span className="text-xs text-gray-500">비중</span>
-              <input type="number" inputMode="decimal" placeholder="수동%"
-                className={cn('w-20 bg-gray-700 border rounded-lg px-2 py-2 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500',
+              <input type="number" inputMode="decimal" placeholder="배당%"
+                className={cn('w-16 bg-gray-700 border rounded-lg px-2 py-2 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500',
                   typeof m === 'number' ? 'border-emerald-600 text-emerald-300' : 'border-gray-600')}
                 value={effective ?? ''}
                 onChange={(e) => h.ticker && setManualYield(h.ticker, Number(e.target.value))}
-                title="조회 실패 시 수동 배당률 입력" />
+                title="배당률(%)" />
               <input type="number" inputMode="decimal" placeholder="상승%"
                 className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
                 value={h.growthRate ?? ''}

@@ -3,8 +3,6 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
-// dev 서버에서 /api/price 를 처리(Node가 Yahoo를 직접 fetch → CORS 없음).
-// prod(Vercel)에서는 api/price.ts 서버리스 함수가 같은 역할.
 function priceProxyDev(): PluginOption {
   return {
     name: 'price-proxy-dev',
@@ -22,16 +20,12 @@ function priceProxyDev(): PluginOption {
           res.setHeader('Cache-Control', 'public, max-age=60')
           res.statusCode = r.ok ? 200 : 502
           res.end(await r.text())
-        } catch {
-          res.statusCode = 502
-          res.end(JSON.stringify({ error: 'upstream error' }))
-        }
+        } catch { res.statusCode = 502; res.end(JSON.stringify({ error: 'upstream error' })) }
       })
     },
   }
 }
 
-// dev 서버에서 /api/yield 처리(3년 배당이력 → 수익률). prod는 api/yield.ts 서버리스.
 function yieldProxyDev(): PluginOption {
   return {
     name: 'yield-proxy-dev',
@@ -56,7 +50,6 @@ function yieldProxyDev(): PluginOption {
           const ts = entries.map(([t]) => Number(t))
           const latest = ts.length > 0 ? Math.max(...ts) : 0
           const ttm = entries.filter(([t]) => Number(t) > latest - 365 * 24 * 3600).reduce((s, [, v]) => s + (v.amount || 0), 0)
-          // 3년 주가상승률 — 종가 배열에서 첫값 vs 현재가
           const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
           const validCloses = closes.filter((c: number) => typeof c === 'number' && c > 0)
           const firstClose = validCloses.length > 0 ? validCloses[0] : 0
@@ -77,10 +70,63 @@ function yieldProxyDev(): PluginOption {
             avg3yGrowth,
             count3y: amounts.length,
           }))
-        } catch {
-          res.statusCode = 502
-          res.end(JSON.stringify({ error: 'upstream error' }))
-        }
+        } catch { res.statusCode = 502; res.end(JSON.stringify({ error: 'upstream error' })) }
+      })
+    },
+  }
+}
+
+function searchProxyDev(): PluginOption {
+  return {
+    name: 'search-proxy-dev',
+    configureServer(server) {
+      server.middlewares.use('/api/search', async (req, res) => {
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const q = url.searchParams.get('q')
+          const krOnly = url.searchParams.get('krOnly') === '1'
+          if (!q) { res.statusCode = 400; res.end('missing query'); return }
+          const sr = await fetch(
+            `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`,
+            { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
+          )
+          const sd = await sr.json()
+          const quotes = (sd?.quotes ?? []).filter((x: any) => {
+            const s: string = x.symbol ?? ''
+            if (krOnly) return s.endsWith('.KS') || s.endsWith('.KQ')
+            return true
+          }).slice(0, 8)
+          const results = await Promise.all(quotes.map(async (x: any) => {
+            const ticker = x.symbol
+            let yld: number | undefined
+            let growth: number | undefined
+            try {
+              const yr = await fetch(
+                `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3y&interval=1d&events=div`,
+                { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
+              )
+              const yd = await yr.json()
+              const result = yd?.chart?.result?.[0]
+              const price = result?.meta?.regularMarketPrice ?? result?.meta?.previousClose
+              const divs = result?.events?.dividends ?? {}
+              const amounts = Object.values(divs).map((v: any) => v.amount).filter((a: number) => a > 0)
+              if (amounts.length > 0 && price > 0) {
+                yld = Math.round((amounts.reduce((s: number, a: number) => s + a, 0) / 3 / price) * 10000) / 100
+              }
+              const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
+              const valid = closes.filter((c: number) => c > 0)
+              if (valid.length > 0 && price > 0) {
+                const years = Math.max(0.5, valid.length / 252)
+                growth = Math.round((Math.pow(price / valid[0], 1 / years) - 1) * 10000) / 100
+              }
+            } catch { /* skip */ }
+            return { ticker, name: x.longname ?? x.shortname ?? ticker, exchange: x.exchange ?? '', yield: yld, growth }
+          }))
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'public, max-age=300')
+          res.statusCode = 200
+          res.end(JSON.stringify({ results }))
+        } catch { res.statusCode = 502; res.end(JSON.stringify({ error: 'search failed' })) }
       })
     },
   }
@@ -91,6 +137,7 @@ export default defineConfig({
     react(),
     priceProxyDev(),
     yieldProxyDev(),
+    searchProxyDev(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
@@ -115,21 +162,10 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
       },
-      // dev에서는 SW 비활성(HMR 방해 방지). 검증은 production build/preview로.
       devOptions: { enabled: false },
     }),
   ],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  server: {
-    host: true,                    // 컨테이너 외부(호스트/폰)에서 접속 허용
-    port: 5173,
-    watch: { usePolling: true },   // WSL2 + Docker 볼륨 마운트에서 HMR 보장
-  },
-  build: {
-    outDir: 'dist',
-  },
+  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
+  server: { host: true, port: 5173, watch: { usePolling: true } },
+  build: { outDir: 'dist' },
 })
