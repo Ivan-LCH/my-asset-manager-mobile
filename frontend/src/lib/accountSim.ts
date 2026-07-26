@@ -18,7 +18,9 @@ export interface AccountSimRow {
   stockDividend:   number   // 배당 (전액 수입으로 나감)
   stockEnd:        number   // 연말 잔액 (상승만, 배당 재투자 X)
   // 합계
-  totalEnd:        number   // IRP + 주식 연말 잔액
+  totalEnd:        number   // IRP + 주식 + 부동산 연말 잔액
+  // 부동산
+  realEstateEnd:   number   // 부동산 가치 (재건축 전환 반영)
 }
 
 export interface AccountSimOptions {
@@ -29,11 +31,13 @@ export interface AccountSimOptions {
   stockInitial:       number   // 일반주식계좌 초기 잔액
   stockGrowthRate:    number   // 주식계좌 연평균 주가상승률(%)
   stockDividendYield: number   // 주식계좌 연평균 배당률(%)
+  // 부동산 (재건축 전환)
+  realEstateItems:    { currentValue: number; futureValue?: number; futureYear?: number }[]
   fromYear:           number
   toYear:             number
 }
 
-/** IRP + 일반주식계좌의 연도별 잔액 추적.
+/** IRP + 일반주식계좌 + 부동산의 연도별 잔액 추적.
  *  - IRP: 배당으로 연금 우선 충당, 남으면 재투자, 부족하면 원금에서.
  *  - 일반주식계좌: 배당은 전액 수입(재투자 X), 상승률만 잔액에 반영.
  */
@@ -64,6 +68,12 @@ export function simulateAccounts(opts: AccountSimOptions): AccountSimRow[] {
     const stockDividend = stockBalance * stockY
     stockBalance = stockBalance + stockGrowthAmt   // 배당은 재투자 X
 
+    // 부동산 가치 (재건축 전환: futureYear 이후 futureValue)
+    const realEstateEnd = opts.realEstateItems.reduce((s, item) => {
+      const useFuture = item.futureValue != null && item.futureYear != null && year >= (item.futureYear as number)
+      return s + (useFuture ? (item.futureValue as number) : item.currentValue)
+    }, 0)
+
     rows.push({
       year,
       irpStart: Math.round(irpStart),
@@ -76,7 +86,8 @@ export function simulateAccounts(opts: AccountSimOptions): AccountSimRow[] {
       stockGrowth: Math.round(stockGrowthAmt),
       stockDividend: Math.round(stockDividend),
       stockEnd: Math.round(stockBalance),
-      totalEnd: Math.round(irpBalance + stockBalance),
+      realEstateEnd: Math.round(realEstateEnd),
+      totalEnd: Math.round(irpBalance + stockBalance + realEstateEnd),
     })
   }
   return rows
@@ -108,6 +119,7 @@ export function buildAccountSimOptions(
     stockInitial: stockTotal,
     stockGrowthRate: stockGrowth,
     stockDividendYield: stockYieldPct,
+    realEstateItems: [],
     fromYear: plan.startYear,
     toYear: plan.startYear + years - 1,
   }

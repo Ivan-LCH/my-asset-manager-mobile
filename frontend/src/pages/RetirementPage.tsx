@@ -936,8 +936,8 @@ export default function RetirementPage() {
     .filter((x): x is NonNullable<typeof x> => x !== null) : [])
   const perPerson = (pensionLinked && pensionSimPlan)
     ? computePensionVehiclePerPerson(pensionSimPlan, {
-        husbandProperty: realEstatePropertyBases(realEstateAssets).husband,
-        wifeProperty: realEstatePropertyBases(realEstateAssets).wife,
+        husbandProperty: realEstatePropertyBases(realEstateAssets, pensionSimPlan.refYear).husband,
+        wifeProperty: realEstatePropertyBases(realEstateAssets, pensionSimPlan.refYear).wife,
         nationalPensions: nationals,
       })
     : null
@@ -1029,6 +1029,11 @@ export default function RetirementPage() {
     stockInitial: stockTotal,
     stockGrowthRate: stockGrowthRate,
     stockDividendYield: stockYieldPct,
+    realEstateItems: realEstateAssets.map((a) => ({
+      currentValue: a.currentValue,
+      futureValue: (a.detail as PensionDetail | undefined && a.detail as { futureValue?: number })?.futureValue,
+      futureYear: (a.detail as { futureYear?: number })?.futureYear,
+    })),
     fromYear: startYear,
     toYear: startYear + withYears - 1,
   })
@@ -1318,6 +1323,7 @@ export default function RetirementPage() {
                   <th className="hidden sm:table-cell text-right py-2 px-1 font-medium">IRP 연금</th>
                   <th className="text-right py-2 px-1 font-medium">주식 잔액</th>
                   <th className="hidden sm:table-cell text-right py-2 px-1 font-medium">주식 배당</th>
+                  <th className="text-right py-2 px-1 font-medium">부동산</th>
                   <th className="text-right py-2 px-1 font-medium">총자산</th>
                 </tr>
               </thead>
@@ -1331,6 +1337,7 @@ export default function RetirementPage() {
                     <td className="hidden sm:table-cell text-right py-2 px-1 text-orange-400/70">{formatManwon(r.irpPension)}</td>
                     <td className="text-right py-2 px-1 text-emerald-300 font-semibold">{formatManwon(r.stockEnd)}</td>
                     <td className="hidden sm:table-cell text-right py-2 px-1 text-emerald-400/70">{formatManwon(r.stockDividend)}</td>
+                    <td className="text-right py-2 px-1 text-amber-300 font-semibold">{formatManwon(r.realEstateEnd)}</td>
                     <td className="text-right py-2 px-1 text-gray-100 font-bold">{formatManwon(r.totalEnd)}</td>
                   </tr>
                 ))}

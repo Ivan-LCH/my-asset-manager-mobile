@@ -87,11 +87,13 @@ export function calcHealthInsurance(hi: HealthInputs): HealthResult {
 /**
  * 부동산 자산에서 1인별 재산세 과세표준 추정.
  * currentValue × 명의 지분을 합산. (실제는 공시가격이나 단순화로 시가 기준.)
+ * refYear 지정 시: futureValue/futureYear이 있고 refYear >= futureYear이면 futureValue 사용 (재건축 후 가치).
  * rentalDeposit(전세금)도 지분별로 합산 — 건보 재산분은 보증금의 30% 반영되므로 여기선 원금을 반환(계산측에서 ×0.3).
  */
 const ASSESSED_RATIO = 0.6  // 공정시장가액비율 (주택 60%)
 export function realEstatePropertyBases(
   assets: Asset[],
+  refYear?: number,
 ): { husband: { propertyTaxBase: number; rentalDeposit: number }; wife: { propertyTaxBase: number; rentalDeposit: number } } {
   let hp = 0, hd = 0, wp = 0, wd = 0
   for (const a of assets) {
@@ -99,8 +101,11 @@ export function realEstatePropertyBases(
     const d = a.detail as RealEstateDetail | undefined
     if (!d) continue
     const o = a.ownership ?? { husband: 50, wife: 50 }
-    hp += a.currentValue * ASSESSED_RATIO * (o.husband / 100)
-    wp += a.currentValue * ASSESSED_RATIO * (o.wife / 100)
+    // 재건축: refYear >= futureYear이면 futureValue 사용
+    const useFuture = d.futureValue != null && d.futureYear != null && refYear != null && refYear >= d.futureYear
+    const value = useFuture ? (d.futureValue as number) : a.currentValue
+    hp += value * ASSESSED_RATIO * (o.husband / 100)
+    wp += value * ASSESSED_RATIO * (o.wife / 100)
     hd += (d.tenantDeposit ?? 0) * (o.husband / 100)
     wd += (d.tenantDeposit ?? 0) * (o.wife / 100)
   }

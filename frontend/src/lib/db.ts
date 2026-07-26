@@ -49,6 +49,8 @@ export interface RealEstateRow {
   tenantDeposit: number
   address:       string
   loanAmount:    number
+  futureValue?:  number
+  futureYear?:   number
 }
 
 export interface StockRow {
@@ -199,6 +201,8 @@ async function putDetail(id: string, type: AssetType, detail: Record<string, any
         tenantDeposit: detail.tenantDeposit ?? 0,
         address:       detail.address ?? '',
         loanAmount:    detail.loanAmount ?? 0,
+        futureValue:   detail.futureValue,
+        futureYear:    detail.futureYear,
       })
       break
     case 'STOCK': {

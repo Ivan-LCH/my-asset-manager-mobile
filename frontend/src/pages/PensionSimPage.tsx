@@ -366,7 +366,7 @@ export default function PensionSimPage() {
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
   // 부동산 명의 가중 → 1인별 건보 재산분
-  const prop = realEstatePropertyBases(realEstateAssets)
+  const prop = realEstatePropertyBases(realEstateAssets, plan.refYear)
 
   // 국민연금 자산(확정급여) — 월수령액·수령개시연령 추출 (plan.sources에서 national로 분류된 것)
   const nationals = pensionAssets

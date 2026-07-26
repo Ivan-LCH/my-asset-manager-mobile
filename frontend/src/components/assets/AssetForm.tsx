@@ -31,6 +31,8 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [isOwned,       setIsOwned]       = useState((d?.isOwned       as boolean) ?? false)
   const [hasTenant,     setHasTenant]     = useState((d?.hasTenant     as boolean) ?? false)
   const [ownership,     setOwnership]     = useState<Ownership>(asset.ownership ?? { husband: 50, wife: 50 })
+  const [futureValue,   setFutureValue]   = useState((d?.futureValue   as number)  ?? 0)
+  const [futureYear,    setFutureYear]    = useState((d?.futureYear    as number)  ?? 0)
 
   // 주식
   const [accountName,   setAccountName]   = useState((d?.accountName   as string)  ?? '')
@@ -55,7 +57,7 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [pensionMonthlySav,   setPensionMonthlySav]   = useState((d?.pensionMonthly   as number) ?? 0)
 
   const buildDetail = (type: AssetType) => {
-    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant }
+    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined }
     if (type === 'STOCK') return {
       accountName, currency, ticker: ticker || undefined,
       isPensionLike,
@@ -152,6 +154,21 @@ export default function AssetForm({ asset, onClose }: Props) {
               <input type="checkbox" checked={hasTenant} onChange={(e) => setHasTenant(e.target.checked)} className="accent-blue-500" />
               세입자 있음
             </label>
+          </div>
+          {/* 재건축 (입주 시점 가치 전환) */}
+          <div className="border-t border-gray-700/50 pt-3 mt-2">
+            <p className="text-[11px] text-gray-500 mb-2">🏗️ 재건축 (입주 시점 가치 전환)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>입주 후 예상 가치</label>
+                <input type="number" inputMode="decimal" className={inputCls} value={futureValue || ''} onChange={(e) => setFutureValue(+e.target.value)} placeholder="0 (미입력 시 현재 가치 유지)" />
+              </div>
+              <div>
+                <label className={labelCls}>입주 예정 연도</label>
+                <input type="number" inputMode="decimal" className={inputCls} value={futureYear || ''} onChange={(e) => setFutureYear(+e.target.value)} placeholder="예: 2028" />
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-600 mt-1">해당 연도부터 잔액 추이·걸보 재산분에 예상 가치 반영.</p>
           </div>
         </div>
       )}

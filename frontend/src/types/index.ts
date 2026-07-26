@@ -38,6 +38,8 @@ export interface RealEstateDetail {
   tenantDeposit: number
   address:       string
   loanAmount:    number
+  futureValue?:  number   // 재건축 후 예상 가치 (입주 시점)
+  futureYear?:   number   // 재건축 완료(입주) 예정 연도
 }
 
 export interface StockDetail {
