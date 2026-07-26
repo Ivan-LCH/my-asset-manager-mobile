@@ -227,6 +227,28 @@ export default function PensionSimPage() {
     setPlan((p) => ({ ...p, stockHoldings: p.stockHoldings.map((h, i) => i === idx ? { ...h, ...patch } : h) }))
     setDirty(true)
   }
+  // 단일 종목 자동 산정 — 티커 입력/Enter 시 배당률+상승률 fetch & 저장
+  const autoFetchHolding = async (ticker: string, idx: number) => {
+    try {
+      const r = await fetch(`/api/yield?ticker=${encodeURIComponent(ticker)}`)
+      if (!r.ok) return
+      const d = await r.json()
+      setPlan((p) => {
+        const newYields = [...p.stockYields]
+        const yi = newYields.findIndex((y) => y.ticker === ticker)
+        const yieldVal = d.avg3yYield ?? 0
+        if (yieldVal > 0) {
+          if (yi >= 0) newYields[yi] = { ticker, yield: yieldVal, manual: false }
+          else newYields.push({ ticker, yield: yieldVal, manual: false })
+        }
+        const newHoldings = p.stockHoldings.map((h, i) =>
+          i === idx && d.avg3yGrowth != null ? { ...h, growthRate: d.avg3yGrowth } : h
+        )
+        return { ...p, stockYields: newYields, stockHoldings: newHoldings }
+      })
+      setDirty(true)
+    } catch { /* 폴백: 수동 입력 대기 */ }
+  }
   const removeHolding = (idx: number) => {
     setPlan((p) => ({ ...p, stockHoldings: p.stockHoldings.filter((_, i) => i !== idx) }))
     setDirty(true)
@@ -479,7 +501,7 @@ export default function PensionSimPage() {
           잔액 {formatManwon(stockBalance)} · 수익률 {yieldPct}% · 연배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
         </p>
         <p className="text-[11px] text-gray-500 leading-relaxed">
-          잔액은 <b>stock 유입 합</b>에서 자동 산출(별도 입력 없음). 종목과 비중을 입력해 배당률을 자동 산정하거나 행별로 수동 입력.
+          잔액은 <b>stock 유입 합</b>에서 자동 산출. 티커 입력 후 Enter → 배당률·상승률 자동 산정. 수동 수정 가능.
         </p>
         {/* 명의 */}
         <Row label="계좌 명의">
@@ -500,7 +522,11 @@ export default function PensionSimPage() {
               <div key={i} className="grid grid-cols-12 gap-2 items-center">
                 <input type="text" placeholder="종목(SCHD…)"
                   className="col-span-4 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
-                  value={hd.ticker} onChange={(e) => updateHolding(i, { ticker: e.target.value.toUpperCase() })} />
+                  value={hd.ticker}
+                  onChange={(e) => updateHolding(i, { ticker: e.target.value.toUpperCase() })}
+                  onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchHolding(t, i) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                />
                 <input type="number" placeholder="비중" inputMode="decimal"
                   className="col-span-2 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 text-right focus:outline-none focus:border-blue-500"
                   value={hd.weight || ''} onChange={(e) => updateHolding(i, { weight: Number(e.target.value) })} />
@@ -522,10 +548,6 @@ export default function PensionSimPage() {
           <button onClick={addHolding}
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
             <Plus className="w-3.5 h-3.5" /> 종목 추가
-          </button>
-          <button onClick={fetchYields} disabled={yieldLoading}
-            className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
-            {yieldLoading ? '조회 중…' : '자동 산정'}
           </button>
           <span className="text-[11px] text-gray-600">
             가중평균 배당 {yieldPct}% · 상승 {blendedGrowth.toFixed(1)}% → 연 배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}

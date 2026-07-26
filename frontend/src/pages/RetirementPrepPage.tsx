@@ -254,6 +254,41 @@ function PortfolioSection() {
     setManual((prev) => [...prev.filter((m) => m.ticker !== ticker), { ticker, yield: y }])
     setDirty(true)
   }
+  // 단일 종목 자동 산정 — 티커 입력/Enter 시 배당률+상승률 fetch & 저장
+  const autoFetchOne = async (ticker: string, idx: number) => {
+    try {
+      const r = await fetch(`/api/yield?ticker=${encodeURIComponent(ticker)}`)
+      if (!r.ok) return
+      const d = await r.json()
+      // 배당률 저장 (manual=false → 자동값)
+      const newYields = [...yieldEntries()]
+      const yi = newYields.findIndex((y) => y.ticker === ticker)
+      const yieldVal = d.avg3yYield ?? 0
+      if (yieldVal > 0) {
+        if (yi >= 0) newYields[yi] = { ticker, yield: yieldVal, manual: false }
+        else newYields.push({ ticker, yield: yieldVal, manual: false })
+      }
+      // 상승률 저장
+      const growth = d.avg3yGrowth
+      const p = [...holdings]
+      if (idx < p.length) p[idx] = { ...p[idx], growthRate: growth ?? p[idx].growthRate }
+      setHoldings(p)
+      // blendedYield 갱신
+      const blended = blendedYield(newYields, p)
+      setYieldVal(Math.round(blended * 100) / 100)
+      setYields(newYields)
+      setDirty(true)
+    } catch { /* 폴백: 수동 입력 대기 */ }
+  }
+  // yields 배열을 PortfolioYield[]로 변환 (yieldEntries 헬퍼)
+  const yieldEntries = (): PortfolioYield[] => {
+    return holdings.map((h) => {
+      const m = manualYieldOf(h.ticker)
+      if (typeof m === 'number') return { ticker: h.ticker, yield: m, manual: true }
+      const f = yields.find((v) => v.ticker === h.ticker)
+      return { ticker: h.ticker, yield: f?.yield ?? 0 }
+    })
+  }
   const fetchYields = async () => {
     setLoading(true); setError('')
     const tickers = holdings.map((h) => h.ticker).filter(Boolean)
@@ -302,7 +337,7 @@ function PortfolioSection() {
         </button>
       </div>
       <p className="text-[11px] text-gray-500 leading-relaxed">
-        IRP 계좌의 종목·비중. "배당률 자동 산정"으로 Yahoo 3년 평균 배당률을 가져와 가중평균 계산 (법인·연금 시뮬이 참조). 일반주식계좌 포트폴리오는 연금시뮬에서 별도 관리.
+        IRP 계좌의 종목·비중. 티커 입력 후 Enter → 배당률·상승률 자동 산정 (Yahoo 3년 평균). 수동 수정 가능.
       </p>
       <div className="space-y-2">
         {holdings.map((h, i) => {
@@ -315,6 +350,8 @@ function PortfolioSection() {
                 className="w-28 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
                 value={h.ticker}
                 onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], ticker: e.target.value.toUpperCase() }; setHoldings(p); setDirty(true) }}
+                onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchOne(t, i) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
                 placeholder="TICKER" />
               <input type="number" inputMode="decimal"
                 className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
@@ -340,12 +377,11 @@ function PortfolioSection() {
       <div className="flex flex-wrap gap-2 items-center">
         <button onClick={() => { setHoldings([...holdings, { ticker: '', weight: 1 }]); setDirty(true) }}
           className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">＋ 종목 추가</button>
-        <button onClick={() => void fetchYields()} disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50">
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? '조회 중...' : '자동 산정'}
-        </button>
-        <span className="text-xs text-blue-400 font-semibold">가중평균 {yieldVal > 0 ? `${yieldVal}%` : '-'}</span>
+        <span className="text-xs text-blue-400 font-semibold">가중평균 배당 {yieldVal > 0 ? `${yieldVal}%` : '-'} · 상승률 {(() => {
+          const hs = holdings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
+          const tw = hs.reduce((s, h) => s + h.weight, 0)
+          return tw > 0 ? `${(hs.reduce((s, h) => s + (h.growthRate ?? 0) * h.weight / tw, 0)).toFixed(1)}%` : '-'
+        })()}</span>
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
     </Section>
