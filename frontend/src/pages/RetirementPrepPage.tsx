@@ -411,11 +411,33 @@ function PortfolioSection() {
                 value={h.growthRate ?? ''}
                 onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], growthRate: Number(e.target.value) }; setHoldings(p); setDirty(true) }}
                 title="연평균 주가상승률(%)" />
+              <button onClick={() => { const p = [...holdings]; p[i] = { ...p[i], isSafe: !p[i].isSafe }; setHoldings(p); setDirty(true) }}
+                className={cn('px-1.5 py-2 text-[10px] rounded shrink-0 transition-colors',
+                  h.isSafe ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}
+                title="안전자산(예금·채권) 토글">
+                {h.isSafe ? '안전' : '위험'}
+              </button>
               <button onClick={() => { setHoldings(holdings.filter((_, j) => j !== i)); setDirty(true) }} className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0 text-xs">삭제</button>
             </div>
           )
         })}
       </div>
+      {/* IRP 안전자산 30% 비율 표시 */}
+      {(() => {
+        const totalW = holdings.reduce((s, h) => s + Math.max(0, h.weight), 0)
+        const safeW = holdings.filter((h) => h.isSafe).reduce((s, h) => s + Math.max(0, h.weight), 0)
+        const safeRatio = totalW > 0 ? (safeW / totalW) * 100 : 0
+        const ok = safeRatio >= 30
+        return (
+          <div className={cn('rounded-lg p-2.5 border flex items-center justify-between gap-2',
+            ok ? 'bg-emerald-500/5 border-emerald-700/30' : 'bg-red-500/5 border-red-700/30')}>
+            <span className="text-[11px] text-gray-400">IRP 안전자산 비율</span>
+            <span className={cn('text-sm font-bold', ok ? 'text-emerald-400' : 'text-red-400')}>
+              {safeRatio.toFixed(0)}% {ok ? '✅' : '⚠️ 30% 미만'}
+            </span>
+          </div>
+        )
+      })()}
       <div className="flex flex-wrap gap-2 items-center">
         <button onClick={() => { setHoldings([...holdings, { ticker: '', weight: 1 }]); setDirty(true) }}
           className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">＋ 종목 추가</button>

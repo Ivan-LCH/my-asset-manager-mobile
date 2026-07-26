@@ -192,6 +192,7 @@ export interface PortfolioHolding {
   weight: number                 // 비중(정규화 전, 예: 1:1:1 → 각 1)
   growthRate?: number            // 연평균 주가상승률(%) — 수동 또는 자동산정
   name?: string                  // 종목명 (자동산정 시 채움)
+  isSafe?: boolean               // 안전자산(예금·채권 등) 여부 — IRP 30% 의무 비율용
 }
 
 // ── 공통 투자 포트폴리오 (법인·연금 시뮬 공유) ─────────────
