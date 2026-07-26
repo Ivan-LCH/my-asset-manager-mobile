@@ -187,6 +187,10 @@ export default function PensionSimPage() {
         detail: {
           pensionType: (a.detail as { pensionType?: string })?.pensionType,
           linkedStockId: (a.detail as { linkedStockId?: string })?.linkedStockId,
+          expectedMonthlyPayout: (a.detail as { expectedMonthlyPayout?: number })?.expectedMonthlyPayout,
+          expectedStartYear: (a.detail as { expectedStartYear?: number })?.expectedStartYear,
+          expectedEndYear: (a.detail as { expectedEndYear?: number })?.expectedEndYear,
+          annualGrowthRate: (a.detail as { annualGrowthRate?: number })?.annualGrowthRate,
         },
       })),
       base.sources,
