@@ -142,3 +142,45 @@
 - [C] **투자법인 시뮬레이터** (새 메뉴 `/corp-sim`) — `lib/corpSim.ts` 순수 계산 + Before/After 대조표 + 자녀 자금출처 시뮬 + 현금흐름 지속가능성(고갈 시점 경고) + 세제 파라미터 편집, settings KV 저장
 - [C] **샘플 데이터 시드** — `seedSampleData`(8개 자산) + 최초 실행 자동 시드 + Settings 샘플/전체삭제 버튼
 - [C] **마이그레이션 정확도** — `retirement_plan` snake→camel 변환, settings 키 camel 변환, `getRate` snake 통일 (USD 주식 손익 정상화)
+
+---
+
+## 2026-07-26 — 은퇴·시뮬 정비 1차 (사용자 확인완료 일괄 이관)
+> TO-DO-LIST.md 에 있던 항목들을 사용자 확인([C]) 처리하여 이관. 이후 신규 이슈는 TO-DO-LIST.md 최하단에 추가.
+
+### CorpSim 강화 (2026-07-10)
+- [C] **CS-1~CS-6** — CorpSimPlan 확장(남편 월급·포트폴리오) · computeTwoPhase · corpSim.test 사이드이펙 수정 · /api/yield 서버리스+dev 프록시 · CorpSimPage UI(남편급여·배당주포트폴리오·2상비교) · 검증+push
+
+### 은퇴 ↔ CorpSim 연동 (2026-07-11)
+- [C] **LK-1~LK-3** — RetirementPlan.linkCorpSim + CashFlowRow corp 필드 · buildCashFlow linked 분기 · 토글 UI · 검증+push
+
+### 누진세율 + 연금 자동 연동 (2026-07-11)
+- [C] **TX-1~TX-7** — calcPensionByYear/SIM_START_YEAR 추출 · comprehensiveTax 누진 · computePersonal/TwoPhase flat→누진 · RetirementPage import · CorpSimPage 연금연동 토글 · 테스트 · 검증+push
+
+### Phase 1/2 연도별 전환
+- [C] **P2-1~P2-3** — CorpCashFlow 인터페이스+시그니처 · 루프내 Phase 분기 · 컴포넌트 · 검증+push
+
+### 전면 수정 (중복계산/건보/표시)
+- [C] **RF-1~RF-8** — 법인 배당 share×tax 수정 · 법인세 기준 통일 · 건보 자동산정 · 미사용 블록 제거 · 건보/Phase/배당 표시 개선 · 검증+push
+
+### 연금 시뮬레이션 신규 페이지
+- [C] **PS-1~PS-8** — PensionSimPlan/Source/TaxType · pensionSim.ts · db+hook · PensionSimPage UI · 라우트/네비 · RetirementPage 연동 · 6개 단위테스트 · 검증+push
+
+### 전면 재설계 (공통 포트폴리오 분리 + 시뮬 구조)
+- [C] **A-1** — 공통 투자포트폴리오 페이지 (types+db+hook+PortfolioPage+라우트+CorpSim에서 제거)
+- [C] **B-1** — 연금시뮬 과세구분 버그 수정 + 현금흐름 제거
+- [C] **C-1** — 은퇴계획 라디오 택일 + 연금시뮬 연동 (연동 토글 버튼으로 구현 완료)
+- [C] **D-1** — CorpSim portfolio 필드 제거 정리
+- [C] **E-1** — 검증(tsc+vitest) + 커밋&push
+
+### 은퇴·시뮬 정비 (포트폴리오/명의/재건축/드라이브)
+- [C] **I1** — 공식 지역걸보 재산분 60등급 모델 (healthInsurance.ts PROPERTY_SCORE_TABLE)
+- [C] **I2** — 총세금 분해 표시 + 연금소득공제 1200만 상수화
+- [C] **J1** — allocations 모델 (목돈→IRP/주식 분배)
+- [C] **J4** — 은퇴계획 목돈수입 단일소스 + 나머지 현금
+- [C] **J5+J6** — 법인 분배 + 마이그레이션 + 배포
+- [C] **A** — 설정 나이→생년 + 와이프 국민연금 자동생성
+- [C] **B3** — IRP 포트폴리오 → 은퇴준비 통합
+- [C] **잔액추적** — IRP+일반주식계좌+부동산 연도별 잔액 시뮬 (accountSim.ts) + 재건축 futureValue/futureYear + 부동산 콤마 표시
+- [C] **Google Drive** — OAuth 백업/복원 (googleDrive.ts + Settings)
+- [C] **종목검색** — StockSearch (국내/미국, 배당률+상승률 자동산정, /api/yield avg3yGrowth)

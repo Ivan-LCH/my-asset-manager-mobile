@@ -216,6 +216,8 @@ export interface VehicleOptions {
   wifeProperty?:     PersonProperty
   nationalPensions?: NationalPension[]   // 국민연금 자산(월수령액 모델)
   scorePerPoint?:    number
+  irpGrowthRate?:    number              // IRP 퇴직시점 성장용 연평균 상승률(%)
+  currentYear?:      number
 }
 
 /** 연도별 연금 스케줄.
@@ -236,15 +238,46 @@ export function pensionSchedule(
   nationals: NationalPension[],
   fromYear: number,
   toYear: number,
+  opts?: { irpGrowthRate?: number; currentYear?: number },
 ): PensionScheduleRow[] {
   const years = plan.withdrawalYears || 1
-  const growthRate = (plan.stockGrowthRate || 0) / 100
-  // 기본 인출액 (수령개시 시점 기준)
-  const drawTaxableBase = (plan.sources
-    .filter((s) => s.taxType === 'irp' || s.taxType === 'taxable')
+  const stockGrowth = (plan.stockGrowthRate || 0) / 100        // 일반주식계좌 배당 성장
+  const irpGrowth = ((opts?.irpGrowthRate ?? plan.stockGrowthRate ?? 0)) / 100  // IRP 잔액 성장
+  const currentYear = opts?.currentYear ?? new Date().getFullYear()
+  const startYear = plan.startYear
+  const yearsToStart = Math.max(0, startYear - currentYear)
+
+  // ── IRP/퇴직연금 (통합 1계좌): 퇴직시점까지 성장한 잔액 ÷ 수령기간 ──
+  // expectedMonthlyPayout 미등록 IRP/과세 자산 + 목돈 IRP 분배. 퇴직(=수령개시)까지 성장.
+  const irpInflow = plan.allocations.reduce((sm, a) => sm + a.irpAmount, 0)
+  const irpAssetCurrent = plan.sources
+    .filter((s) => (s.taxType === 'irp' || s.taxType === 'taxable') && !(s.expectedMonthlyPayout && s.expectedMonthlyPayout > 0))
     .reduce((sm, s) => sm + s.principal, 0)
-    + plan.allocations.reduce((sm, a) => sm + a.irpAmount, 0)) / years
-  const drawExemptBase = plan.sources.filter((s) => s.taxType === 'taxExempt').reduce((sm, s) => sm + s.principal, 0) / years
+  const irpProjected = (irpAssetCurrent + irpInflow) * Math.pow(1 + irpGrowth, yearsToStart)
+  const irpAnnualBase = irpProjected / years
+  const irpAnnualAt = (Y: number): number => {
+    if (Y < startYear || Y > startYear + years - 1) return 0
+    const elapsed = Y - startYear
+    return irpAnnualBase * Math.pow(1 + irpGrowth, elapsed)
+  }
+
+  // ── 등록 월수령액 모델 (비과세·과세 연금저축): expectedMonthlyPayout × 12 × 연성장 ──
+  const registeredSources = plan.sources.filter((s) => s.expectedMonthlyPayout && s.expectedMonthlyPayout > 0)
+  const allowanceAnnualAt = (Y: number): { taxable: number; exempt: number } => {
+    let taxable = 0, exempt = 0
+    for (const s of registeredSources) {
+      const st = s.expectedStartYear ?? startYear
+      const ed = s.expectedEndYear ?? (startYear + years - 1)
+      if (Y < st || Y > ed) continue
+      const elapsed = Math.max(0, Y - st)
+      const g = (s.annualGrowthRate ?? 0) / 100
+      const annual = (s.expectedMonthlyPayout as number) * 12 * Math.pow(1 + g, elapsed)
+      if (s.taxType === 'taxExempt') exempt += annual
+      else taxable += annual   // taxable 연금저축(과세) — 연금소득세 대상
+    }
+    return { taxable, exempt }
+  }
+
   // 주식 배당 기준 (수령개시 시점 잔액 × 배당률)
   const stockTotal = plan.allocations.reduce((sm, a) => sm + a.stockAmount, 0)
   const yieldPct = stockAccountYield(plan)
@@ -252,12 +285,11 @@ export function pensionSchedule(
 
   const rows: PensionScheduleRow[] = []
   for (let year = fromYear; year <= toYear; year++) {
-    const elapsed = year - fromYear  // 수령개시 경과년수
-    const growthFactor = Math.pow(1 + growthRate, elapsed)
-    // 인출액·배당에 성장률 적용 (매년 증가)
-    const drawTaxable = drawTaxableBase * growthFactor
-    const drawExempt = drawExemptBase * growthFactor
-    const financial = dividendBase * growthFactor
+    const elapsed = year - fromYear  // 배당 성장 경과년수
+    const financial = dividendBase * Math.pow(1 + stockGrowth, elapsed)
+
+    const irp = irpAnnualAt(year)
+    const allow = allowanceAnnualAt(year)
 
     let national = 0
     for (const n of nationals) {
@@ -266,6 +298,8 @@ export function pensionSchedule(
         national += n.expectedMonthlyPayout * 12 * Math.pow(1 + (n.annualGrowthRate || 0) / 100, natElapsed)
       }
     }
+    const drawTaxable = irp + allow.taxable
+    const drawExempt = allow.exempt
     const taxable = drawTaxable + national
     rows.push({
       year,
@@ -278,6 +312,54 @@ export function pensionSchedule(
     })
   }
   return rows
+}
+
+/** 특정 연도 스케줄 행에 대해 1인별 세금·건보 산정 (현금흐름 연도별 재산정용).
+ *  연금은 남편 명의 가정. 배당은 stockOwnership으로 1인 분할.
+ *  재산분은 해당 연도의 부동산 재산과표(props) 반영 (재건축 futureYear 전환 포함). */
+export function perPersonYearTaxHealth(
+  row: PensionScheduleRow,
+  plan: PensionSimPlan,
+  husbandProp: PersonProperty,
+  wifeProp: PersonProperty,
+  scorePerPoint = 208.4,
+): { husbandTax: number; wifeTax: number; husbandHealth: number; wifeHealth: number } {
+  const ded = computePerPersonComprehensiveDeduction(plan)
+  const hShare = plan.stockOwnership.husband / 100
+  const wShare = plan.stockOwnership.wife / 100
+
+  const pensionTaxableH = row.taxableAnnual
+  const pensionExemptH = row.exemptAnnual
+  const pensionTaxH = pensionIncomeTax(Math.max(0, pensionTaxableH - plan.pensionDeduction))
+
+  const finH = row.financialAnnual * hShare
+  const finW = row.financialAnnual * wShare
+  const ftH = comprehensiveTaxBreakdown(finH, plan.otherIncome, ded.husband)
+  const ftW = comprehensiveTaxBreakdown(finW, 0, ded.wife)
+
+  const husbandTax = pensionTaxH + ftH.totalFinancialTax
+  const wifeTax = ftW.totalFinancialTax
+
+  const husbandHealth = calcHealthInsurance({
+    pensionAnnual: pensionTaxableH + pensionExemptH,
+    dividendAnnual: finH,
+    otherAnnual: plan.otherIncome,
+    propertyTaxBase: husbandProp.propertyTaxBase,
+    rentalDeposit: husbandProp.rentalDeposit,
+    carValue: husbandProp.carValue ?? 0,
+    scorePerPoint,
+  }).grandTotal
+  const wifeHealth = calcHealthInsurance({
+    pensionAnnual: 0,
+    dividendAnnual: finW,
+    otherAnnual: 0,
+    propertyTaxBase: wifeProp.propertyTaxBase,
+    rentalDeposit: wifeProp.rentalDeposit,
+    carValue: wifeProp.carValue ?? 0,
+    scorePerPoint,
+  }).grandTotal
+
+  return { husbandTax, wifeTax, husbandHealth, wifeHealth }
 }
 
 
@@ -327,7 +409,10 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   // refYear가 수령기간 밖이면 가장 가까운 해로, 미설정이면 peak.
   const fromYear = plan.startYear
   const toYear = plan.startYear + years - 1
-  const schedule = pensionSchedule(plan, nationals, fromYear, toYear)
+  const schedule = pensionSchedule(plan, nationals, fromYear, toYear, {
+    irpGrowthRate: opts?.irpGrowthRate,
+    currentYear: opts?.currentYear,
+  })
   const peakRow = schedule.reduce<PensionScheduleRow | undefined>(
     (max, r) => (!max || r.totalAnnual > max.totalAnnual ? r : max), undefined)
   const refY = plan.refYear
@@ -446,7 +531,7 @@ export function effectivePensionValue(
 
 /** PENSION 자산에서 PensionSource 자동 생성 */
 export function sourcesFromAssets(
-  assets: { id: string; name: string; currentValue: number; detail?: { pensionType?: string; linkedStockId?: string } }[],
+  assets: { id: string; name: string; currentValue: number; detail?: { pensionType?: string; linkedStockId?: string; expectedMonthlyPayout?: number; expectedStartYear?: number; expectedEndYear?: number; annualGrowthRate?: number } }[],
   existing: PensionSource[] = [],
   stockById?: Map<string, number>,
 ): PensionSource[] {
@@ -465,6 +550,11 @@ export function sourcesFromAssets(
       taxType: existingSrc?.taxType ?? taxType,
       yieldRate: existingSrc?.yieldRate ?? 4,
       owner: existingSrc?.owner ?? 'husband',
+      // 수령 모델 필드 (자산 detail에서 자동 채움) — 비과세·과세 연금저축의 등록 월수령액
+      expectedMonthlyPayout: a.detail?.expectedMonthlyPayout ?? existingSrc?.expectedMonthlyPayout,
+      expectedStartYear: a.detail?.expectedStartYear ?? existingSrc?.expectedStartYear,
+      expectedEndYear: a.detail?.expectedEndYear ?? existingSrc?.expectedEndYear,
+      annualGrowthRate: a.detail?.annualGrowthRate ?? existingSrc?.annualGrowthRate,
     }
   })
 }

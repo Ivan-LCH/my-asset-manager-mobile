@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehiclePerPerson,
   computePensionVehicle, computePerPersonComprehensiveDeduction, pensionSchedule,
-  severanceTax,
+  severanceTax, perPersonYearTaxHealth,
   stockBalanceFromInflows, totalInflows, sourcesFromAssets,
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
@@ -248,5 +248,55 @@ describe('pensionSim 계산', () => {
     // s3: 미분류 → 자산별 0/100 → husband 0, wife 50k
     expect(d.husband).toBe(200_000)
     expect(d.wife).toBe(150_000)
+  })
+
+  it('pensionSchedule: 비과세 연금은 등록 expectedMonthlyPayout 사용 (원금÷기간 아님)', () => {
+    // 비과세 연금: 원금 2.16억지만 등록 월수령액 110만 → 연 1320만 (원금÷30=720만과 다름)
+    const p = plan({
+      sources: [
+        { id: 'ex', name: '비과세', principal: 216_000_000, taxType: 'taxExempt', yieldRate: 0, owner: 'husband',
+          expectedMonthlyPayout: 1_100_000, expectedStartYear: 2029, expectedEndYear: 2058, annualGrowthRate: 0 },
+      ],
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const sched = pensionSchedule(p, [], 2029, 2058)
+    const row = sched.find((r) => r.year === 2029)!
+    expect(row.exemptAnnual).toBe(1_100_000 * 12)   // 1320만 — 등록값 honored
+    expect(row.exemptAnnual).not.toBe(216_000_000 / 30)  // 원금÷30(720만)이 아님
+  })
+
+  it('pensionSchedule: IRP는 퇴직시점까지 성장한 잔액÷기간 (irpGrowthRate)', () => {
+    // IRP 현재 3억, startYear까지 3년, 연 10% 성장 → 3억×1.1^3 ≈ 3.993억 ÷ 30 ≈ 1331만/년
+    const p = plan({
+      sources: [
+        { id: 'irp', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' },
+      ],
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const sched = pensionSchedule(p, [], 2029, 2029, { irpGrowthRate: 10, currentYear: 2026 })
+    const projected = 300_000_000 * Math.pow(1.1, 3)
+    expect(sched[0].drawdownAnnual).toBeCloseTo(projected / 30, -3)
+    expect(sched[0].drawdownAnnual).toBeGreaterThan(10_000_000)  // 3억÷30(1000만)보다 큼
+  })
+
+  it('perPersonYearTaxHealth: 연도별 세금·건보 산정 (배당 성장 반영)', () => {
+    const p = plan({
+      sources: [
+        { id: 'irp', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' },
+      ],
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 500_000_000 }],
+      stockYields: [{ ticker: 'A', yield: 6 }],
+      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockOwnership: { husband: 100, wife: 0 },
+      stockGrowthRate: 5,
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const sched = pensionSchedule(p, [], 2029, 2035, { currentYear: 2029 })
+    const early = perPersonYearTaxHealth(sched[0], p, { propertyTaxBase: 0, rentalDeposit: 0 }, { propertyTaxBase: 0, rentalDeposit: 0 })
+    const late = perPersonYearTaxHealth(sched[sched.length - 1], p, { propertyTaxBase: 0, rentalDeposit: 0 }, { propertyTaxBase: 0, rentalDeposit: 0 })
+    // 배당이 성장하므로 나중 해의 세금이 더 큼
+    expect(late.husbandTax).toBeGreaterThanOrEqual(early.husbandTax)
+    expect(early.husbandHealth).toBeGreaterThan(0)
+    expect(early.wifeTax).toBe(0)  // 와이프 배당 0
   })
 })

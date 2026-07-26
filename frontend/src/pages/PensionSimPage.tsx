@@ -7,6 +7,7 @@ import StockSearch from '@/components/common/StockSearch'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
+import { usePortfolio } from '@/hooks/usePortfolio'
 import {
   EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, computePerPersonComprehensiveDeduction,
   stockBalanceFromInflows, stockAccountYield, totalInflows, sourcesFromAssets, pensionSchedule,
@@ -384,14 +385,23 @@ export default function PensionSimPage() {
 
   // 종목별 growthRate 가중평균 → stockGrowthRate 자동 반영
   const effectivePlan = { ...plan, stockGrowthRate: blendedGrowth }
+  // IRP 포트폴리오 상승률 (은퇴준비 IRP 포트폴리오) — IRP 퇴직시점 잔액 성장·수령액 산정용
+  const { data: portfolio } = usePortfolio()
+  const irpHoldings = portfolio?.holdings ?? []
+  const irpWithGrowth = irpHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
+  const irpGrowthW = irpWithGrowth.reduce((s, h) => s + h.weight, 0)
+  const irpGrowthRate = irpGrowthW > 0
+    ? irpWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpGrowthW), 0)
+    : 0
   const h = computePensionVehiclePerPerson(effectivePlan, {
     husbandProperty: prop.husband,
     wifeProperty: prop.wife,
     nationalPensions: nationals,
+    irpGrowthRate,
   })
 
   // 연도별 연금 스케줄 (국민연금 65세 step-up 가시)
-  const schedule = pensionSchedule(effectivePlan, nationals, effectivePlan.startYear, effectivePlan.startYear + (effectivePlan.withdrawalYears || 1) - 1)
+  const schedule = pensionSchedule(effectivePlan, nationals, effectivePlan.startYear, effectivePlan.startYear + (effectivePlan.withdrawalYears || 1) - 1, { irpGrowthRate })
 
   // 1인별 종합소득공제 자동 산정 표시
   const perPersonDed = computePerPersonComprehensiveDeduction(plan)
@@ -692,7 +702,7 @@ export default function PensionSimPage() {
             <div className="flex justify-between"><span className="text-gray-500">비과세 연금 (98년)</span><span className="text-gray-100 font-semibold">{formatManwon(h.husband.annualPensionExempt)}</span></div>
             <div className="flex justify-between"><span className="text-blue-400">국민연금 ({plan.refYear}년)</span><span className="text-blue-300 font-semibold">{formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0)))}</span></div>
             <div className="flex justify-between border-t border-gray-700 pt-1.5"><span className="text-gray-400 font-semibold">연금수입 합계</span><span className="text-emerald-400 font-bold">{formatManwon(h.husband.annualPensionTaxable + h.husband.annualPensionExempt)}</span></div>
-            <p className="text-[10px] text-gray-600">{formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt) / 12))}/월 · 과세연금 = 원금÷{plan.withdrawalYears}년 균등 인출 · 국민연금 = 65세부터 월 {formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0) / 12))}</p>
+            <p className="text-[10px] text-gray-600">{formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt) / 12))}/월 · 과세연금 = 자산 등록 월수령액 또는 퇴직시점 잔액÷{plan.withdrawalYears}년 · 국민연금 = 65세부터 월 {formatManwon(Math.round((schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0) / 12))}</p>
           </div>
         </div>
         {/* 배당수입 */}

@@ -8,7 +8,7 @@ import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { resolveAge } from '@/lib/people'
-import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountYield } from '@/lib/pensionSim'
+import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountYield, perPersonYearTaxHealth } from '@/lib/pensionSim'
 import { realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { simulateAccounts } from '@/lib/accountSim'
 import { usePensionSim } from '@/hooks/usePensionSim'
@@ -700,12 +700,12 @@ interface CashFlowRow {
   dividendMonthly:         number
   corpSalaryMonthly:       number
   corpReturnMonthly:       number
-  taxMonthly:              number  // 배당소득세 + 급여소득세 (월)
+  taxAnnual:               number  // 세금(연) — 종합·연금소득세는 연단위, +/- 조정열에서 차감
   expenseMonthly:          number
   travelMonthly:           number
   medicalMonthly:          number
   healthInsuranceMonthly:  number
-  totalExpense:            number
+  totalExpense:            number  // 세금 제외 (생활비+여행·의료+건보)
   lumpsumReceived:         number
   totalIncome:             number
   balance:                 number
@@ -730,13 +730,13 @@ function buildCashFlow(
   healthInsuranceMonthly: number,
   corpCF?: CorpCashFlow,
   corpLoanOutflow: number = 0,
-  /** 연금시뮬 연동 시 1인별 결과에서 산출한 가구 합계 오버라이드 (세금/건보 1인별 정확). */
+  /** 연금시뮬 연동 시 1인별 결과에서 산출한 가구 합계 오버라이드 (세금/건보 1인별·연도별 정확). */
   linked?: {
     nationalByYear:  Map<number, number>  // 연도별 국민연금(월)
-    privateByYear:  Map<number, number>  // 연도별 개인연금(IRP·퇴직·연금저축)(월)
+    privateByYear:   Map<number, number>  // 연도별 개인연금(IRP·퇴직·연금저축)(월)
     dividendByYear:  Map<number, number>  // 연도별 배당(월) — 성장률 반영, 매년 증가
-    healthMonthly:   number  // 남편+와이프 건보(재산분 포함)
-    taxMonthly:      number  // 남편+와이프 세금(대표연도 기준)/12
+    healthByYear:    Map<number, number>  // 연도별 건보(월) — 재산분(재건축 전환)·소득분 매년 반영
+    taxByYear:       Map<number, number>  // 연도별 세금(연) — 연금·배당 성장 반영
   },
   /** 목돈 수입 — 시뮬의 cash 처리 유입 항목 (plan.lumpsum 대체, 단일 소스). */
   lumpsumOverride?: LumpsumItem[],
@@ -748,7 +748,6 @@ function buildCashFlow(
   const rows: CashFlowRow[] = []
 
   const expenseMonthly = plan.expenses.reduce((s, e) => s + num(e.amount), 0)
-  const hiMonthly = linked ? linked.healthMonthly : healthInsuranceMonthly
   const lumpsum = lumpsumOverride ?? plan.lumpsum
 
   let cumulative = 0
@@ -788,23 +787,28 @@ function buildCashFlow(
       ? (linked.dividendByYear.get(year) ?? 0)
       : (corpCF ? corpDiv : (stockDivMonthly + corpDiv))
 
-    // 세금: 연동 시 1인별 산정값, 아니면 근사(배당 15.4% + 급여 3%) + 목돈 퇴직소득세
-    const taxMonthly = (linked ? linked.taxMonthly : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03))
-      + lumpsumTaxAnnual / 12
+    // 건보: 연동 시 연도별(재산·소득 매년 반영), 아니면 고정
+    const hiMonthly = linked ? (linked.healthByYear.get(year) ?? 0) : healthInsuranceMonthly
 
-    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly + taxMonthly
+    // 세금(연) — 종합·연금소득세는 연단위 납부 → 월 지출에서 제외, +/- 조정열에서 차감.
+    // 연동 시 연도별 1인별 산정, 아니면 근사(배당 15.4% + 급여 3%)×12 + 목돈 퇴직소득세
+    const taxAnnual = (linked
+      ? (linked.taxByYear.get(year) ?? 0)
+      : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03) * 12)
+      + lumpsumTaxAnnual
+
+    // 세금은 월 지출에서 제외 (연간 조정항목)
+    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly
     const totalIncome  = nationalPensionMonthly + pensionMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
-    // 목돈(현금 나머지)은 해당 연도에 일회 수령 — totalIncome에 가산하지 않고
-    // cumulative에만 반영 (월수입과 분리 — 일회성이므로 월환산하지 않음)
     const balance      = totalIncome - totalExpense
 
-    // 목돈은 수령 연도에 일회 수령 (월수입 나누기 없음)
-    cumulative += balance * 12 - emergencyAnnual + lumpsumReceived
+    // 세금(연)은 +/- 누적에서 차감
+    cumulative += balance * 12 - emergencyAnnual - taxAnnual + lumpsumReceived
 
     rows.push({
       year, age,
       nationalPensionMonthly, pensionMonthly, dividendMonthly, corpSalaryMonthly, corpReturnMonthly,
-      taxMonthly,
+      taxAnnual,
       expenseMonthly, travelMonthly,
       medicalMonthly: num(plan.medicalMonthly),
       healthInsuranceMonthly: hiMonthly,
@@ -918,10 +922,48 @@ export default function RetirementPage() {
   // ── 연금시뮬 연동 (linkMode==='pension') ──
   const { data: rawPensionSim } = usePensionSim()
   const realEstateAssets = allAssets.filter((a) => a.type === 'REAL_ESTATE')
-  const pensionSimPlan = rawPensionSim ? { ...EMPTY_PENSION_PLAN, ...rawPensionSim } : null
+  const pensionAssetsAll = allAssets.filter((a) => a.type === 'PENSION')
+  // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서) — 퇴직시점 잔액 성장·수령액 산정용
+  const { data: portfolio } = usePortfolio()
+  const irpHoldings = portfolio?.holdings ?? []
+  const irpWithGrowth = irpHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
+  const irpGrowthW = irpWithGrowth.reduce((s, h) => s + h.weight, 0)
+  const irpGrowthRate = irpGrowthW > 0
+    ? irpWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpGrowthW), 0)
+    : 0
+  const irpDivYield = portfolio?.blendedYield ?? 0
+  // IRP 잔액(현재 PENSION 자산 가치 합)
+  const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate)
+  const irpInitial = irpAssets.reduce((s, a) => s + a.currentValue, 0)
+
+  const pensionSimPlanBase = rawPensionSim ? { ...EMPTY_PENSION_PLAN, ...rawPensionSim } : null
+  // sources 보강 — 자산 detail의 expectedMonthlyPayout(비과세·과세 연금저축 등록 월수령액) 주입
+  const pensionSimPlan = (() => {
+    if (!pensionSimPlanBase) return null
+    const stockByAccount = new Map<string, number>()
+    for (const s of allAssets.filter((a) => a.type === 'STOCK')) {
+      const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? ''
+      if (acct) stockByAccount.set(acct, (stockByAccount.get(acct) ?? 0) + s.currentValue)
+    }
+    const augmented = sourcesFromAssets(
+      pensionAssetsAll.map((a) => ({
+        id: a.id, name: a.name, currentValue: a.currentValue,
+        detail: {
+          pensionType: (a.detail as { pensionType?: string })?.pensionType,
+          linkedStockId: (a.detail as { linkedStockId?: string })?.linkedStockId,
+          expectedMonthlyPayout: (a.detail as { expectedMonthlyPayout?: number })?.expectedMonthlyPayout,
+          expectedStartYear: (a.detail as { expectedStartYear?: number })?.expectedStartYear,
+          expectedEndYear: (a.detail as { expectedEndYear?: number })?.expectedEndYear,
+          annualGrowthRate: (a.detail as { annualGrowthRate?: number })?.annualGrowthRate,
+        },
+      })),
+      pensionSimPlanBase.sources,
+      stockByAccount,
+    )
+    return { ...pensionSimPlanBase, sources: augmented }
+  })()
   const pensionLinked = linkMode === 'pension' && !!pensionSimPlan
   // 국민연금 자산(확정급여) 추출
-  const pensionAssetsAll = allAssets.filter((a) => a.type === 'PENSION')
   const nationals = (pensionSimPlan ? pensionAssetsAll
     .filter((a) => pensionSimPlan.sources.find((s) => s.id === a.id)?.taxType === 'national')
     .map((a) => {
@@ -939,6 +981,7 @@ export default function RetirementPage() {
         husbandProperty: realEstatePropertyBases(realEstateAssets, pensionSimPlan.refYear).husband,
         wifeProperty: realEstatePropertyBases(realEstateAssets, pensionSimPlan.refYear).wife,
         nationalPensions: nationals,
+        irpGrowthRate,
       })
     : null
   // 연도별 가구 연금(월) Map — 국민연금·개인연금 분리, 65세 step-up 반영
@@ -946,18 +989,29 @@ export default function RetirementPage() {
   const schedFromYear = SIM_START_YEAR
   const schedToYear = new Date().getFullYear() + (100 - resolveAge(settings))
   const sched = (pensionLinked && pensionSimPlan)
-    ? pensionSchedule(pensionSimPlan, nationals, schedFromYear, schedToYear)
+    ? pensionSchedule(pensionSimPlan, nationals, schedFromYear, schedToYear, { irpGrowthRate })
     : []
   const nationalByYear = new Map(sched.map((r) => [r.year, Math.round(r.nationalAnnual / 12)]))
   const privateByYear  = new Map(sched.map((r) => [r.year, Math.round(r.drawdownAnnual / 12)]))
   // 배당도 연도별 (성장률 반영) — financialAnnual를 월로 변환
   const dividendByYear = new Map(sched.map((r) => [r.year, Math.round(r.financialAnnual / 12)]))
+  // 건보·세금 연도별 재산정 — 매년 연금·배당 성장·재산(재건축 전환) 반영
+  const healthByYear = new Map<number, number>()
+  const taxByYear = new Map<number, number>()
+  if (pensionLinked && pensionSimPlan) {
+    for (const r of sched) {
+      const propsY = realEstatePropertyBases(realEstateAssets, r.year)
+      const th = perPersonYearTaxHealth(r, pensionSimPlan, propsY.husband, propsY.wife)
+      healthByYear.set(r.year, th.husbandHealth + th.wifeHealth)
+      taxByYear.set(r.year, th.husbandTax + th.wifeTax)
+    }
+  }
   const linkedOverride = perPerson ? {
     nationalByYear,
     privateByYear,
     dividendByYear,
-    healthMonthly: perPerson.husband.healthMonthly + perPerson.wife.healthMonthly,
-    taxMonthly: (perPerson.husband.totalAnnualTax + perPerson.wife.totalAnnualTax) / 12,
+    healthByYear,
+    taxByYear,
   } : undefined
 
   // 건강보험료: 연동 시 직장건보(급여×율×50%, 자동 산정), 미연동 시 지역건보
@@ -998,18 +1052,12 @@ export default function RetirementPage() {
   const cashFlow = buildCashFlow(plan, pensionMap, currentAge, stockDivMonthly, healthInsuranceMonthly, corpCF, linked && corpPlan ? corpPlan.loanAmount : 0, linkedOverride, cashLumpsum, lumpsumTaxByYear)
 
   // 계좌 잔액 추적 (IRP + 일반주식계좌) — 연도별 시장가치 변화
-  const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate)
-  const irpInitial = irpAssets.reduce((s, a) => s + a.currentValue, 0)
-  // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서)
-  const { data: portfolio } = usePortfolio()
-  const irpHoldings = portfolio?.holdings ?? []
-  // growthRate 있는 종목만 totalW에 포함 (blendedYield와 동일 로직)
-  const irpWithGrowth = irpHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
-  const irpGrowthW = irpWithGrowth.reduce((s, h) => s + h.weight, 0)
-  const irpGrowthRate = irpGrowthW > 0
-    ? irpWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpGrowthW), 0)
-    : 0
-  const irpDivYield = portfolio?.blendedYield ?? 0
+  // IRP 퇴직시점 잔액 = 현재 PENSION 자산합 + 목돈 IRP분배 → 수령개시(startYear)까지 성장
+  const startYear = pensionSimPlan?.startYear ?? plan.retirementYear
+  const withYears = pensionSimPlan?.withdrawalYears ?? 30
+  const irpInflow = (pensionSimPlan?.allocations ?? []).reduce((s, a) => s + a.irpAmount, 0)
+  const yearsToStart = Math.max(0, startYear - new Date().getFullYear())
+  const irpProjected = (irpInitial + irpInflow) * Math.pow(1 + irpGrowthRate / 100, yearsToStart)
   // 일반주식계좌 (시뮬에서)
   const stockTotal = (pensionSimPlan?.allocations ?? []).reduce((s, a) => s + a.stockAmount, 0)
   const stockYieldPct = pensionSimPlan ? stockAccountYield(pensionSimPlan) : 0
@@ -1019,13 +1067,11 @@ export default function RetirementPage() {
   const stockGrowthRate = simGrowthW > 0
     ? simWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / simGrowthW), 0)
     : 0
-  const startYear = pensionSimPlan?.startYear ?? plan.retirementYear
-  const withYears = pensionSimPlan?.withdrawalYears ?? 30
   const accountSim = simulateAccounts({
-    irpInitial,
+    irpInitial: irpProjected,
     irpGrowthRate,
     irpDividendYield: irpDivYield,
-    irpMonthlyPension: irpInitial / withYears / 12,
+    irpMonthlyPension: irpProjected / withYears / 12,
     stockInitial: stockTotal,
     stockGrowthRate: stockGrowthRate,
     stockDividendYield: stockYieldPct,
@@ -1129,7 +1175,6 @@ export default function RetirementPage() {
                 `생활비 ${fmtK(retirementRow.expenseMonthly)}`,
                 retirementRow.travelMonthly + retirementRow.medicalMonthly > 0 ? `여행·의료 ${fmtK(retirementRow.travelMonthly + retirementRow.medicalMonthly)}` : null,
                 retirementRow.healthInsuranceMonthly > 0 ? `건보 ${fmtK(retirementRow.healthInsuranceMonthly)}` : null,
-                retirementRow.taxMonthly > 0 ? `세금 ${fmtK(retirementRow.taxMonthly)}` : null,
               ].filter(Boolean).join(' · ') : '-'}
             </p>
           </div>
@@ -1141,7 +1186,7 @@ export default function RetirementPage() {
                 ? `${retirementRow.balance >= 0 ? '+' : ''}${formatManwon(retirementRow.balance)}`
                 : '-'}
             </p>
-            <p className="text-[10px] text-gray-600 mt-1">월 누적 × 12 = 연간</p>
+            <p className="text-[10px] text-gray-600 mt-1">월 누적 × 12 − 세금(연) = 연 누적</p>
           </div>
         </div>
       </div>
@@ -1215,7 +1260,7 @@ export default function RetirementPage() {
 
       {/* 연도별 현금흐름 테이블 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 천원/월)</span></h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 천원 · /월=월, (연)=연간)</span></h3>
         <div className="overflow-x-auto">
           <p className="text-[11px] text-gray-500 mb-2 landscape:hidden">📌 세로 모드: 핵심 6열만 표시. 전체 내역은 가로로 돌려보세요.</p>
           <table className="w-full text-xs">
@@ -1233,10 +1278,10 @@ export default function RetirementPage() {
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">생활비/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">여행+의료/월</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">건보/월</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-red-950/20">세금/월</th>
                 <th className="text-right py-2 px-1 font-medium bg-red-950/20">월지출</th>
                 {/* 결과 그룹 */}
                 <th className="text-right py-2 px-1 font-medium">+/-</th>
+                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">세금(연)</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">목돈</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">긴급지출</th>
                 <th className="text-right py-2 pl-1 font-medium">누적</th>
@@ -1282,14 +1327,14 @@ export default function RetirementPage() {
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">
                       {row.healthInsuranceMonthly > 0 ? fmtK(row.healthInsuranceMonthly) : '—'}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-orange-400 bg-red-950/20">
-                      {row.taxMonthly > 0 ? fmtK(row.taxMonthly) : '—'}
-                    </td>
                     <td className="text-right py-2 px-1 font-semibold text-gray-100 bg-red-950/20">
                       {fmtK(row.totalExpense)}
                     </td>
                     <td className={`text-right py-2 px-1 font-bold ${pnlColor(row.balance)}`}>
                       {row.balance >= 0 ? '+' : ''}{fmtK(row.balance)}
+                    </td>
+                    <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.taxAnnual > 0 ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
+                      {row.taxAnnual > 0 ? '−' : ''}{row.taxAnnual > 0 ? fmtK(row.taxAnnual) : '—'}
                     </td>
                     <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.lumpsumReceived > 0 ? 'text-emerald-400 font-semibold' : 'text-gray-600'}`}>
                       {row.lumpsumReceived > 0 ? '+' : ''}{row.lumpsumReceived > 0 ? fmtK(row.lumpsumReceived) : '—'}
