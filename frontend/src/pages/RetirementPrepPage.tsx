@@ -526,8 +526,7 @@ export default function RetirementPrepPage() {
       </div>
 
       <Expander title="✏️ 💰 생활비 / 여행 / 의료비"
-        badge={`월 ${formatManwon(plan.expenses.reduce((s, e) => s + e.amount, 0) + plan.travel.reduce((s, t) => s + (t.phase1Times * t.costPerTrip) / 12, 0) + plan.medicalMonthly)}`}
-        defaultOpen>
+        badge={`월 ${formatManwon(plan.expenses.reduce((s, e) => s + e.amount, 0) + plan.travel.reduce((s, t) => s + (t.phase1Times * t.costPerTrip) / 12, 0) + plan.medicalMonthly)}`}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ExpensesSection items={plan.expenses} onChange={(v) => update('expenses', v)} />
           <div className="space-y-5">
@@ -544,7 +543,7 @@ export default function RetirementPrepPage() {
         </div>
       </Expander>
 
-      <Expander title="✏️ 💎 목돈 수입 / 긴급자금" badge={`${plan.lumpsum.length + plan.emergency.length}건`} defaultOpen>
+      <Expander title="✏️ 💎 목돈 수입 / 긴급자금" badge={`${plan.lumpsum.length + plan.emergency.length}건`}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <LumpsumSection items={plan.lumpsum} onChange={(v) => update('lumpsum', v)} />
           <EmergencySection items={plan.emergency} onChange={(v) => update('emergency', v)} />
