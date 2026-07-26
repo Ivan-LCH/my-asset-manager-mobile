@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Download, Upload } from 'lucide-react'
+import { Download, Upload, Cloud, CloudOff, FolderOpen, RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
 import { exportBackup, importBackup, clearAllData, seedSampleData, type BackupData } from '@/lib/db'
 import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
+import { googleSignIn, logout, isLoggedIn, saveToDrive, listBackupFiles, loadFromDrive, pickFolder } from '@/lib/googleDrive'
 
 export default function Settings() {
   const { data: settings, isLoading } = useSettings()
@@ -16,6 +17,11 @@ export default function Settings() {
   const [retirementYear, setRetirementYear] = useState(new Date().getFullYear() + 10)
   const [saved,          setSaved]          = useState(false)
   const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
+  // Google Drive 상태
+  const [gDriveLoggedIn, setGDriveLoggedIn] = useState(isLoggedIn())
+  const [driveFolder,    setDriveFolder]    = useState<{ id: string; name: string } | null>(null)
+  const [driveFiles,     setDriveFiles]     = useState<{ id: string; name: string; modifiedTime: string }[]>([])
+  const [driveLoading,   setDriveLoading]   = useState(false)
 
   useEffect(() => {
     if (settings) {
@@ -95,6 +101,62 @@ export default function Settings() {
     setTimeout(() => setBackupMsg(null), 3000)
   }
 
+  // ── Google Drive ──
+  const handleGDriveLogin = async () => {
+    try {
+      setDriveLoading(true)
+      await googleSignIn()
+      setGDriveLoggedIn(true)
+      const files = await listBackupFiles()
+      setDriveFiles(files)
+      setBackupMsg({ ok: true, text: 'Google Drive 연결됨' })
+    } catch (e) {
+      setBackupMsg({ ok: false, text: e instanceof Error ? e.message : '로그인 실패' })
+    }
+    setDriveLoading(false)
+    setTimeout(() => setBackupMsg(null), 3000)
+  }
+
+  const handleGDriveSave = async () => {
+    try {
+      setDriveLoading(true)
+      const data = await exportBackup()
+      const json = JSON.stringify(data, null, 2)
+      const result = await saveToDrive(json, driveFolder?.id)
+      const files = await listBackupFiles()
+      setDriveFiles(files)
+      setBackupMsg({ ok: true, text: `Drive에 저장됨: ${result.name}` })
+    } catch (e) {
+      setBackupMsg({ ok: false, text: e instanceof Error ? e.message : '저장 실패' })
+    }
+    setDriveLoading(false)
+    setTimeout(() => setBackupMsg(null), 4000)
+  }
+
+  const handleGDriveLoad = async (fileId: string) => {
+    try {
+      setDriveLoading(true)
+      const json = await loadFromDrive(fileId)
+      const data = JSON.parse(json) as BackupData
+      await importBackup(data)
+      await qc.invalidateQueries()
+      setBackupMsg({ ok: true, text: 'Drive에서 복원 완료 (새로고침 권장)' })
+    } catch (e) {
+      setBackupMsg({ ok: false, text: e instanceof Error ? e.message : '복원 실패' })
+    }
+    setDriveLoading(false)
+    setTimeout(() => setBackupMsg(null), 4000)
+  }
+
+  const handlePickFolder = async () => {
+    const folder = await pickFolder()
+    if (folder) {
+      setDriveFolder(folder)
+      setBackupMsg({ ok: true, text: `폴더 선택: ${folder.name}` })
+      setTimeout(() => setBackupMsg(null), 3000)
+    }
+  }
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64 text-gray-400">로딩 중...</div>
   }
@@ -161,9 +223,84 @@ export default function Settings() {
         <h3 className="text-sm font-semibold text-gray-300">📈 시세 자동 가져오기</h3>
         <p className="text-xs text-gray-500 leading-relaxed">
           주식 페이지의 "시세 업데이트" 버튼으로 종목 단가를 자동 반영합니다.
-          배포(Vercel) 환경에서는 서버리스 함수가, 개발 중에는 로컬 서버가 Yahoo Finance 에서 가져옵니다.
           자동 실패 시 수동 입력란으로 직접 채울 수 있습니다.
         </p>
+      </div>
+
+      {/* Google Drive 백업 */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-300">☁️ Google Drive 백업</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Google 계정으로 로그인 → 본인 Drive에 백업 저장/복원. 폰 교체 시 같은 계정으로 복원.
+          </p>
+        </div>
+        {!gDriveLoggedIn ? (
+          <button
+            onClick={handleGDriveLogin}
+            disabled={driveLoading}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
+          >
+            <Cloud className="w-4 h-4" />
+            Google 계정으로 로그인
+          </button>
+        ) : (
+          <div className="space-y-3">
+            {/* 폴더 선택 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePickFolder}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                폴더 선택
+              </button>
+              <span className="text-xs text-gray-400">
+                {driveFolder ? `📁 ${driveFolder.name}` : '내 Drive 루트'}
+              </span>
+              <button
+                onClick={() => { logout(); setGDriveLoggedIn(false); setDriveFolder(null); setDriveFiles([]) }}
+                className="ml-auto flex items-center gap-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300"
+              >
+                <CloudOff className="w-3.5 h-3.5" /> 로그아웃
+              </button>
+            </div>
+            {/* 저장 */}
+            <button
+              onClick={handleGDriveSave}
+              disabled={driveLoading}
+              className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
+            >
+              <Cloud className="w-4 h-4" />
+              {driveLoading ? '저장 중...' : 'Drive에 저장'}
+            </button>
+            {/* 백업 파일 목록 */}
+            {driveFiles.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">Drive 백업 파일 ({driveFiles.length}개)</p>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {driveFiles.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => handleGDriveLoad(f.id)}
+                      className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 text-xs rounded-lg bg-gray-700/50 hover:bg-gray-700 transition-colors"
+                    >
+                      <span className="text-gray-300 truncate">{f.name}</span>
+                      <span className="text-gray-600 shrink-0">{f.modifiedTime?.slice(0, 10)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={async () => { const files = await listBackupFiles(); setDriveFiles(files) }}
+              disabled={driveLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> 새로고침
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 데이터 백업 / 복원 */}
