@@ -330,7 +330,11 @@ function PortfolioSection() {
     <Section>
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (종목·비중·배당률·상승률)</p>
-        <button onClick={() => saveMut.mutate({ holdings, blendedYield: yieldVal, manualYields: manual }, { onSuccess: () => setDirty(false) })}
+        <button onClick={() => {
+          // 저장 시 auto-fetched 배당률도 manualYields에 병합 → 영구 저장
+          const allYields = yieldEntries().filter((y) => y.yield > 0).map((y) => ({ ticker: y.ticker, yield: y.yield }))
+          saveMut.mutate({ holdings, blendedYield: yieldVal, manualYields: allYields }, { onSuccess: () => setDirty(false) })
+        }}
           disabled={!dirty || saveMut.isPending}
           className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
           <Save className="w-3.5 h-3.5" />{saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
