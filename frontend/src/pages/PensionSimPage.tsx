@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Save, ChevronDown, AlertTriangle, Trash2, ArrowLeft, Plus } from 'lucide-react'
+import StockSearch from '@/components/common/StockSearch'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
@@ -519,8 +520,22 @@ export default function PensionSimPage() {
           잔액 {formatManwon(stockBalance)} · 수익률 {yieldPct}% · 연배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
         </p>
         <p className="text-[11px] text-gray-500 leading-relaxed">
-          잔액은 <b>stock 유입 합</b>에서 자동 산출. 티커 입력 후 Enter → 배당률·상승률 자동 산정. 수동 수정 가능.
+          잔액은 <b>stock 유입 합</b>에서 자동 산출. 검색으로 종목 추가 → 배당률·상승률 자동 산정.
         </p>
+        {/* 종목 검색으로 추가 */}
+        <StockSearch
+          onSelect={(r) => {
+            if (plan.stockHoldings.some((h) => h.ticker === r.ticker)) return
+            setPlan((p) => {
+              const newHoldings = [...p.stockHoldings, { ticker: r.ticker, weight: 1, growthRate: r.growth ?? 0, name: r.name }]
+              const newYields = r.yield != null && r.yield > 0
+                ? [...p.stockYields.filter((y) => y.ticker !== r.ticker), { ticker: r.ticker, yield: r.yield, manual: true }]
+                : p.stockYields
+              return { ...p, stockHoldings: newHoldings, stockYields: newYields }
+            })
+            setDirty(true)
+          }}
+        />
         {/* 명의 */}
         <Row label="계좌 명의">
           <OwnershipPreset value={plan.stockOwnership} onChange={(o) => update('stockOwnership', o)} />
@@ -539,13 +554,9 @@ export default function PensionSimPage() {
             return (
               <div key={i} className="grid grid-cols-12 gap-2 items-start">
                 <div className="col-span-4">
-                  <input type="text" placeholder="종목(SCHD…)"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
-                    value={hd.ticker}
-                    onChange={(e) => updateHolding(i, { ticker: e.target.value.toUpperCase() })}
-                    onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchHolding(t, i) }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                  />
+                  <input type="text" readOnly
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none"
+                    value={hd.ticker} />
                   {hd.name && hd.name !== hd.ticker && (
                     <p className="text-[9px] text-gray-500 truncate mt-0.5">{hd.name}</p>
                   )}
