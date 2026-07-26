@@ -246,6 +246,24 @@ function PortfolioSection() {
       setHoldings(saved.holdings)
       setYieldVal(saved.blendedYield)
       setManual(saved.manualYields ?? [])
+      // name이 없는 기존 종목들 자동 fetch
+      void (async () => {
+        const toFetch = saved.holdings.filter((h) => h.ticker && !h.name)
+        if (toFetch.length === 0) return
+        const updated = [...saved.holdings]
+        for (const h of toFetch) {
+          try {
+            const r = await fetch(`/api/yield?ticker=${encodeURIComponent(h.ticker)}`)
+            if (!r.ok) continue
+            const d = await r.json()
+            const idx = updated.findIndex((x) => x.ticker === h.ticker)
+            if (idx >= 0 && d.name) {
+              updated[idx] = { ...updated[idx], name: d.name }
+            }
+          } catch { /* skip */ }
+        }
+        setHoldings(updated)
+      })()
     }
   }, [saved])
 

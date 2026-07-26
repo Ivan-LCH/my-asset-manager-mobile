@@ -191,14 +191,32 @@ export default function PensionSimPage() {
       stockByAccount,
     )
     const manual = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
+    const loadedHoldings = base.stockHoldings ?? []
     setPlan({
       ...EMPTY_PENSION_PLAN, ...base,
       sources: [...auto, ...manual],
       allocations: base.allocations ?? [],
-      stockHoldings: base.stockHoldings ?? [],
+      stockHoldings: loadedHoldings,
       stockYields: base.stockYields ?? [],
       stockOwnership: base.stockOwnership ?? { husband: 50, wife: 50 },
     })
+    // name이 없는 기존 종목들 자동 fetch
+    const toFetch = loadedHoldings.filter((h) => h.ticker && !h.name)
+    if (toFetch.length > 0) {
+      void (async () => {
+        const updated = [...loadedHoldings]
+        for (const h of toFetch) {
+          try {
+            const r = await fetch(`/api/yield?ticker=${encodeURIComponent(h.ticker)}`)
+            if (!r.ok) continue
+            const d = await r.json()
+            const idx = updated.findIndex((x) => x.ticker === h.ticker)
+            if (idx >= 0 && d.name) updated[idx] = { ...updated[idx], name: d.name }
+          } catch { /* skip */ }
+        }
+        setPlan((p) => ({ ...p, stockHoldings: updated }))
+      })()
+    }
   }, [saved, pensionAssets])
 
   const update = useCallback(<K extends keyof PensionSimPlan>(key: K, val: PensionSimPlan[K]) => {
