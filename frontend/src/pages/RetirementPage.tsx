@@ -1003,18 +1003,21 @@ export default function RetirementPage() {
   // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서)
   const { data: portfolio } = usePortfolio()
   const irpHoldings = portfolio?.holdings ?? []
-  const irpTotalW = irpHoldings.reduce((s, h) => s + Math.max(0, h.weight), 0)
-  const irpGrowthRate = irpTotalW > 0
-    ? irpHoldings.filter((h) => (h.growthRate ?? 0) > 0).reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpTotalW), 0)
+  // growthRate 있는 종목만 totalW에 포함 (blendedYield와 동일 로직)
+  const irpWithGrowth = irpHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
+  const irpGrowthW = irpWithGrowth.reduce((s, h) => s + h.weight, 0)
+  const irpGrowthRate = irpGrowthW > 0
+    ? irpWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpGrowthW), 0)
     : 0
   const irpDivYield = portfolio?.blendedYield ?? 0
   // 일반주식계좌 (시뮬에서)
   const stockTotal = (pensionSimPlan?.allocations ?? []).reduce((s, a) => s + a.stockAmount, 0)
   const stockYieldPct = pensionSimPlan ? stockAccountYield(pensionSimPlan) : 0
   const simHoldings = pensionSimPlan?.stockHoldings ?? []
-  const simTotalW = simHoldings.reduce((s, h) => s + Math.max(0, h.weight), 0)
-  const stockGrowthRate = simTotalW > 0
-    ? simHoldings.filter((h) => (h.growthRate ?? 0) > 0).reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / simTotalW), 0)
+  const simWithGrowth = simHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
+  const simGrowthW = simWithGrowth.reduce((s, h) => s + h.weight, 0)
+  const stockGrowthRate = simGrowthW > 0
+    ? simWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / simGrowthW), 0)
     : 0
   const startYear = pensionSimPlan?.startYear ?? plan.retirementYear
   const withYears = pensionSimPlan?.withdrawalYears ?? 30
