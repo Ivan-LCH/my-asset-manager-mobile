@@ -279,6 +279,20 @@ describe('pensionSim 계산', () => {
     expect(row.exemptAnnual).toBeGreaterThan(0)
   })
 
+  it('pensionSchedule: 등록 월수령액 있지만 수령연도 0(미입력)이면 startYear로 폴백 (skip 안 됨)', () => {
+    // 개인연금: 월수령액 100만 등록, 수령 시작/종료 연도 미입력(0) → startYear~endYear 구간 적용
+    const p = plan({
+      sources: [
+        { id: 'pen', name: '개인연금', principal: 100_000_000, taxType: 'taxable', yieldRate: 0, owner: 'husband',
+          expectedMonthlyPayout: 1_000_000, expectedStartYear: 0, expectedEndYear: 0, annualGrowthRate: 0 },
+      ],
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const sched = pensionSchedule(p, [], 2029, 2058)
+    const row = sched.find((r) => r.year === 2029)!
+    expect(row.drawdownAnnual).toBe(1_000_000 * 12)  // 1200만 — 0년도로 skip되지 않아야 함
+  })
+
   it('pensionSchedule: IRP는 퇴직시점까지 성장한 잔액÷기간 (irpGrowthRate)', () => {
     // IRP 현재 3억, startYear까지 3년, 연 10% 성장 → 3억×1.1^3 ≈ 3.993억 ÷ 30 ≈ 1331만/년
     const p = plan({

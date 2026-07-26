@@ -266,8 +266,9 @@ export function pensionSchedule(
   const allowanceAnnualAt = (Y: number): { taxable: number; exempt: number } => {
     let taxable = 0, exempt = 0
     for (const s of registeredSources) {
-      const st = s.expectedStartYear ?? startYear
-      const ed = s.expectedEndYear ?? (startYear + years - 1)
+      // 0(미입력)도 폴백 — || 사용 (??는 0을 그대로 둬 startYear가 안 됨)
+      const st = s.expectedStartYear || startYear
+      const ed = s.expectedEndYear || (startYear + years - 1)
       if (Y < st || Y > ed) continue
       const elapsed = Math.max(0, Y - st)
       const g = (s.annualGrowthRate ?? 0) / 100
