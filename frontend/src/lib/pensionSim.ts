@@ -278,6 +278,19 @@ export function pensionSchedule(
     return { taxable, exempt }
   }
 
+  // ── 폴백: expectedMonthlyPayout 미등록 비과세·과세 연금저축 = 원금 ÷ 수령기간 (예전 모델) ──
+  const hasPayout = (s: PensionSource) => !!(s.expectedMonthlyPayout && s.expectedMonthlyPayout > 0)
+  const flatTaxableBase = plan.sources
+    .filter((s) => s.taxType === 'taxable' && !hasPayout(s))
+    .reduce((sm, s) => sm + s.principal, 0) / years
+  const flatExemptBase = plan.sources
+    .filter((s) => s.taxType === 'taxExempt' && !hasPayout(s))
+    .reduce((sm, s) => sm + s.principal, 0) / years
+  const flatAnnualAt = (Y: number): { taxable: number; exempt: number } => {
+    if (Y < startYear || Y > startYear + years - 1) return { taxable: 0, exempt: 0 }
+    return { taxable: flatTaxableBase, exempt: flatExemptBase }
+  }
+
   // 주식 배당 기준 (수령개시 시점 잔액 × 배당률)
   const stockTotal = plan.allocations.reduce((sm, a) => sm + a.stockAmount, 0)
   const yieldPct = stockAccountYield(plan)
@@ -290,6 +303,7 @@ export function pensionSchedule(
 
     const irp = irpAnnualAt(year)
     const allow = allowanceAnnualAt(year)
+    const flat = flatAnnualAt(year)
 
     let national = 0
     for (const n of nationals) {
@@ -298,8 +312,8 @@ export function pensionSchedule(
         national += n.expectedMonthlyPayout * 12 * Math.pow(1 + (n.annualGrowthRate || 0) / 100, natElapsed)
       }
     }
-    const drawTaxable = irp + allow.taxable
-    const drawExempt = allow.exempt
+    const drawTaxable = irp + allow.taxable + flat.taxable
+    const drawExempt = allow.exempt + flat.exempt
     const taxable = drawTaxable + national
     rows.push({
       year,

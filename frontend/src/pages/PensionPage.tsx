@@ -225,7 +225,7 @@ export default function PensionPage() {
             <BarChart data={simData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
               <XAxis dataKey="year" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} interval={4} />
               <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
-                tickFormatter={(v: number) => `${Math.round(v / 1000).toLocaleString()}천`} width={40} />
+                tickFormatter={(v: number) => `${Math.round(v / 10000).toLocaleString()}만`} width={40} />
               <Tooltip content={<SimTooltip />} />
               {simSources.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af', paddingTop: 8 }} />}
               {simSources.map((src, i) => (

@@ -141,9 +141,9 @@ const num = (v: unknown): number => {
   const n = Number(v)
   return Number.isFinite(n) ? n : 0
 }
-/** 천원 단위 숫자만(표 셀용 — '천원' 접미사 없음). 단위는 표 상단에 표시. */
-const fmtK = (v: number): string =>
-  Number.isFinite(v) ? Math.round(v / 1000).toLocaleString('ko-KR') : '—'
+/** 만원 단위 숫자만(표 셀용 — '만원' 접미사 없음). 단위는 표 상단에 표시. */
+const fmtM = (v: number): string =>
+  Number.isFinite(v) ? Math.round(v / 10000).toLocaleString('ko-KR') : '—'
 
 function pnlColor(v: number) {
   if (v > 0) return 'text-emerald-400'
@@ -1154,12 +1154,12 @@ export default function RetirementPage() {
             </p>
             <p className="text-[10px] text-gray-600 mt-1 leading-tight">
               {retirementRow ? [
-                retirementRow.nationalPensionMonthly > 0 ? `국민 ${fmtK(retirementRow.nationalPensionMonthly)}` : null,
-                retirementRow.pensionMonthly > 0 ? `연금 ${fmtK(retirementRow.pensionMonthly)}` : null,
-                retirementRow.dividendMonthly > 0 ? `배당 ${fmtK(retirementRow.dividendMonthly)}` : null,
+                retirementRow.nationalPensionMonthly > 0 ? `국민 ${fmtM(retirementRow.nationalPensionMonthly)}` : null,
+                retirementRow.pensionMonthly > 0 ? `연금 ${fmtM(retirementRow.pensionMonthly)}` : null,
+                retirementRow.dividendMonthly > 0 ? `배당 ${fmtM(retirementRow.dividendMonthly)}` : null,
                 ...(linkMode === 'corp' ? [
-                  retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtK(retirementRow.corpSalaryMonthly)}` : null,
-                  retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtK(retirementRow.corpReturnMonthly)}` : null,
+                  retirementRow.corpSalaryMonthly > 0 ? `급여 ${fmtM(retirementRow.corpSalaryMonthly)}` : null,
+                  retirementRow.corpReturnMonthly > 0 ? `가수금 ${fmtM(retirementRow.corpReturnMonthly)}` : null,
                 ] : []),
               ].filter(Boolean).join(' · ') : '-'}
             </p>
@@ -1172,9 +1172,9 @@ export default function RetirementPage() {
             </p>
             <p className="text-[10px] text-gray-600 mt-1 leading-tight">
               {retirementRow ? [
-                `생활비 ${fmtK(retirementRow.expenseMonthly)}`,
-                retirementRow.travelMonthly + retirementRow.medicalMonthly > 0 ? `여행·의료 ${fmtK(retirementRow.travelMonthly + retirementRow.medicalMonthly)}` : null,
-                retirementRow.healthInsuranceMonthly > 0 ? `건보 ${fmtK(retirementRow.healthInsuranceMonthly)}` : null,
+                `생활비 ${fmtM(retirementRow.expenseMonthly)}`,
+                retirementRow.travelMonthly + retirementRow.medicalMonthly > 0 ? `여행·의료 ${fmtM(retirementRow.travelMonthly + retirementRow.medicalMonthly)}` : null,
+                retirementRow.healthInsuranceMonthly > 0 ? `건보 ${fmtM(retirementRow.healthInsuranceMonthly)}` : null,
               ].filter(Boolean).join(' · ') : '-'}
             </p>
           </div>
@@ -1260,7 +1260,7 @@ export default function RetirementPage() {
 
       {/* 연도별 현금흐름 테이블 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 천원 · /월=월, (연)=연간)</span></h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 만원 · /월=월, (연)=연간)</span></h3>
         <div className="overflow-x-auto">
           <p className="text-[11px] text-gray-500 mb-2 landscape:hidden">📌 세로 모드: 핵심 6열만 표시. 전체 내역은 가로로 돌려보세요.</p>
           <table className="w-full text-xs">
@@ -1303,47 +1303,47 @@ export default function RetirementPage() {
                       {isRetirementYear && <span className="ml-1 text-[10px] text-blue-500">은퇴</span>}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-300 bg-emerald-950/30">
-                      {row.nationalPensionMonthly > 0 ? fmtK(row.nationalPensionMonthly) : '—'}
+                      {row.nationalPensionMonthly > 0 ? fmtM(row.nationalPensionMonthly) : '—'}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-300 bg-emerald-950/30">
-                      {row.pensionMonthly > 0 ? fmtK(row.pensionMonthly) : '—'}
+                      {row.pensionMonthly > 0 ? fmtM(row.pensionMonthly) : '—'}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-emerald-400 bg-emerald-950/30">
-                      {row.dividendMonthly > 0 ? fmtK(row.dividendMonthly) : '—'}
+                      {row.dividendMonthly > 0 ? fmtM(row.dividendMonthly) : '—'}
                     </td>
                     {linkMode === 'corp' && <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-400 bg-emerald-950/30">
-                      {row.corpSalaryMonthly > 0 ? fmtK(row.corpSalaryMonthly) : '—'}
+                      {row.corpSalaryMonthly > 0 ? fmtM(row.corpSalaryMonthly) : '—'}
                     </td>}
                     {linkMode === 'corp' && <td className="hidden landscape:table-cell text-right py-2 px-1 text-cyan-400 bg-emerald-950/30">
-                      {row.corpReturnMonthly > 0 ? fmtK(row.corpReturnMonthly) : '—'}
+                      {row.corpReturnMonthly > 0 ? fmtM(row.corpReturnMonthly) : '—'}
                     </td>}
                     <td className="text-right py-2 px-1 font-semibold text-gray-100 bg-emerald-950/30">
-                      {fmtK(row.totalIncome)}
+                      {fmtM(row.totalIncome)}
                     </td>
-                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">{fmtK(row.expenseMonthly)}</td>
+                    <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">{fmtM(row.expenseMonthly)}</td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">
-                      {(row.travelMonthly + row.medicalMonthly) > 0 ? fmtK(row.travelMonthly + row.medicalMonthly) : '—'}
+                      {(row.travelMonthly + row.medicalMonthly) > 0 ? fmtM(row.travelMonthly + row.medicalMonthly) : '—'}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-gray-400 bg-red-950/20">
-                      {row.healthInsuranceMonthly > 0 ? fmtK(row.healthInsuranceMonthly) : '—'}
+                      {row.healthInsuranceMonthly > 0 ? fmtM(row.healthInsuranceMonthly) : '—'}
                     </td>
                     <td className="text-right py-2 px-1 font-semibold text-gray-100 bg-red-950/20">
-                      {fmtK(row.totalExpense)}
+                      {fmtM(row.totalExpense)}
                     </td>
                     <td className={`text-right py-2 px-1 font-bold ${pnlColor(row.balance)}`}>
-                      {row.balance >= 0 ? '+' : ''}{fmtK(row.balance)}
+                      {row.balance >= 0 ? '+' : ''}{fmtM(row.balance)}
                     </td>
                     <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.taxAnnual > 0 ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
-                      {row.taxAnnual > 0 ? '−' : ''}{row.taxAnnual > 0 ? fmtK(row.taxAnnual) : '—'}
+                      {row.taxAnnual > 0 ? '−' : ''}{row.taxAnnual > 0 ? fmtM(row.taxAnnual) : '—'}
                     </td>
                     <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.lumpsumReceived > 0 ? 'text-emerald-400 font-semibold' : 'text-gray-600'}`}>
-                      {row.lumpsumReceived > 0 ? '+' : ''}{row.lumpsumReceived > 0 ? fmtK(row.lumpsumReceived) : '—'}
+                      {row.lumpsumReceived > 0 ? '+' : ''}{row.lumpsumReceived > 0 ? fmtM(row.lumpsumReceived) : '—'}
                     </td>
                     <td className={`hidden landscape:table-cell text-right py-2 px-1 ${hasEmergency ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
-                      {hasEmergency ? fmtK(row.emergencyAnnual) : '—'}
+                      {hasEmergency ? fmtM(row.emergencyAnnual) : '—'}
                     </td>
                     <td className={`text-right py-2 pl-1 font-semibold ${pnlColor(row.cumulative)}`}>
-                      {row.cumulative >= 0 ? '+' : ''}{fmtK(row.cumulative)}
+                      {row.cumulative >= 0 ? '+' : ''}{fmtM(row.cumulative)}
                     </td>
                   </tr>
                 )

@@ -265,6 +265,20 @@ describe('pensionSim 계산', () => {
     expect(row.exemptAnnual).not.toBe(216_000_000 / 30)  // 원금÷30(720만)이 아님
   })
 
+  it('pensionSchedule: 비과세 연금 expectedMonthlyPayout 미등록 시 원금÷기간 폴백 (0이 아님)', () => {
+    // 비과세 원금 2.16억, 등록 월수령액 없음 → 예전처럼 원금÷30 = 720만/년 (0이 되면 안 됨)
+    const p = plan({
+      sources: [
+        { id: 'ex', name: '비과세', principal: 216_000_000, taxType: 'taxExempt', yieldRate: 0, owner: 'husband' },
+      ],
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const sched = pensionSchedule(p, [], 2029, 2058)
+    const row = sched.find((r) => r.year === 2029)!
+    expect(row.exemptAnnual).toBe(216_000_000 / 30)  // 720만 — 폴백
+    expect(row.exemptAnnual).toBeGreaterThan(0)
+  })
+
   it('pensionSchedule: IRP는 퇴직시점까지 성장한 잔액÷기간 (irpGrowthRate)', () => {
     // IRP 현재 3억, startYear까지 3년, 연 10% 성장 → 3억×1.1^3 ≈ 3.993억 ÷ 30 ≈ 1331만/년
     const p = plan({
