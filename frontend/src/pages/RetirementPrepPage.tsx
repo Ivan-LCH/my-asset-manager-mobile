@@ -268,10 +268,11 @@ function PortfolioSection() {
         if (yi >= 0) newYields[yi] = { ticker, yield: yieldVal, manual: false }
         else newYields.push({ ticker, yield: yieldVal, manual: false })
       }
-      // 상승률 저장
+      // 상승률 + 종목명 저장
       const growth = d.avg3yGrowth
+      const name = d.name
       const p = [...holdings]
-      if (idx < p.length) p[idx] = { ...p[idx], growthRate: growth ?? p[idx].growthRate }
+      if (idx < p.length) p[idx] = { ...p[idx], growthRate: growth ?? p[idx].growthRate, name: name ?? p[idx].name }
       setHoldings(p)
       // blendedYield 갱신
       const blended = blendedYield(newYields, p)
@@ -350,13 +351,18 @@ function PortfolioSection() {
           const effective = typeof m === 'number' ? m : y
           return (
             <div key={i} className="flex items-center gap-2">
-              <input type="text"
-                className="w-28 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
-                value={h.ticker}
-                onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], ticker: e.target.value.toUpperCase() }; setHoldings(p); setDirty(true) }}
-                onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchOne(t, i) }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
-                placeholder="TICKER" />
+              <div className="w-28 shrink-0">
+                <input type="text"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                  value={h.ticker}
+                  onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], ticker: e.target.value.toUpperCase() }; setHoldings(p); setDirty(true) }}
+                  onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchOne(t, i) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
+                  placeholder="TICKER" />
+                {h.name && h.name !== h.ticker && (
+                  <p className="text-[9px] text-gray-500 truncate mt-0.5">{h.name}</p>
+                )}
+              </div>
               <input type="number" inputMode="decimal"
                 className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
                 value={h.weight || ''}

@@ -53,6 +53,7 @@ export default async function handler(req: any, res: any) {
     res.statusCode = 200
     res.end(JSON.stringify({
       ticker,
+      name: meta?.longName ?? meta?.shortName ?? ticker,
       price: round2(price),
       ttmDividend: round2(ttm),
       ttmYield: pct(ttm, price),

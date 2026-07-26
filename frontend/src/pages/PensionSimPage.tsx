@@ -242,7 +242,7 @@ export default function PensionSimPage() {
           else newYields.push({ ticker, yield: yieldVal, manual: false })
         }
         const newHoldings = p.stockHoldings.map((h, i) =>
-          i === idx && d.avg3yGrowth != null ? { ...h, growthRate: d.avg3yGrowth } : h
+          i === idx ? { ...h, growthRate: d.avg3yGrowth ?? h.growthRate, name: d.name ?? h.name } : h
         )
         return { ...p, stockYields: newYields, stockHoldings: newHoldings }
       })
@@ -519,14 +519,19 @@ export default function PensionSimPage() {
           {plan.stockHoldings.map((hd, i) => {
             const yld = plan.stockYields.find((y) => y.ticker === hd.ticker && hd.ticker)
             return (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                <input type="text" placeholder="종목(SCHD…)"
-                  className="col-span-4 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
-                  value={hd.ticker}
-                  onChange={(e) => updateHolding(i, { ticker: e.target.value.toUpperCase() })}
-                  onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchHolding(t, i) }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                />
+              <div key={i} className="grid grid-cols-12 gap-2 items-start">
+                <div className="col-span-4">
+                  <input type="text" placeholder="종목(SCHD…)"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
+                    value={hd.ticker}
+                    onChange={(e) => updateHolding(i, { ticker: e.target.value.toUpperCase() })}
+                    onBlur={(e) => { const t = e.target.value.trim().toUpperCase(); if (t) void autoFetchHolding(t, i) }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                  />
+                  {hd.name && hd.name !== hd.ticker && (
+                    <p className="text-[9px] text-gray-500 truncate mt-0.5">{hd.name}</p>
+                  )}
+                </div>
                 <input type="number" placeholder="비중" inputMode="decimal"
                   className="col-span-2 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 text-right focus:outline-none focus:border-blue-500"
                   value={hd.weight || ''} onChange={(e) => updateHolding(i, { weight: Number(e.target.value) })} />

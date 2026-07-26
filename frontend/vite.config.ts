@@ -68,6 +68,7 @@ function yieldProxyDev(): PluginOption {
           res.statusCode = 200
           res.end(JSON.stringify({
             ticker,
+            name: result?.meta?.longName ?? result?.meta?.shortName ?? ticker,
             price: Math.round(price * 100) / 100,
             ttmDividend: Math.round(ttm * 100) / 100,
             ttmYield: price > 0 ? Math.round((ttm / price) * 10000) / 100 : null,
