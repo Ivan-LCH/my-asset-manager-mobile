@@ -293,6 +293,28 @@ describe('pensionSim 계산', () => {
     expect(row.drawdownAnnual).toBe(1_000_000 * 12)  // 1200만 — 0년도로 skip되지 않아야 함
   })
 
+  it('pensionSchedule: IRP 퇴직금 인출은 퇴직연금 expectedStartYear(2031)부터 (2029엔 0)', () => {
+    // plan.startYear=2029 이더라도, 퇴직연금(irp) 자산의 expectedStartYear=2031 이면
+    // IRP 인출(목돈 분배 4.5억)은 2031부터. 2029에는 개인연금만.
+    const p = plan({
+      sources: [
+        { id: 'pen', name: '개인연금', principal: 0, taxType: 'taxable', yieldRate: 0, owner: 'husband',
+          expectedMonthlyPayout: 1_160_000, expectedStartYear: 2029, expectedEndYear: 2049 },
+        { id: 'irp1', name: '퇴직연금-미래에셋', principal: 0, taxType: 'irp', yieldRate: 0, owner: 'husband',
+          expectedMonthlyPayout: 1_650_000, expectedStartYear: 2031, expectedEndYear: 2051 },
+      ],
+      allocations: [{ lumpsumId: 's', irpAmount: 450_000_000, stockAmount: 0 }],
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const sched = pensionSchedule(p, [], 2029, 2051, { irpGrowthRate: 0, currentYear: 2026 })
+    const at2029 = sched.find((r) => r.year === 2029)!
+    const at2031 = sched.find((r) => r.year === 2031)!
+    // 2029: 개인연금 116만×12 = 1394만만. IRP 인출(4.5억)은 0.
+    expect(at2029.drawdownAnnual).toBe(1_160_000 * 12)
+    // 2031: 개인연금 + 퇴직연금 165만 + IRP인출(4.5억÷21년) → 2029보다 큼
+    expect(at2031.drawdownAnnual).toBeGreaterThan(at2029.drawdownAnnual)
+  })
+
   it('pensionSchedule: IRP는 퇴직시점까지 성장한 잔액÷기간 (irpGrowthRate)', () => {
     // IRP 현재 3억, startYear까지 3년, 연 10% 성장 → 3억×1.1^3 ≈ 3.993억 ÷ 30 ≈ 1331만/년
     const p = plan({

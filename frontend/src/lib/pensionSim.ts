@@ -245,19 +245,27 @@ export function pensionSchedule(
   const irpGrowth = ((opts?.irpGrowthRate ?? plan.stockGrowthRate ?? 0)) / 100  // IRP 잔액 성장
   const currentYear = opts?.currentYear ?? new Date().getFullYear()
   const startYear = plan.startYear
-  const yearsToStart = Math.max(0, startYear - currentYear)
 
   // ── IRP/퇴직연금 (통합 1계좌): 퇴직시점까지 성장한 잔액 ÷ 수령기간 ──
-  // expectedMonthlyPayout 미등록 IRP/과세 자산 + 목돈 IRP 분배. 퇴직(=수령개시)까지 성장.
+  // 목돈 IRP 분배(퇴직금 등) + expectedMonthlyPayout 미등록 IRP 자산.
+  // 수령 개시/종료 연도는 퇴직연금 자산의 expectedStart/EndYear을 따름 (한 계좌로 합쳐진 가정).
+  const irpSourcesAll = plan.sources.filter((s) => s.taxType === 'irp')
+  const irpStartCand = irpSourcesAll.map((s) => s.expectedStartYear).filter((y): y is number => !!y)
+  const irpEndCand = irpSourcesAll.map((s) => s.expectedEndYear).filter((y): y is number => !!y)
+  const irpStartY = irpStartCand.length ? Math.min(...irpStartCand) : startYear
+  const irpEndY = irpEndCand.length ? Math.max(...irpEndCand) : (startYear + years - 1)
+  const irpYears = Math.max(1, irpEndY - irpStartY + 1)
+  const yearsToIrpStart = Math.max(0, irpStartY - currentYear)
   const irpInflow = plan.allocations.reduce((sm, a) => sm + a.irpAmount, 0)
+  // 등록 월수령액이 있는 IRP 자산은 registeredSources에서 수령 → 여기서는 제외(이중방지)
   const irpAssetCurrent = plan.sources
-    .filter((s) => (s.taxType === 'irp' || s.taxType === 'taxable') && !(s.expectedMonthlyPayout && s.expectedMonthlyPayout > 0))
+    .filter((s) => s.taxType === 'irp' && !(s.expectedMonthlyPayout && s.expectedMonthlyPayout > 0))
     .reduce((sm, s) => sm + s.principal, 0)
-  const irpProjected = (irpAssetCurrent + irpInflow) * Math.pow(1 + irpGrowth, yearsToStart)
-  const irpAnnualBase = irpProjected / years
+  const irpProjected = (irpAssetCurrent + irpInflow) * Math.pow(1 + irpGrowth, yearsToIrpStart)
+  const irpAnnualBase = irpProjected / irpYears
   const irpAnnualAt = (Y: number): number => {
-    if (Y < startYear || Y > startYear + years - 1) return 0
-    const elapsed = Y - startYear
+    if (Y < irpStartY || Y > irpEndY) return 0
+    const elapsed = Y - irpStartY
     return irpAnnualBase * Math.pow(1 + irpGrowth, elapsed)
   }
 
