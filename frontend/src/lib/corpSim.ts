@@ -79,12 +79,18 @@ export function employerInsuranceMonthly(plan: CorpSimPlan): EmployerInsurance {
 export const salariesAnnual = (plan: CorpSimPlan): number =>
   (plan.repSalaryMonthly + plan.repSalaryHusbandMonthly) * 12
 
-/** 배당주 포트폴리오 가중평균 수익률(%). yields: 각 ticker의 3년평균 수익률 */
+/** 배당주 포트폴리오 가중평균 수익률(%). yields: 각 ticker의 3년평균 수익률.
+ *  yield 데이터가 없는 종목은 totalW에서도 제외 (0%로 끌어내리지 않음). */
 export function blendedYield(
   yields: { ticker: string; yield: number }[],
   portfolio: { ticker: string; weight: number }[],
 ): number {
-  const totalW = portfolio.reduce((s, h) => s + (h.weight > 0 ? h.weight : 0), 0)
+  // yield 데이터가 있는 종목만 totalW에 포함
+  const totalW = portfolio.reduce((s, h) => {
+    if (h.weight <= 0) return s
+    const y = yields.find((v) => v.ticker === h.ticker)?.yield
+    return typeof y === 'number' ? s + h.weight : s
+  }, 0)
   if (totalW <= 0) return 0
   let blended = 0
   for (const h of portfolio) {
