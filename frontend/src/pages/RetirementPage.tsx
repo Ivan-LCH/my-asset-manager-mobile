@@ -8,7 +8,7 @@ import { useCorpSim } from '@/hooks/useCorpSim'
 import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { resolveAge } from '@/lib/people'
-import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountYield, perPersonYearTaxHealth } from '@/lib/pensionSim'
+import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountBalances, perPersonYearTaxHealth } from '@/lib/pensionSim'
 import { realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { simulateAccounts } from '@/lib/accountSim'
 import { usePensionSim } from '@/hooks/usePensionSim'
@@ -960,14 +960,8 @@ export default function RetirementPage() {
       pensionSimPlanBase.sources,
       stockByAccount,
     )
-    // stockGrowthRate를 종목별 가중평균으로 재계산 (저장된 값이 0/과거값일 수 있어 배당 성장 반영)
-    const sh = pensionSimPlanBase.stockHoldings ?? []
-    const sw = sh.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
-    const swSum = sw.reduce((s, h) => s + h.weight, 0)
-    const stockGrowthRateComputed = swSum > 0
-      ? sw.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / swSum), 0)
-      : (pensionSimPlanBase.stockGrowthRate ?? 0)
-    return { ...pensionSimPlanBase, sources: augmented, stockGrowthRate: stockGrowthRateComputed }
+    // stockAccount(남편/와이프 각 계좌 배당률·상승률)는 plan 자체에 저장 → 그대로 사용
+    return { ...pensionSimPlanBase, sources: augmented }
   })()
   const pensionLinked = linkMode === 'pension' && !!pensionSimPlan
   // 국민연금 자산(확정급여) 추출
@@ -1065,23 +1059,19 @@ export default function RetirementPage() {
   const irpInflow = (pensionSimPlan?.allocations ?? []).reduce((s, a) => s + a.irpAmount, 0)
   const yearsToStart = Math.max(0, startYear - new Date().getFullYear())
   const irpProjected = (irpInitial + irpInflow) * Math.pow(1 + irpGrowthRate / 100, yearsToStart)
-  // 일반주식계좌 (시뮬에서)
-  const stockTotal = (pensionSimPlan?.allocations ?? []).reduce((s, a) => s + a.stockAmount, 0)
-  const stockYieldPct = pensionSimPlan ? stockAccountYield(pensionSimPlan) : 0
-  const simHoldings = pensionSimPlan?.stockHoldings ?? []
-  const simWithGrowth = simHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
-  const simGrowthW = simWithGrowth.reduce((s, h) => s + h.weight, 0)
-  const stockGrowthRate = simGrowthW > 0
-    ? simWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / simGrowthW), 0)
-    : 0
+  // 일반주식계좌 (남편/와이프 각 계좌) — 잔액·배당률·상승률을 stockAccountBalances에서 산출
+  const sb = pensionSimPlan ? stockAccountBalances(pensionSimPlan) : null
   const accountSim = simulateAccounts({
     irpInitial: irpProjected,
     irpGrowthRate,
     irpDividendYield: irpDivYield,
     irpMonthlyPension: irpProjected / withYears / 12,
-    stockInitial: stockTotal,
-    stockGrowthRate: stockGrowthRate,
-    stockDividendYield: stockYieldPct,
+    stockAccounts: sb
+      ? [
+          { initial: sb.husband.total, growthRate: sb.husband.growthRate, dividendYield: sb.husband.dividendYield },
+          { initial: sb.wife.total,    growthRate: sb.wife.growthRate,    dividendYield: sb.wife.dividendYield },
+        ]
+      : [],
     realEstateItems: realEstateAssets.map((a) => ({
       currentValue: a.currentValue,
       futureValue: (a.detail as PensionDetail | undefined && a.detail as { futureValue?: number })?.futureValue,
@@ -1363,7 +1353,7 @@ export default function RetirementPage() {
       {/* 계좌 잔액 추이 (IRP + 일반주식계좌) */}
       {accountSim.length > 0 && (
         <div className="bg-gray-800 border border-cyan-700/40 rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-gray-300 mb-1">💎 계좌 잔액 추이 <span className="text-[11px] font-normal text-gray-500">(IRP 상승률 {irpGrowthRate.toFixed(1)}% · 배당률 {irpDivYield}% / 주식 상승률 {stockGrowthRate.toFixed(1)}% · 배당률 {stockYieldPct}%)</span></h3>
+          <h3 className="text-sm font-semibold text-gray-300 mb-1">💎 계좌 잔액 추이 <span className="text-[11px] font-normal text-gray-500">(IRP 상승률 {irpGrowthRate.toFixed(1)}% · 배당률 {irpDivYield}% / 주식 남편 {sb ? sb.husband.growthRate.toFixed(1) : 0}%·{sb ? sb.husband.dividendYield : 0}% · 와이프 {sb ? sb.wife.growthRate.toFixed(1) : 0}%·{sb ? sb.wife.dividendYield : 0}%)</span></h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>

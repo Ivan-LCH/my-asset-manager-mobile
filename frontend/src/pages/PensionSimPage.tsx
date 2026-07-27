@@ -1,23 +1,21 @@
 // 연금 시뮬레이션 — 법인시뮬과 대칭되는 "연금·개인 vehicle" 모델. 1인(남편/와이프) 과세.
-// 일반주식계좌 잔액 = stock 유입 합, 종목 기반 배당률(자동+수동폴백), 명의 프리셋.
+// 일반주식계좌 = 남편/와이프 각 계좌(잔액·배당률·상승률 입력). 종목 단위 입력은 사용 안 함.
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Save, ChevronDown, AlertTriangle, Trash2, ArrowLeft, Plus } from 'lucide-react'
-import StockSearch from '@/components/common/StockSearch'
+import { Save, ChevronDown, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import {
   EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, computePerPersonComprehensiveDeduction,
-  stockBalanceFromInflows, stockAccountYield, totalInflows, sourcesFromAssets, pensionSchedule,
+  stockAccountBalances, stockBalanceFromInflows, totalInflows, sourcesFromAssets, pensionSchedule,
   FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
 import { realEstatePropertyBases, calcHealthInsurance } from '@/lib/healthInsurance'
-import { blendedYield } from '@/lib/corpSim'
 import { formatManwon, cn } from '@/lib/utils'
 import {
-  type PensionSimPlan, type Ownership, type OwnershipPreset,
+  type PensionSimPlan, type Ownership, type OwnershipPreset, type StockAccountConfig,
   type PensionDetail,
   ownershipFromPreset, presetFromOwnership,
 } from '@/types'
@@ -171,8 +169,6 @@ export default function PensionSimPage() {
 
   const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
   const [dirty, setDirty] = useState(false)
-  const [yieldLoading, setYieldLoading] = useState(false)
-  const [yieldErr, setYieldErr] = useState('')
 
   const didInit = useRef(false)
   useEffect(() => {
@@ -197,32 +193,13 @@ export default function PensionSimPage() {
       stockByAccount,
     )
     const manual = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
-    const loadedHoldings = base.stockHoldings ?? []
     setPlan({
       ...EMPTY_PENSION_PLAN, ...base,
       sources: [...auto, ...manual],
       allocations: base.allocations ?? [],
-      stockHoldings: loadedHoldings,
-      stockYields: base.stockYields ?? [],
+      stockAccount: base.stockAccount ?? EMPTY_PENSION_PLAN.stockAccount,
       stockOwnership: base.stockOwnership ?? { husband: 50, wife: 50 },
     })
-    // name이 없는 기존 종목들 자동 fetch
-    const toFetch = loadedHoldings.filter((h) => h.ticker && !h.name)
-    if (toFetch.length > 0) {
-      void (async () => {
-        const updated = [...loadedHoldings]
-        for (const h of toFetch) {
-          try {
-            const r = await fetch(`/api/yield?ticker=${encodeURIComponent(h.ticker)}`)
-            if (!r.ok) continue
-            const d = await r.json()
-            const idx = updated.findIndex((x) => x.ticker === h.ticker)
-            if (idx >= 0 && d.name) updated[idx] = { ...updated[idx], name: d.name }
-          } catch { /* skip */ }
-        }
-        setPlan((p) => ({ ...p, stockHoldings: updated }))
-      })()
-    }
   }, [saved, pensionAssets])
 
   const update = useCallback(<K extends keyof PensionSimPlan>(key: K, val: PensionSimPlan[K]) => {
@@ -242,131 +219,11 @@ export default function PensionSimPage() {
     setDirty(true)
   }
 
-  // 종목(홀딩) 관리
-  const addHolding = () => {
-    setPlan((p) => ({ ...p, stockHoldings: [...p.stockHoldings, { ticker: '', weight: 1 }] }))
+  // 일반주식계좌(남편/와이프) 설정 변경
+  const updateStockAccount = (who: 'husband' | 'wife', patch: Partial<StockAccountConfig>) => {
+    setPlan((p) => ({ ...p, stockAccount: { ...p.stockAccount, [who]: { ...p.stockAccount[who], ...patch } } }))
     setDirty(true)
   }
-  const updateHolding = (idx: number, patch: Partial<{ ticker: string; weight: number; growthRate: number }>) => {
-    setPlan((p) => ({ ...p, stockHoldings: p.stockHoldings.map((h, i) => i === idx ? { ...h, ...patch } : h) }))
-    setDirty(true)
-  }
-  // 단일 종목 자동 산정 — 티커 입력/Enter 시 배당률+상승률 fetch & 저장
-  const autoFetchHolding = async (ticker: string, idx: number) => {
-    try {
-      const r = await fetch(`/api/yield?ticker=${encodeURIComponent(ticker)}`)
-      if (!r.ok) return
-      const d = await r.json()
-      setPlan((p) => {
-        const newYields = [...p.stockYields]
-        const yi = newYields.findIndex((y) => y.ticker === ticker)
-        const yieldVal = d.avg3yYield ?? 0
-        if (yieldVal > 0) {
-          if (yi >= 0) newYields[yi] = { ticker, yield: yieldVal, manual: false }
-          else newYields.push({ ticker, yield: yieldVal, manual: false })
-        }
-        const newHoldings = p.stockHoldings.map((h, i) =>
-          i === idx ? { ...h, growthRate: d.avg3yGrowth ?? h.growthRate, name: d.name ?? h.name } : h
-        )
-        return { ...p, stockYields: newYields, stockHoldings: newHoldings }
-      })
-      setDirty(true)
-    } catch { /* 폴백: 수동 입력 대기 */ }
-  }
-  const removeHolding = (idx: number) => {
-    setPlan((p) => ({ ...p, stockHoldings: p.stockHoldings.filter((_, i) => i !== idx) }))
-    setDirty(true)
-  }
-  // 행별 수동 배당률
-  const setManualYield = (ticker: string, y: number) => {
-    setPlan((p) => {
-      const others = p.stockYields.filter((yld) => yld.ticker !== ticker)
-      return { ...p, stockYields: [...others, { ticker, yield: y, manual: true }] }
-    })
-    setDirty(true)
-  }
-  // 프리셋 종목 추가 (티커·배당률·상승률 자동 채움)
-  const PRESETS: Record<string, { ticker: string; yield: number; growth: number }[]> = {
-    'div-us': [
-      { ticker: 'SCHD', yield: 3.5, growth: 9 },
-      { ticker: 'VYM',  yield: 2.8, growth: 8 },
-      { ticker: 'JEPI', yield: 7.5, growth: 5 },
-    ],
-    'div-kr': [
-      { ticker: '005930.KS', yield: 2.5, growth: 7 },   // 삼성전자
-      { ticker: '105560.KS', yield: 5.0, growth: 6 },   // KB금융
-      { ticker: '033780.KS', yield: 6.0, growth: 4 },   // SK텔레콤
-    ],
-    growth: [
-      { ticker: 'QQQ',  yield: 0.5, growth: 13 },
-      { ticker: 'AAPL', yield: 0.5, growth: 14 },
-      { ticker: 'MSFT', yield: 0.7, growth: 12 },
-      { ticker: 'NVDA', yield: 0.03, growth: 25 },
-    ],
-    mixed: [
-      { ticker: 'SCHD',  yield: 3.5, growth: 9 },
-      { ticker: 'AAPL',  yield: 0.5, growth: 14 },
-      { ticker: '005930.KS', yield: 2.5, growth: 7 },
-      { ticker: 'JEPI',  yield: 7.5, growth: 5 },
-    ],
-  }
-  const addPreset = (key: string) => {
-    const stocks = PRESETS[key] ?? []
-    setPlan((p) => {
-      const existing = new Set(p.stockHoldings.map((h) => h.ticker))
-      const toAdd = stocks.filter((s) => !existing.has(s.ticker))
-      const newHoldings = [...p.stockHoldings, ...toAdd.map((s) => ({ ticker: s.ticker, weight: 1, growthRate: s.growth }))]
-      const newYields = [...p.stockYields]
-      for (const s of toAdd) {
-        if (!newYields.some((y) => y.ticker === s.ticker)) {
-          newYields.push({ ticker: s.ticker, yield: s.yield, manual: true })
-        }
-      }
-      return { ...p, stockHoldings: newHoldings, stockYields: newYields }
-    })
-    setDirty(true)
-  }
-  // 자동산정 — 배당률 + 주가상승률 동시 산정 (/api/yield, 수동 행 보존)
-  const fetchYields = async () => {
-    const tickers = plan.stockHoldings.map((h) => h.ticker).filter(Boolean)
-    if (tickers.length === 0) { setYieldErr('종목을 먼저 입력하세요.'); return }
-    setYieldLoading(true); setYieldErr('')
-    const manualYieldMap = new Map(plan.stockYields.filter((y) => y.manual).map((y) => [y.ticker, y.yield]))
-    // 배당률 + 상승률 동시 fetch
-    const fetched: { ticker: string; yield: number; manual: boolean; growth: number | null }[] = await Promise.all(tickers.map(async (t) => {
-      const yld = manualYieldMap.get(t) ?? 0
-      const isManual = manualYieldMap.has(t)
-      try {
-        const r = await fetch(`/api/yield?ticker=${encodeURIComponent(t)}`)
-        if (!r.ok) return { ticker: t, yield: yld, manual: isManual, growth: null }
-        const d = await r.json()
-        return { ticker: t, yield: isManual ? yld : (d.avg3yYield ?? 0), manual: isManual, growth: d.avg3yGrowth ?? null }
-      } catch {
-        return { ticker: t, yield: yld, manual: isManual, growth: null }
-      }
-    }))
-    // stockYields + stockHoldings.growthRate 업데이트
-    setPlan((p) => {
-      const newYields = fetched.map((f) => ({ ticker: f.ticker, yield: f.yield, manual: f.manual }))
-      const newHoldings = p.stockHoldings.map((h) => {
-        const f = fetched.find((x) => x.ticker === h.ticker)
-        return (f && f.growth != null) ? { ...h, growthRate: f.growth } : h
-      })
-      return { ...p, stockYields: newYields, stockHoldings: newHoldings }
-    })
-    setDirty(true)
-    setYieldLoading(false)
-    const ok = fetched.filter((r) => r.yield > 0).length
-    if (ok === 0) setYieldErr(`${tickers.length}개 종목 조회 실패. 수동으로 배당률·상승률을 입력하세요.`)
-    else if (ok < tickers.length) setYieldErr(`${tickers.length - ok}개 종목 조회 실패 (수동 입력 필요).`)
-  }
-  // 종목별 growthRate 가중평균 → stockGrowthRate (자동)
-  const blendedGrowth = (() => {
-    const holdings = plan.stockHoldings.filter((h) => h.ticker && h.weight > 0 && (h.growthRate ?? 0) > 0)
-    const totalW = holdings.reduce((s, h) => s + h.weight, 0)
-    if (totalW <= 0) return 0
-    return holdings.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / totalW), 0)
-  })()
 
   const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
 
@@ -387,8 +244,8 @@ export default function PensionSimPage() {
     })
     .filter((x): x is NonNullable<typeof x> => x !== null)
 
-  // 종목별 growthRate 가중평균 → stockGrowthRate 자동 반영
-  const effectivePlan = { ...plan, stockGrowthRate: blendedGrowth }
+  // plan 자체가 stockAccount(남편/와이프 계좌 배당률·상승률)를 가지므로 effectivePlan 분리 불필요
+  const effectivePlan = plan
   // IRP 포트폴리오 상승률 (은퇴준비 IRP 포트폴리오) — IRP 퇴직시점 잔액 성장·수령액 산정용
   const { data: portfolio } = usePortfolio()
   const irpHoldings = portfolio?.holdings ?? []
@@ -424,7 +281,7 @@ export default function PensionSimPage() {
   const husbandHI = personHI(h.husband, prop.husband)
   const wifeHI = personHI(h.wife, prop.wife)
   const stockBalance = stockBalanceFromInflows(plan.allocations)
-  const yieldPct = stockAccountYield(plan)
+  const sb = stockAccountBalances(plan)
   const inflowTotal = totalInflows(plan)
   const irpInflow = plan.allocations.reduce((s, a) => s + a.irpAmount, 0)
   const stockInflow = plan.allocations.reduce((s, a) => s + a.stockAmount, 0)
@@ -528,93 +385,55 @@ export default function PensionSimPage() {
         </p>
       </Expander>
 
-{/* 일반주식계좌 포트폴리오 (배당) */}
-      <Expander title="📈 일반주식계좌 포트폴리오 (배당)">
-        <p className="text-[11px] font-semibold text-gray-300">
-          잔액 {formatManwon(stockBalance)} · 수익률 {yieldPct}% · 연배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
-        </p>
-        <p className="text-[11px] text-gray-500 leading-relaxed">
-          잔액은 <b>stock 유입 합</b>에서 자동 산출. 검색으로 종목 추가 → 배당률·상승률 자동 산정.
-        </p>
-        {/* 종목 검색으로 추가 */}
-        <StockSearch
-          onSelect={(r) => {
-            if (plan.stockHoldings.some((h) => h.ticker === r.ticker)) return
-            setPlan((p) => {
-              const newHoldings = [...p.stockHoldings, { ticker: r.ticker, weight: 1, growthRate: r.growth ?? 0, name: r.name }]
-              const newYields = r.yield != null && r.yield > 0
-                ? [...p.stockYields.filter((y) => y.ticker !== r.ticker), { ticker: r.ticker, yield: r.yield, manual: true }]
-                : p.stockYields
-              return { ...p, stockHoldings: newHoldings, stockYields: newYields }
-            })
-            setDirty(true)
-          }}
-        />
-        {/* 명의 */}
-        <Row label="계좌 명의">
+{/* 일반주식계좌 (남편/와이프 각 계좌) */}
+      <Expander title="📈 일반주식계좌 (남편/와이프)">
+        <div className="bg-blue-500/5 border border-blue-700/30 rounded-lg p-3">
+          <p className="text-[11px] text-blue-200/90 leading-relaxed">
+            잔액 = <b>목돈 분배(stock) 합계 × 명의지분</b> + <b>추가 금액</b>. 종목 입력 없이
+            <b> 계좌 단위 배당률·상승률</b>만 입력 → 연배당·연도별 성장 자동 산정.
+          </p>
+          <p className="text-[10px] text-blue-200/70 mt-1">
+            목돈 분배금 변경: 위 '목돈 분배' 섹션. 현재 stock 분배 합계 {formatManwon(stockBalance)}.
+          </p>
+        </div>
+        {/* 명의 — 연결금액(목돈 분배) 분할 비율 */}
+        <Row label="연결금액 분할 (남편/와이프)">
           <OwnershipPreset value={plan.stockOwnership} onChange={(o) => update('stockOwnership', o)} />
         </Row>
-        {/* 종목 리스트 */}
-        <div className="grid grid-cols-12 gap-1 text-[9px] text-gray-500 px-1 mb-1">
-          <span className="col-span-4">종목</span>
-          <span className="col-span-2 text-right">비중</span>
-          <span className="col-span-2 text-right">배당%</span>
-          <span className="col-span-2 text-right">상승%</span>
-          <span className="col-span-2"></span>
-        </div>
-        <div className="space-y-2">
-          {plan.stockHoldings.map((hd, i) => {
-            const yld = plan.stockYields.find((y) => y.ticker === hd.ticker && hd.ticker)
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {([['husband', '🧑 남편 계좌', 'text-blue-400'], ['wife', '👩 와이프 계좌', 'text-pink-400']] as const).map(([who, title, color]) => {
+            const cfg = plan.stockAccount[who]
+            const b = sb[who]
             return (
-              <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                <div className="col-span-4">
-                  <input type="text" readOnly
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none"
-                    value={hd.ticker} />
-                  {hd.name && hd.name !== hd.ticker && (
-                    <p className="text-[9px] text-gray-500 truncate mt-0.5">{hd.name}</p>
-                  )}
+              <div key={who} className="bg-gray-900/50 rounded-xl border border-gray-700 p-3 space-y-2">
+                <p className={cn('text-xs font-bold', color)}>{title}</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-gray-500">연결금액 (분배 지분)</span>
+                    <span className="text-gray-300">{formatManwon(b.linked)}</span>
+                  </div>
+                  <Row label="추가 금액">
+                    <AmountInput value={cfg.extraAmount} onChange={(v) => updateStockAccount(who, { extraAmount: v })} placeholder="추가 금액" />
+                  </Row>
+                  <Row label="배당률">
+                    <NumInput value={cfg.dividendYield} onChange={(v) => updateStockAccount(who, { dividendYield: v })} suffix="%" />
+                  </Row>
+                  <Row label="주가상승률">
+                    <NumInput value={cfg.growthRate} onChange={(v) => updateStockAccount(who, { growthRate: v })} suffix="%" />
+                  </Row>
                 </div>
-                <input type="number" placeholder="비중" inputMode="decimal"
-                  className="col-span-2 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-gray-100 text-right focus:outline-none focus:border-blue-500"
-                  value={hd.weight || ''} onChange={(e) => updateHolding(i, { weight: Number(e.target.value) })} />
-                <input type="number" placeholder="배당%" inputMode="decimal"
-                  className={cn('col-span-2 bg-gray-700 border rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-blue-500',
-                    yld?.manual ? 'border-emerald-600 text-emerald-300' : 'border-gray-600 text-gray-100')}
-                  value={yld?.yield ?? ''}
-                  onChange={(e) => hd.ticker && setManualYield(hd.ticker, Number(e.target.value))} />
-                <input type="number" placeholder="상승%" inputMode="decimal"
-                  className="col-span-2 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
-                  value={hd.growthRate ?? ''}
-                  onChange={(e) => updateHolding(i, { growthRate: Number(e.target.value) })} />
-                <button onClick={() => removeHolding(i)} className="col-span-2 text-gray-600 hover:text-red-400 flex justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                <div className="border-t border-gray-700/60 pt-1.5 space-y-0.5 text-[11px]">
+                  <div className="flex justify-between"><span className="text-gray-500">잔액</span><span className="text-gray-100 font-semibold">{formatManwon(b.total)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">연배당</span><span className="text-emerald-400 font-semibold">{formatManwon(Math.round(b.dividendBase))}</span></div>
+                  <p className="text-[10px] text-gray-600">{formatManwon(Math.round(b.dividendBase / 12))}/월 · 상승률로 매년 증가</p>
+                </div>
               </div>
             )
           })}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={addHolding}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
-            <Plus className="w-3.5 h-3.5" /> 종목 추가
-          </button>
-          <span className="text-[11px] text-gray-600">
-            가중평균 배당 {yieldPct}% · 상승 {blendedGrowth.toFixed(1)}% → 연 배당 {formatManwon(Math.round(stockBalance * yieldPct / 100))}
-          </span>
-        </div>
-        {/* 프리셋 종목 선택 */}
-        <div className="pt-2 border-t border-gray-700/50">
-          <p className="text-[10px] text-gray-500 mb-1.5">📦 프리셋 종목 (원클릭 추가)</p>
-          <div className="flex flex-wrap gap-1.5">
-            <button onClick={() => addPreset('div-us')} className="px-2 py-1 text-[10px] rounded-lg bg-emerald-700/30 hover:bg-emerald-700/50 text-emerald-300 border border-emerald-700/40 transition-colors">🇺🇸 고배당 (SCHD·VYM·JEPI)</button>
-            <button onClick={() => addPreset('div-kr')} className="px-2 py-1 text-[10px] rounded-lg bg-blue-700/30 hover:bg-blue-700/50 text-blue-300 border border-blue-700/40 transition-colors">🇰🇷 고배당 (삼성전자·KB금융·SK텔레콤)</button>
-            <button onClick={() => addPreset('growth')} className="px-2 py-1 text-[10px] rounded-lg bg-purple-700/30 hover:bg-purple-700/50 text-purple-300 border border-purple-700/40 transition-colors">📈 IT대형주 (QQQ·AAPL·MSFT·NVDA)</button>
-            <button onClick={() => addPreset('mixed')} className="px-2 py-1 text-[10px] rounded-lg bg-orange-700/30 hover:bg-orange-700/50 text-orange-300 border border-orange-700/40 transition-colors">🎯 배당+성장 혼합</button>
-          </div>
-        </div>
-        {yieldErr && <p className="text-[11px] text-orange-400/80">{yieldErr}</p>}
-        {plan.stockHoldings.length === 0 && (
-          <Row label="수동 배당률(종목 없을 때)" hint="종목 입력이 귀찮을 때"><NumInput value={plan.stockManualYield ?? 0} onChange={(v) => update('stockManualYield', v)} suffix="%" /></Row>
-        )}
+        <p className="text-[11px] text-gray-600">
+          합계 잔액 {formatManwon(sb.husband.total + sb.wife.total)} · 합계 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}
+        </p>
       </Expander>
 
       {/* ═══ 결과 (자동 계산) ═══ */}
@@ -646,7 +465,7 @@ export default function PensionSimPage() {
               <PrincipalCard title="IRP 원금" husband={irpHusband} wife={irpWife}
                 note={`기존 연금 + IRP 유입 ${formatManwon(irpInflow)} · 연금은 남편 명의 가정`} />
               <PrincipalCard title="일반주식계좌 원금" husband={h.husband.stockBalance} wife={h.wife.stockBalance}
-                note={`stock 유입 × ${yieldPct}% = 연배당 ${formatManwon(Math.round((h.husband.stockBalance + h.wife.stockBalance) * yieldPct / 100))}`} />
+                note={`잔액 × 계좌 배당률 = 연배당 ${formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}`} />
             </div>
             <p className="text-[10px] text-gray-600 mt-1.5">
               💡 분배하지 않은 나머지는 현금 수령(은퇴계획 목돈)으로, 투자 원금에서 제외됨.
@@ -716,7 +535,7 @@ export default function PensionSimPage() {
             <div className="flex justify-between"><span className="text-gray-500">일반주식계좌 배당</span><span className="text-emerald-400 font-semibold">{formatManwon(h.totals.financialIncome)}</span></div>
             <div className="flex justify-between"><span className="text-[10px] text-gray-600">— 남편</span><span className="text-gray-300">{formatManwon(h.husband.financialIncome)}</span></div>
             <div className="flex justify-between"><span className="text-[10px] text-gray-600">— 와이프</span><span className="text-gray-300">{formatManwon(h.wife.financialIncome)}</span></div>
-            <p className="text-[10px] text-gray-600">잔액 {formatManwon(stockBalance)} × {yieldPct}% = 연 {formatManwon(Math.round(stockBalance * yieldPct / 100))} · {formatManwon(Math.round(h.totals.financialIncome / 12))}/월</p>
+            <p className="text-[10px] text-gray-600">잔액 남편 {formatManwon(sb.husband.total)}·와이프 {formatManwon(sb.wife.total)} → 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))} · {formatManwon(Math.round(h.totals.financialIncome / 12))}/월</p>
             <p className="text-[10px] text-gray-600 mt-1 pt-1 border-t border-gray-700/50">※ 연금저축의 배당수입은 <b>배당재투자</b>로 들어가 별도 수입으로 잡지 않습니다.</p>
           </div>
         </div>

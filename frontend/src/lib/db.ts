@@ -888,6 +888,40 @@ export async function getPensionSim(): Promise<PensionSimPlan | null> {
       delete (parsed as { stockBalance?: number }).stockBalance
       delete (parsed as { stockDividendYield?: number }).stockDividendYield
     }
+    // 마이그레이션: 종목 기반(stockHoldings/stockYields/stockGrowthRate) → 계좌 단위 stockAccount(남편/와이프)
+    // 종목별 가중평균 배당률·상승률을 계좌 기본값으로 승계. extraAmount=0.
+    const legacyHoldings = parsed as {
+      stockHoldings?: { ticker?: string; weight?: number; growthRate?: number }[]
+      stockYields?: { ticker?: string; yield?: number; manual?: boolean }[]
+      stockGrowthRate?: number; stockManualYield?: number; stockAccount?: unknown
+    }
+    if (legacyHoldings.stockHoldings !== undefined && legacyHoldings.stockAccount === undefined) {
+      const holdings = legacyHoldings.stockHoldings ?? []
+      const yields = legacyHoldings.stockYields ?? []
+      // 가중평균 배당률 (수동 입력 우선) — blendedYield 인라인 (db.ts는 corpSim import 회피)
+      const yieldByTicker = new Map<string, number>()
+      for (const y of yields) if (y.ticker && typeof y.yield === 'number') yieldByTicker.set(y.ticker, y.yield)
+      const wHoldings = holdings.filter((h) => h.ticker && (h.weight ?? 0) > 0)
+      const totalW = wHoldings.reduce((s, h) => s + (h.weight ?? 0), 0)
+      let blendedY = 0
+      if (totalW > 0) {
+        blendedY = wHoldings.reduce((s, h) => s + (yieldByTicker.get(h.ticker as string) ?? 0) * ((h.weight ?? 0) / totalW), 0)
+      }
+      // 가중평균 상승률
+      const gHoldings = holdings.filter((h) => h.ticker && (h.weight ?? 0) > 0 && (h.growthRate ?? 0) > 0)
+      const gW = gHoldings.reduce((s, h) => s + (h.weight ?? 0), 0)
+      const blendedG = gW > 0 ? gHoldings.reduce((s, h) => s + (h.growthRate ?? 0) * ((h.weight ?? 0) / gW), 0) : 0
+      const yieldVal = blendedY > 0 ? blendedY : (legacyHoldings.stockManualYield ?? 4)
+      const growthVal = blendedG > 0 ? blendedG : (legacyHoldings.stockGrowthRate ?? 5)
+      parsed.stockAccount = {
+        husband: { extraAmount: 0, dividendYield: yieldVal, growthRate: growthVal },
+        wife:    { extraAmount: 0, dividendYield: yieldVal, growthRate: growthVal },
+      }
+      delete (parsed as { stockHoldings?: unknown }).stockHoldings
+      delete (parsed as { stockYields?: unknown }).stockYields
+      delete (parsed as { stockGrowthRate?: unknown }).stockGrowthRate
+      delete (parsed as { stockManualYield?: unknown }).stockManualYield
+    }
     // 마이그레이션: 구 comprehensiveDeduction → spouseDependent/dependents/useStandardDeduction
     const legacyDed = parsed as { comprehensiveDeduction?: number; spouseDependent?: boolean; useStandardDeduction?: boolean }
     if (typeof legacyDed.comprehensiveDeduction === 'number' && legacyDed.spouseDependent === undefined) {

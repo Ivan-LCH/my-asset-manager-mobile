@@ -3,8 +3,7 @@
 // 기존 연금원천(sources)은 그대로 가정(연금=남편 명의), + 유입 항목의 목적지·명의에
 // 따라 1인별 세금·건보를 산출 → 가구 총계.
 // 모든 수치는 사용자 가정에 기반한 추정치.
-import type { PensionSimPlan, PensionSource, PensionAllocation, Ownership, PortfolioHolding, PortfolioYield } from '@/types'
-import { blendedYield } from '@/lib/corpSim'
+import type { PensionSimPlan, PensionSource, PensionAllocation, Ownership } from '@/types'
 import { calcHealthInsurance } from '@/lib/healthInsurance'
 
 /** 연금소득세 누진구간 (연금소득 전용, 종합소득세와 별개) */
@@ -99,12 +98,24 @@ export function stockBalanceFromInflows(allocations: PensionAllocation[]): numbe
   return allocations.reduce((s, a) => s + a.stockAmount, 0)
 }
 
-/** 종목별 배당률 → 가중평균. 수동 > 자동조회 > 0. */
-export function blendedYieldWithFallback(
-  yields: PortfolioYield[],
-  holdings: PortfolioHolding[],
-): number {
-  return blendedYield(yields, holdings)
+/** 일반주식계좌(남편/와이프 각각) 잔액·배당기준.
+ *  잔액 = (목돈 분배 stock 합 × stockOwnership 지분) + extraAmount.
+ *  dividendBase = 잔액 × dividendYield%. */
+export interface StockAccountBalances {
+  husband: { linked: number; extra: number; total: number; dividendBase: number; growthRate: number; dividendYield: number }
+  wife:    { linked: number; extra: number; total: number; dividendBase: number; growthRate: number; dividendYield: number }
+}
+export function stockAccountBalances(plan: PensionSimPlan): StockAccountBalances {
+  const pool = stockBalanceFromInflows(plan.allocations)
+  const h = plan.stockAccount.husband, w = plan.stockAccount.wife
+  const hLinked = pool * (plan.stockOwnership.husband / 100)
+  const wLinked = pool * (plan.stockOwnership.wife / 100)
+  const hTot = hLinked + h.extraAmount
+  const wTot = wLinked + w.extraAmount
+  return {
+    husband: { linked: hLinked, extra: h.extraAmount, total: hTot, dividendBase: hTot * (h.dividendYield / 100), growthRate: h.growthRate, dividendYield: h.dividendYield },
+    wife:    { linked: wLinked, extra: w.extraAmount, total: wTot, dividendBase: wTot * (w.dividendYield / 100), growthRate: w.growthRate, dividendYield: w.dividendYield },
+  }
 }
 
 /** 목돈별 현금 나머지 = 목돈 금액 − (퇴직IRP + 주식 분배). 0 미만 방지. */
@@ -120,9 +131,10 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
     { id: 'pen1', name: '연금저축(98년 비과세)', principal: 100_000_000, taxType: 'taxExempt', yieldRate: 4, owner: 'husband' },
   ],
   allocations: [],
-  stockHoldings: [],
-  stockYields: [],
-  stockGrowthRate: 0,
+  stockAccount: {
+    husband: { extraAmount: 0, dividendYield: 4, growthRate: 5 },
+    wife:    { extraAmount: 0, dividendYield: 4, growthRate: 5 },
+  },
   stockOwnership: { husband: 50, wife: 50 },
   otherIncome: 0,
   spouseDependent: true,
@@ -151,15 +163,6 @@ export function computePerPersonComprehensiveDeduction(plan: Pick<PensionSimPlan
               + (plan.useStandardDeduction ? 1_000_000 : 0)
   const perPerson = 1_500_000 + shared / 2
   return { husband: perPerson, wife: perPerson }
-}
-
-/** 일반주식계좌 blended 배당률(%) — 종목 기반, 실패 시 stockManualYield */
-export function stockAccountYield(plan: PensionSimPlan): number {
-  if (plan.stockHoldings.length > 0) {
-    const y = blendedYieldWithFallback(plan.stockYields, plan.stockHoldings)
-    if (y > 0) return y
-  }
-  return plan.stockManualYield ?? 0
 }
 
 // ── 1인별 결과 ───────────────────────────────────────────────
@@ -228,7 +231,9 @@ export interface PensionScheduleRow {
   year:            number
   drawdownAnnual:  number   // IRP/연금저축 인출 (과세+비과세, 성장률 적용)
   nationalAnnual:  number   // 국민연금 (과세)
-  financialAnnual: number   // 일반주식계좌 배당 (성장률 적용, 매년 증가)
+  financialAnnual: number   // 일반주식계좌 배당 합계 (남편+와이프, 성장률 적용)
+  financialHusbandAnnual: number  // 남편 계좌 배당 (본인 배당률·상승률)
+  financialWifeAnnual:    number  // 와이프 계좌 배당
   taxableAnnual:   number   // drawdown과세 + 국민연금
   exemptAnnual:    number   // drawdown 비과세
   totalAnnual:     number   // 연금 + 배당 합계
@@ -241,10 +246,14 @@ export function pensionSchedule(
   opts?: { irpGrowthRate?: number; currentYear?: number },
 ): PensionScheduleRow[] {
   const years = plan.withdrawalYears || 1
-  const stockGrowth = (plan.stockGrowthRate || 0) / 100        // 일반주식계좌 배당 성장
-  const irpGrowth = ((opts?.irpGrowthRate ?? plan.stockGrowthRate ?? 0)) / 100  // IRP 잔액 성장
+  const irpGrowth = ((opts?.irpGrowthRate ?? 0)) / 100  // IRP 잔액 성장
   const currentYear = opts?.currentYear ?? new Date().getFullYear()
   const startYear = plan.startYear
+
+  // ── 일반주식계좌 (남편/와이프 각각): 계좌 단위 배당률·상승률 ──
+  const sb = stockAccountBalances(plan)
+  const hGrowth = sb.husband.growthRate / 100
+  const wGrowth = sb.wife.growthRate / 100
 
   // ── IRP/퇴직연금 (통합 1계좌): 퇴직시점까지 성장한 잔액 ÷ 수령기간 ──
   // 목돈 IRP 분배(퇴직금 등) + expectedMonthlyPayout 미등록 IRP 자산.
@@ -300,15 +309,13 @@ export function pensionSchedule(
     return { taxable: flatTaxableBase, exempt: flatExemptBase }
   }
 
-  // 주식 배당 기준 (수령개시 시점 잔액 × 배당률)
-  const stockTotal = plan.allocations.reduce((sm, a) => sm + a.stockAmount, 0)
-  const yieldPct = stockAccountYield(plan)
-  const dividendBase = Math.round(stockTotal * (yieldPct / 100))
-
   const rows: PensionScheduleRow[] = []
   for (let year = fromYear; year <= toYear; year++) {
     const elapsed = year - fromYear  // 배당 성장 경과년수
-    const financial = dividendBase * Math.pow(1 + stockGrowth, elapsed)
+    // 남편/와이프 각 계좌 배당 (본인 배당률·상승률 적용)
+    const finH = sb.husband.dividendBase * Math.pow(1 + hGrowth, elapsed)
+    const finW = sb.wife.dividendBase * Math.pow(1 + wGrowth, elapsed)
+    const financial = finH + finW
 
     const irp = irpAnnualAt(year)
     const allow = allowanceAnnualAt(year)
@@ -331,6 +338,8 @@ export function pensionSchedule(
       drawdownAnnual: Math.round(drawTaxable + drawExempt),
       nationalAnnual: Math.round(national),
       financialAnnual: Math.round(financial),
+      financialHusbandAnnual: Math.round(finH),
+      financialWifeAnnual: Math.round(finW),
       taxableAnnual: Math.round(taxable),
       exemptAnnual: Math.round(drawExempt),
       totalAnnual: Math.round(taxable + drawExempt + financial),
@@ -340,7 +349,7 @@ export function pensionSchedule(
 }
 
 /** 특정 연도 스케줄 행에 대해 1인별 세금·건보 산정 (현금흐름 연도별 재산정용).
- *  연금은 남편 명의 가정. 배당은 stockOwnership으로 1인 분할.
+ *  연금은 남편 명의 가정. 배당은 남편/와이프 각 계좌의 본인 배당(row.financialHusband/WifeAnnual).
  *  재산분은 해당 연도의 부동산 재산과표(props) 반영 (재건축 futureYear 전환 포함). */
 export function perPersonYearTaxHealth(
   row: PensionScheduleRow,
@@ -350,15 +359,13 @@ export function perPersonYearTaxHealth(
   scorePerPoint = 208.4,
 ): { husbandTax: number; wifeTax: number; husbandHealth: number; wifeHealth: number } {
   const ded = computePerPersonComprehensiveDeduction(plan)
-  const hShare = plan.stockOwnership.husband / 100
-  const wShare = plan.stockOwnership.wife / 100
 
   const pensionTaxableH = row.taxableAnnual
   const pensionExemptH = row.exemptAnnual
   const pensionTaxH = pensionIncomeTax(Math.max(0, pensionTaxableH - plan.pensionDeduction))
 
-  const finH = row.financialAnnual * hShare
-  const finW = row.financialAnnual * wShare
+  const finH = row.financialHusbandAnnual
+  const finW = row.financialWifeAnnual
   const ftH = comprehensiveTaxBreakdown(finH, plan.otherIncome, ded.husband)
   const ftW = comprehensiveTaxBreakdown(finW, 0, ded.wife)
 
@@ -415,14 +422,8 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   // IRP 유입은 남편(퇴직) 명의로 합산 (목돈 분배 → 퇴직IRP)
   const irpInflow = plan.allocations.reduce((s, a) => s + a.irpAmount, 0)
 
-  // 일반주식계좌: 잔액은 목돈 분배(주식) 합에서, 명의는 stockOwnership
-  const stockTotal = stockBalanceFromInflows(plan.allocations)
-  const yieldPct = stockAccountYield(plan)
-  const annualDividendBase = Math.round(stockTotal * (yieldPct / 100))
-
-  // 주식 소득 1인 분할 — 기준년도의 성장률 적용된 배당은 아래 pensionRow에서 가져옴
-  const husbandShare = plan.stockOwnership.husband / 100
-  const wifeShare = plan.stockOwnership.wife / 100
+  // 일반주식계좌 (남편/와이프 각각): 계좌 단위 잔액·배당기준
+  const sb = stockAccountBalances(plan)
 
   // 기타소득은 남편 근로 가정(연금시뮬에선 남편에 배정; 은퇴계획에서 1인별 처리)
   const other = { husband: plan.otherIncome, wife: 0 }
@@ -452,11 +453,10 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   const annualPensionExemptH = pensionRow?.exemptAnnual ?? exemptSrc / years
   const pensionTaxH = pensionIncomeTax(Math.max(0, annualPensionTaxableH - plan.pensionDeduction))
 
-  // 기준년도 주식 배당 (성장률 적용) — pensionRow의 financialAnnual 사용
-  const refDividend = pensionRow?.financialAnnual ?? annualDividendBase
+  // 기준년도 주식 배당 (본인 계좌 배당률·상승률 적용) — pensionRow의 1인별 배당 사용
   const fin = {
-    husband: refDividend * husbandShare,
-    wife: refDividend * wifeShare,
+    husband: pensionRow?.financialHusbandAnnual ?? sb.husband.dividendBase,
+    wife: pensionRow?.financialWifeAnnual ?? sb.wife.dividendBase,
   }
 
   const computePerson = (owner: 'husband' | 'wife'): PersonVehicleResult => {
@@ -472,7 +472,7 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
     const personDeduction = (isHusband ? perPersonDed.husband : perPersonDed.wife)
     const ft = comprehensiveTaxBreakdown(personFin, personOther, personDeduction)
 
-    const stockBalance = stockTotal * (isHusband ? husbandShare : wifeShare)
+    const stockBalance = isHusband ? sb.husband.total : sb.wife.total
     const prop = isHusband ? opts?.husbandProperty : opts?.wifeProperty
     const healthMonthly = prop
       ? calcHealthInsurance({

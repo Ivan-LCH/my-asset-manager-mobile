@@ -3,7 +3,7 @@ import {
   EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehiclePerPerson,
   computePensionVehicle, computePerPersonComprehensiveDeduction, pensionSchedule,
   severanceTax, perPersonYearTaxHealth,
-  stockBalanceFromInflows, totalInflows, sourcesFromAssets,
+  stockBalanceFromInflows, stockAccountBalances, totalInflows, sourcesFromAssets,
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
@@ -56,12 +56,14 @@ describe('pensionSim 계산', () => {
   })
 
   it('1인별 2천만 한도: 부부 합산>2천만이어도 각<2천만이면 종합합산 없음', () => {
-    // stock 잔액 6억 × 6% = 3천6백만, 50:50 → 각 1천8백만 (<2천만)
+    // 연결금액(목돈 분배) 6억 × 50:50 = 각 3억 × 배당률 6% = 각 1천8백만 (<2천만)
     const p = plan({
       sources: [],
       startYear: 2029,
-      stockHoldings: [{ ticker: 'A', weight: 1 }],
-      stockYields: [{ ticker: 'A', yield: 6 }],
+      stockAccount: {
+        husband: { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+        wife:    { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+      },
       stockOwnership: { husband: 50, wife: 50 },
       allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 600_000_000 }],
     })
@@ -74,12 +76,14 @@ describe('pensionSim 계산', () => {
     // 가구 합산(3천6백만)으로 한 번에 계산했으면 1천6백만이 종합합산되었을 것 → 1인별이 유리
   })
 
-  it('명의 100:0 → 와이프 금융소득 0', () => {
+  it('명의 100:0 → 와이프 연결금액 0', () => {
     const p = plan({
       sources: [],
       startYear: 2029,
-      stockYields: [{ ticker: 'A', yield: 6 }],
-      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockAccount: {
+        husband: { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+        wife:    { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+      },
       stockOwnership: { husband: 100, wife: 0 },
       allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 300_000_000 }],
     })
@@ -88,17 +92,20 @@ describe('pensionSim 계산', () => {
     expect(r.wife.financialIncome).toBe(0)
   })
 
-  it('수동 yield가 조회=0을 이긴다', () => {
+  it('계좌별 배당률·추가금액: 남편 5%·추가 1억 / 와이프 4% (연결 0)', () => {
     const p = plan({
       sources: [],
       startYear: 2029,
-      stockHoldings: [{ ticker: 'X', weight: 1 }],
-      stockYields: [{ ticker: 'X', yield: 5, manual: true }],  // 수동 5%
+      stockAccount: {
+        husband: { extraAmount: 100_000_000, dividendYield: 5, growthRate: 0 },
+        wife:    { extraAmount: 0,            dividendYield: 4, growthRate: 0 },
+      },
       stockOwnership: { husband: 100, wife: 0 },
-      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 100_000_000 }],
+      allocations: [],
     })
     const r = computePensionVehiclePerPerson(p)
-    expect(r.husband.financialIncome).toBeCloseTo(5_000_000, -4) // 1억 × 5%
+    expect(r.husband.financialIncome).toBeCloseTo(5_000_000, -4) // 추가 1억 × 5%
+    expect(r.wife.financialIncome).toBe(0)
   })
 
   it('computePensionVehicle(shim): 가구 합계 반환', () => {
@@ -129,8 +136,10 @@ describe('pensionSim 계산', () => {
     const p = plan({
       sources: [],
       startYear: 2029,
-      stockYields: [{ ticker: 'A', yield: 6 }],
-      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockAccount: {
+        husband: { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+        wife:    { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+      },
       stockOwnership: { husband: 50, wife: 50 },
       allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 600_000_000 }],
     })
@@ -192,8 +201,10 @@ describe('pensionSim 계산', () => {
     const p = plan({
       sources: [],
       startYear: 2029,
-      stockYields: [{ ticker: 'A', yield: 6 }],
-      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockAccount: {
+        husband: { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+        wife:    { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+      },
       stockOwnership: { husband: 100, wife: 0 },
       // 목돈 분배: 전세금 5억 → 주식, 위로금 1.5억은 분배 없음(현금=나머지, allocations에 없음)
       allocations: [
@@ -365,16 +376,17 @@ describe('pensionSim 계산', () => {
     expect(sched[0].drawdownAnnual).toBeGreaterThan(10_000_000)  // 3억÷30(1000만)보다 큼
   })
 
-  it('perPersonYearTaxHealth: 연도별 세금·건보 산정 (배당 성장 반영)', () => {
+  it('perPersonYearTaxHealth: 연도별 세금·건보 산정 (계좌별 배당 성장 반영)', () => {
     const p = plan({
       sources: [
         { id: 'irp', name: 'IRP', principal: 300_000_000, taxType: 'irp', yieldRate: 0, owner: 'husband' },
       ],
       allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 500_000_000 }],
-      stockYields: [{ ticker: 'A', yield: 6 }],
-      stockHoldings: [{ ticker: 'A', weight: 1 }],
+      stockAccount: {
+        husband: { extraAmount: 0, dividendYield: 6, growthRate: 5 },
+        wife:    { extraAmount: 0, dividendYield: 6, growthRate: 5 },
+      },
       stockOwnership: { husband: 100, wife: 0 },
-      stockGrowthRate: 5,
       startYear: 2029, withdrawalYears: 30,
     })
     const sched = pensionSchedule(p, [], 2029, 2035, { currentYear: 2029 })
@@ -383,6 +395,44 @@ describe('pensionSim 계산', () => {
     // 배당이 성장하므로 나중 해의 세금이 더 큼
     expect(late.husbandTax).toBeGreaterThanOrEqual(early.husbandTax)
     expect(early.husbandHealth).toBeGreaterThan(0)
-    expect(early.wifeTax).toBe(0)  // 와이프 배당 0
+    expect(early.wifeTax).toBe(0)  // 와이프 연결금액 0 → 배당 0
+  })
+
+  it('stockAccountBalances: 연결금액 분할 + 추가금액 + 계좌별 배당률', () => {
+    const p = plan({
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 400_000_000 }],
+      stockAccount: {
+        husband: { extraAmount: 100_000_000, dividendYield: 5, growthRate: 3 },
+        wife:    { extraAmount: 50_000_000,  dividendYield: 4, growthRate: 2 },
+      },
+      stockOwnership: { husband: 50, wife: 50 },
+    })
+    const sb = stockAccountBalances(p)
+    // 남편: 연결 2억 + 추가 1억 = 3억, 배당 5% = 1500만
+    expect(sb.husband.total).toBe(300_000_000)
+    expect(sb.husband.dividendBase).toBe(15_000_000)
+    // 와이프: 연결 2억 + 추가 5천만 = 2.5억, 배당 4% = 1000만
+    expect(sb.wife.total).toBe(250_000_000)
+    expect(sb.wife.dividendBase).toBe(10_000_000)
+  })
+
+  it('pensionSchedule: 계좌별 상승률이 다르면 연도별 배당 증가율이 다르다', () => {
+    const p = plan({
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 200_000_000 }],
+      stockAccount: {
+        husband: { extraAmount: 0, dividendYield: 6, growthRate: 10 },  // 남편 고성장
+        wife:    { extraAmount: 0, dividendYield: 6, growthRate: 0  },  // 와이프 성장 0
+      },
+      stockOwnership: { husband: 50, wife: 50 },
+      startYear: 2029, withdrawalYears: 30,
+    })
+    const sched = pensionSchedule(p, [], 2029, 2031, { currentYear: 2029 })
+    const y0 = sched[0], y2 = sched[2]
+    // 남편 배당은 2년 뒤 (1.1)^2 배 증가
+    expect(y2.financialHusbandAnnual).toBeCloseTo(y0.financialHusbandAnnual * 1.21, -3)
+    // 와이프 배당은 변화 없음
+    expect(y2.financialWifeAnnual).toBe(y0.financialWifeAnnual)
+    // 합계는 남편 성장분만큼 증가
+    expect(y2.financialAnnual).toBeGreaterThan(y0.financialAnnual)
   })
 })

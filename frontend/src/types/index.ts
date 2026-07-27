@@ -261,14 +261,22 @@ export interface PensionAllocation {
   // 현금 = lumpsum.amount - irpAmount - stockAmount (나머지, 은퇴계획 목돈)
 }
 
+/** 일반주식계좌(남편/와이프 각각) 설정 — 종목 입력 없이 계좌 단위 배당률·상승률.
+ *  잔액 = (목돈 분배 stock 합계 × stockOwnership 지분) + extraAmount. */
+export interface StockAccountConfig {
+  extraAmount: number     // 연결금액(목돈 분배) 외 추가 수동 금액(원)
+  dividendYield: number   // 계좌 전체 배당률 (%)
+  growthRate: number      // 계좌 전체 연평균 주가상승률 (%)
+}
+
 export interface PensionSimPlan {
   sources:                  PensionSource[]     // 기존 연금원천 (PensionPage에서 과세구분 관리)
   allocations:              PensionAllocation[] // 은퇴계획 목돈을 퇴직IRP/일반주식계좌로 분배
-  stockHoldings:            PortfolioHolding[]  // 일반주식계좌 종목 (배당률 자동산정용)
-  stockYields:              PortfolioYield[]    // 종목별 배당률(조회+수동 폴백)
-  stockGrowthRate:          number              // 일반주식계좌 연평균 주가상승률(%) — 종목별 가중평균
-  stockOwnership:           Ownership           // 일반주식계좌 명의 지분
-  stockManualYield?:        number              // 종목 없을 때 수동 배당률(%) 오버라이드
+  stockAccount: {                               // 일반주식계좌 (남편/와이프 각각)
+    husband: StockAccountConfig
+    wife:    StockAccountConfig
+  }
+  stockOwnership:           Ownership           // 연결금액(목돈 분배 stock)을 남편/와이프로 분할할 비율
   otherIncome:              number              // 기타 종합소득(연, 근로/사업 등)
   spouseDependent:          boolean             // 배우자 부양공제 (기본 true, 부부 가정)
   dependents:               number              // 부양가족 수 (0~)
