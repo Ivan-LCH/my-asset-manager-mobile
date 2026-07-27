@@ -316,7 +316,9 @@ export function pensionSchedule(
 
     let national = 0
     for (const n of nationals) {
-      if (year >= n.expectedStartYear && year <= n.expectedEndYear) {
+      // 국민연금은 종신 → 수령개시연도부터 스케줄 끝(toYear, 사망)까지 지급.
+      // (endYear가 짧아 현금흐름 중간에 끊기는 버그 방지 — 와이프 자동생성 endYear=start+50 등)
+      if (year >= n.expectedStartYear && year <= toYear) {
         const natElapsed = year - n.expectedStartYear
         national += n.expectedMonthlyPayout * 12 * Math.pow(1 + (n.annualGrowthRate || 0) / 100, natElapsed)
       }

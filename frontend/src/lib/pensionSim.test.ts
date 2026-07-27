@@ -293,6 +293,22 @@ describe('pensionSim 계산', () => {
     expect(row.drawdownAnnual).toBe(1_000_000 * 12)  // 1200만 — 0년도로 skip되지 않아야 함
   })
 
+  it('pensionSchedule: 국민연금은 종신 — endYear 짧아도 스케줄 끝까지 지급', () => {
+    // 와이프 국민연금이 startYear+50 같은 짧은 endYear로 생성되어도 중간에 끊기지 않아야 함
+    const nationals = [
+      { expectedStartYear: 2037, expectedEndYear: 2099, expectedMonthlyPayout: 1_906_250, annualGrowthRate: 3 }, // 남편
+      { expectedStartYear: 2018, expectedEndYear: 2068, expectedMonthlyPayout: 1_107_450, annualGrowthRate: 2 }, // 와이프 (endYear 2068)
+    ]
+    const p = plan({ sources: [], startYear: 2029, withdrawalYears: 30 })
+    const sched = pensionSchedule(p, nationals, 2029, 2072)
+    const at2067 = sched.find((r) => r.year === 2067)!
+    const at2068 = sched.find((r) => r.year === 2068)!  // endYear=2068 지나도록 종신
+    const at2070 = sched.find((r) => r.year === 2070)!
+    // 2068(=endYear) 이후에도 와이프 국민연금이 유지 → 감소 없음
+    expect(at2068.nationalAnnual).toBeGreaterThanOrEqual(at2067.nationalAnnual)
+    expect(at2070.nationalAnnual).toBeGreaterThanOrEqual(at2068.nationalAnnual)
+  })
+
   it('sourcesFromAssets: pensionType NATIONAL(영어) → national 분류 (taxable 아님)', () => {
     // 이창호-국민연금 pensionType="NATIONAL" 이 'taxable'로 잘못 분류되던 버그
     const assets = [
