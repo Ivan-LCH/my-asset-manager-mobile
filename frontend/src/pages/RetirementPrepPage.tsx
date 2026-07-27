@@ -9,7 +9,7 @@ import { usePortfolio, useSavePortfolio, DEFAULT_PORTFOLIO } from '@/hooks/usePo
 import { formatManwon, cn } from '@/lib/utils'
 import type {
   RetirementPlan, ExpenseItem, TravelItem, LumpsumItem, EmergencyItem,
-  PensionSimPlan,
+  PensionSimPlan, PortfolioSettings,
 } from '@/types'
 import { EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
 
@@ -229,32 +229,14 @@ function EmergencySection({ items, onChange }: { items: EmergencyItem[]; onChang
 }
 
 // ── IRP 투자 포트폴리오 섹션 ───────────────────────────────
-function PortfolioSection() {
-  const { data: saved } = usePortfolio()
-  const saveMut = useSavePortfolio()
-  const [dividendYield, setDividendYield] = useState(DEFAULT_PORTFOLIO.dividendYield)
-  const [growthRate, setGrowthRate] = useState(DEFAULT_PORTFOLIO.growthRate)
-  const [dirty, setDirty] = useState(false)
-
-  useEffect(() => {
-    if (saved) {
-      setDividendYield(saved.dividendYield)
-      setGrowthRate(saved.growthRate)
-    }
-  }, [saved])
-
+function PortfolioSection({ value, onChange }: {
+  value: PortfolioSettings; onChange: (patch: Partial<PortfolioSettings>) => void
+}) {
   return (
     <Section>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (배당률·상승률)</p>
-        <button onClick={() => saveMut.mutate({ dividendYield, growthRate }, { onSuccess: () => setDirty(false) })}
-          disabled={!dirty || saveMut.isPending}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
-          <Save className="w-3.5 h-3.5" />{saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
-        </button>
-      </div>
+      <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (배당률·상승률)</p>
       <p className="text-[11px] text-gray-500 leading-relaxed">
-        IRP 계좌(법인시뮬 공유). 종목 입력 없이 <b>계좌 전체 배당률·상승률</b>만 입력 → 퇴직시점 잔액 성장·배당 산정.
+        IRP 계좌(법인시뮬 공유). 종목 입력 없이 <b>계좌 전체 배당률·상승률</b>만 입력 → 퇴직시점 잔액 성장·배당 산정. 상단 저장 버튼으로 저장.
       </p>
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-gray-900/50 rounded-lg p-3">
@@ -262,7 +244,7 @@ function PortfolioSection() {
           <div className="flex items-center gap-1">
             <input type="number" inputMode="decimal"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
-              value={dividendYield || ''} onChange={(e) => { setDividendYield(Number(e.target.value)); setDirty(true) }} />
+              value={value.dividendYield || ''} onChange={(e) => onChange({ dividendYield: Number(e.target.value) })} />
             <span className="text-xs text-gray-500 shrink-0">%</span>
           </div>
         </div>
@@ -271,7 +253,7 @@ function PortfolioSection() {
           <div className="flex items-center gap-1">
             <input type="number" inputMode="decimal"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
-              value={growthRate || ''} onChange={(e) => { setGrowthRate(Number(e.target.value)); setDirty(true) }} />
+              value={value.growthRate || ''} onChange={(e) => onChange({ growthRate: Number(e.target.value) })} />
             <span className="text-xs text-gray-500 shrink-0">%</span>
           </div>
         </div>
@@ -342,8 +324,12 @@ function PensionSettingsSection() {
 export default function RetirementPrepPage() {
   const { data: saved } = useRetirement()
   const saveMut = useSaveRetirement()
+  const { data: portfolioSaved } = usePortfolio()
+  const portfolioSaveMut = useSavePortfolio()
   const [plan, setPlan] = useState<RetirementPlan | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [portfolio, setPortfolio] = useState<PortfolioSettings>(DEFAULT_PORTFOLIO)
+  const [portfolioDirty, setPortfolioDirty] = useState(false)
 
   useEffect(() => {
     if (saved && Object.keys(saved).length > 0) {
@@ -364,14 +350,24 @@ export default function RetirementPrepPage() {
     }
   }, [saved])
 
+  useEffect(() => { if (portfolioSaved) setPortfolio(portfolioSaved) }, [portfolioSaved])
+
   const update = useCallback(<K extends keyof RetirementPlan>(key: K, val: RetirementPlan[K]) => {
     setPlan((p) => (p ? { ...p, [key]: val } : p))
     setDirty(true)
   }, [])
 
+  const updatePortfolio = useCallback((patch: Partial<PortfolioSettings>) => {
+    setPortfolio((p) => ({ ...p, ...patch }))
+    setPortfolioDirty(true)
+  }, [])
+
   const handleSave = () => {
     if (plan) saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
+    if (portfolioDirty) portfolioSaveMut.mutate(portfolio, { onSuccess: () => setPortfolioDirty(false) })
   }
+  const anyDirty = dirty || portfolioDirty
+  const saving = saveMut.isPending || portfolioSaveMut.isPending
 
   if (!plan) return <div className="flex items-center justify-center h-64 text-gray-400">로딩 중...</div>
 
@@ -382,10 +378,10 @@ export default function RetirementPrepPage() {
           <h2 className="text-lg sm:text-xl font-bold text-gray-100">📝 은퇴 준비 (입력)</h2>
           <p className="text-xs text-gray-500 mt-0.5">생활비·목돈·IRP 포트폴리오 입력. 결과는 연금시뮬 / 법인시뮬 / 현금흐름에서 확인.</p>
         </div>
-        <button onClick={handleSave} disabled={!dirty || saveMut.isPending}
+        <button onClick={handleSave} disabled={!anyDirty || saving}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 shrink-0">
           <Save className="w-4 h-4" />
-          {saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
+          {saving ? '저장 중...' : anyDirty ? '저장' : '저장됨'}
         </button>
       </div>
 
@@ -418,8 +414,8 @@ export default function RetirementPrepPage() {
         <PensionSettingsSection />
       </Expander>
 
-      <Expander title="📊 IRP 투자 포트폴리오" badge="종목·비중·배당률">
-        <PortfolioSection />
+      <Expander title="📊 IRP 투자 포트폴리오" badge="배당률·상승률">
+        <PortfolioSection value={portfolio} onChange={updatePortfolio} />
       </Expander>
     </div>
   )
