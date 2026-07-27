@@ -5,13 +5,8 @@ import type { PortfolioSettings } from '@/types'
 const KEY = ['portfolio']
 
 const DEFAULT: PortfolioSettings = {
-  holdings: [
-    { ticker: 'SCHD', weight: 1 },
-    { ticker: 'GPIQ', weight: 1 },
-    { ticker: 'JEPQ', weight: 1 },
-  ],
-  blendedYield: 0,
-  manualYields: [],
+  dividendYield: 4,
+  growthRate: 5,
 }
 
 export { DEFAULT as DEFAULT_PORTFOLIO }

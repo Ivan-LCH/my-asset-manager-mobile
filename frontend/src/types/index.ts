@@ -198,15 +198,10 @@ export interface PortfolioHolding {
 }
 
 // ── 공통 투자 포트폴리오 (법인·연금 시뮬 공유) ─────────────
+// 단순화: 종목 단위 입력 제거 → 계좌 전체 배당률·상승률만 입력.
 export interface PortfolioSettings {
-  holdings:    PortfolioHolding[]
-  blendedYield: number           // 자동 산정 가중평균 수익률(%)
-  manualYields: { ticker: string; yield: number }[]  // 수동 배당률 폴백 (/api/yield 실패 시)
-}
-export interface PortfolioYield {
-  ticker: string
-  yield: number                  // 3년평균 배당수익률(%)
-  manual?: boolean               // 수동 입력 여부
+  dividendYield: number          // 연평균 배당률(%)
+  growthRate:    number          // 연평균 주가상승률(%)
 }
 
 export interface CorpSimPlan {

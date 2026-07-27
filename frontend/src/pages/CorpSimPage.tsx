@@ -163,8 +163,8 @@ export default function CorpSimPage() {
     const pensionMap = calcPensionByYear(allAssets, currentAge)
     pensionAnnual = (pensionMap.get(retirementYear) ?? 0) * 12
   }
-  // 포트폴리오 blendedYield가 있으면 dividendYield override
-  const portfolioYield = portfolioData?.blendedYield ?? 0
+  // 포트폴리오 배당률이 있으면 dividendYield override
+  const portfolioYield = portfolioData?.dividendYield ?? 0
   const effectiveYield = portfolioYield > 0 ? portfolioYield : plan.dividendYield
   const effectivePlan: CorpSimPlan = { ...plan, pensionIncomeAnnual: pensionAnnual, dividendYield: effectiveYield, loanAmount: plan.loanAmount + corpInflow }
 

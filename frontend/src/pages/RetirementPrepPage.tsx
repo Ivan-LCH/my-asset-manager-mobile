@@ -2,16 +2,14 @@
 // 생활비/여행/의료비 + 목돈수입/긴급자금 + IRP 투자 포트폴리오.
 // 결과는 연금시뮬 / 법인시뮬 / 현금흐름(은퇴계획)에서 확인.
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, RotateCcw, Save, ChevronDown, RefreshCw } from 'lucide-react'
-import StockSearch from '@/components/common/StockSearch'
+import { Plus, Trash2, RotateCcw, Save, ChevronDown } from 'lucide-react'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { usePortfolio, useSavePortfolio, DEFAULT_PORTFOLIO } from '@/hooks/usePortfolio'
-import { blendedYield } from '@/lib/corpSim'
 import { formatManwon, cn } from '@/lib/utils'
 import type {
   RetirementPlan, ExpenseItem, TravelItem, LumpsumItem, EmergencyItem,
-  PortfolioHolding, PortfolioYield, PensionSimPlan,
+  PensionSimPlan,
 } from '@/types'
 import { EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
 
@@ -234,220 +232,50 @@ function EmergencySection({ items, onChange }: { items: EmergencyItem[]; onChang
 function PortfolioSection() {
   const { data: saved } = usePortfolio()
   const saveMut = useSavePortfolio()
-  const [holdings, setHoldings] = useState<PortfolioHolding[]>(DEFAULT_PORTFOLIO.holdings)
-  const [yieldVal, setYieldVal] = useState(0)
-  const [yields, setYields] = useState<PortfolioYield[]>([])
-  const [manual, setManual] = useState<{ ticker: string; yield: number }[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [dividendYield, setDividendYield] = useState(DEFAULT_PORTFOLIO.dividendYield)
+  const [growthRate, setGrowthRate] = useState(DEFAULT_PORTFOLIO.growthRate)
   const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
     if (saved) {
-      setHoldings(saved.holdings)
-      setYieldVal(saved.blendedYield)
-      setManual(saved.manualYields ?? [])
-      // name이 없는 기존 종목들 자동 fetch
-      void (async () => {
-        const toFetch = saved.holdings.filter((h) => h.ticker && !h.name)
-        if (toFetch.length === 0) return
-        const updated = [...saved.holdings]
-        for (const h of toFetch) {
-          try {
-            const r = await fetch(`/api/yield?ticker=${encodeURIComponent(h.ticker)}`)
-            if (!r.ok) continue
-            const d = await r.json()
-            const idx = updated.findIndex((x) => x.ticker === h.ticker)
-            if (idx >= 0 && d.name) {
-              updated[idx] = { ...updated[idx], name: d.name }
-            }
-          } catch { /* skip */ }
-        }
-        setHoldings(updated)
-      })()
+      setDividendYield(saved.dividendYield)
+      setGrowthRate(saved.growthRate)
     }
   }, [saved])
-
-  const manualYieldOf = (ticker: string) => manual.find((m) => m.ticker === ticker)?.yield
-  const setManualYield = (ticker: string, y: number) => {
-    setManual((prev) => [...prev.filter((m) => m.ticker !== ticker), { ticker, yield: y }])
-    setDirty(true)
-  }
-  // 단일 종목 자동 산정 — 티커 입력/Enter 시 배당률+상승률 fetch & 저장
-  const autoFetchOne = async (ticker: string, idx: number) => {
-    try {
-      const r = await fetch(`/api/yield?ticker=${encodeURIComponent(ticker)}`)
-      if (!r.ok) return
-      const d = await r.json()
-      // 배당률 저장 (manual=false → 자동값)
-      const newYields = [...yieldEntries()]
-      const yi = newYields.findIndex((y) => y.ticker === ticker)
-      const yieldVal = d.avg3yYield ?? 0
-      if (yieldVal > 0) {
-        if (yi >= 0) newYields[yi] = { ticker, yield: yieldVal, manual: false }
-        else newYields.push({ ticker, yield: yieldVal, manual: false })
-      }
-      // 상승률 + 종목명 저장
-      const growth = d.avg3yGrowth
-      const name = d.name
-      const p = [...holdings]
-      if (idx < p.length) p[idx] = { ...p[idx], growthRate: growth ?? p[idx].growthRate, name: name ?? p[idx].name }
-      setHoldings(p)
-      // blendedYield 갱신
-      const blended = blendedYield(newYields, p)
-      setYieldVal(Math.round(blended * 100) / 100)
-      setYields(newYields)
-      setDirty(true)
-    } catch { /* 폴백: 수동 입력 대기 */ }
-  }
-  // yields 배열을 PortfolioYield[]로 변환 (yieldEntries 헬퍼)
-  const yieldEntries = (): PortfolioYield[] => {
-    return holdings.map((h) => {
-      const m = manualYieldOf(h.ticker)
-      if (typeof m === 'number') return { ticker: h.ticker, yield: m, manual: true }
-      const f = yields.find((v) => v.ticker === h.ticker)
-      return { ticker: h.ticker, yield: f?.yield ?? 0 }
-    })
-  }
-  const fetchYields = async () => {
-    setLoading(true); setError('')
-    const tickers = holdings.map((h) => h.ticker).filter(Boolean)
-    if (tickers.length === 0) { setError('종목을 먼저 입력하세요.'); setLoading(false); return }
-    const manualMap = new Map(manual.map((m) => [m.ticker, m.yield]))
-    const results: PortfolioYield[] = await Promise.all(tickers.map(async (t) => {
-      if (manualMap.has(t)) return { ticker: t, yield: manualMap.get(t) as number, manual: true }
-      try {
-        const r = await fetch(`/api/yield?ticker=${encodeURIComponent(t)}`)
-        if (!r.ok) return { ticker: t, yield: 0 }
-        const d = await r.json()
-        return { ticker: t, yield: d.avg3yYield ?? 0 }
-      } catch { return { ticker: t, yield: 0 } }
-    }))
-    // growthRate도 자동 산정
-    const newHoldings = [...holdings]
-    for (let i = 0; i < tickers.length; i++) {
-      try {
-        const r = await fetch(`/api/yield?ticker=${encodeURIComponent(tickers[i])}`)
-        if (r.ok) {
-          const d = await r.json()
-          if (d.avg3yGrowth != null) {
-            const idx = newHoldings.findIndex((h) => h.ticker === tickers[i])
-            if (idx >= 0) newHoldings[idx] = { ...newHoldings[idx], growthRate: d.avg3yGrowth }
-          }
-        }
-      } catch { /* growth 폴백: 수동값 유지 */ }
-    }
-    setHoldings(newHoldings)
-    setYields(results)
-    setYieldVal(Math.round(blendedYield(results, holdings) * 100) / 100)
-    setDirty(true); setLoading(false)
-    const ok = results.filter((r) => r.yield > 0).length
-    if (ok === 0) setError(`${tickers.length}개 종목 조회 실패. 행별 수동 입력하세요.`)
-    else if (ok < tickers.length) setError(`${tickers.length - ok}개 종목 조회 실패 (수동 입력 필요).`)
-  }
 
   return (
     <Section>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (종목·비중·배당률·상승률)</p>
-        <button onClick={() => {
-          // 저장 시 auto-fetched 배당률도 manualYields에 병합 → 영구 저장
-          const allYields = yieldEntries().filter((y) => y.yield > 0).map((y) => ({ ticker: y.ticker, yield: y.yield }))
-          saveMut.mutate({ holdings, blendedYield: yieldVal, manualYields: allYields }, { onSuccess: () => setDirty(false) })
-        }}
+        <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (배당률·상승률)</p>
+        <button onClick={() => saveMut.mutate({ dividendYield, growthRate }, { onSuccess: () => setDirty(false) })}
           disabled={!dirty || saveMut.isPending}
           className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40">
           <Save className="w-3.5 h-3.5" />{saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
         </button>
       </div>
       <p className="text-[11px] text-gray-500 leading-relaxed">
-        IRP 계좌 (한국장만). 종목명/티커 검색 → 배당률·상승률 자동 산정.
+        IRP 계좌(법인시뮬 공유). 종목 입력 없이 <b>계좌 전체 배당률·상승률</b>만 입력 → 퇴직시점 잔액 성장·배당 산정.
       </p>
-      {/* 종목 검색으로 추가 */}
-      <StockSearch koreanOnly
-        onSelect={(r) => {
-          const exists = holdings.some((h) => h.ticker === r.ticker)
-          if (exists) return
-          const newHoldings = [...holdings, { ticker: r.ticker, weight: 1, growthRate: r.growth ?? 0, name: r.name }]
-          setHoldings(newHoldings)
-          const yv = r.yield ?? 0
-          if (yv > 0) {
-            setManual((prev) => [...prev.filter((m) => m.ticker !== r.ticker), { ticker: r.ticker, yield: yv }])
-          }
-          setYields((prev) => [...prev.filter((y) => y.ticker !== r.ticker), { ticker: r.ticker, yield: yv }])
-          const blended = blendedYield([...yields.filter((y) => y.ticker !== r.ticker), { ticker: r.ticker, yield: yv }], newHoldings)
-          setYieldVal(Math.round(blended * 100) / 100)
-          setDirty(true)
-        }}
-      />
-      <div className="space-y-2">
-        {holdings.map((h, i) => {
-          const m = manualYieldOf(h.ticker)
-          const y = yields.find((v) => v.ticker === h.ticker)?.yield
-          const effective = typeof m === 'number' ? m : y
-          return (
-            <div key={i} className="flex items-center gap-2">
-              <div className="w-36 shrink-0">
-                <input type="text"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
-                  value={h.ticker} readOnly />
-                {h.name && h.name !== h.ticker && (
-                  <p className="text-[9px] text-gray-500 truncate mt-0.5">{h.name}</p>
-                )}
-              </div>
-              <input type="number" inputMode="decimal"
-                className="w-14 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-gray-100 text-center focus:outline-none focus:border-blue-500"
-                value={h.weight || ''}
-                onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], weight: Number(e.target.value) }; setHoldings(p); setDirty(true) }} />
-              <span className="text-xs text-gray-500">비중</span>
-              <input type="number" inputMode="decimal" placeholder="배당%"
-                className={cn('w-16 bg-gray-700 border rounded-lg px-2 py-2 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500',
-                  typeof m === 'number' ? 'border-emerald-600 text-emerald-300' : 'border-gray-600')}
-                value={effective ?? ''}
-                onChange={(e) => h.ticker && setManualYield(h.ticker, Number(e.target.value))}
-                title="배당률(%)" />
-              <input type="number" inputMode="decimal" placeholder="상승%"
-                className="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
-                value={h.growthRate ?? ''}
-                onChange={(e) => { const p = [...holdings]; p[i] = { ...p[i], growthRate: Number(e.target.value) }; setHoldings(p); setDirty(true) }}
-                title="연평균 주가상승률(%)" />
-              <button onClick={() => { const p = [...holdings]; p[i] = { ...p[i], isSafe: !p[i].isSafe }; setHoldings(p); setDirty(true) }}
-                className={cn('px-1.5 py-2 text-[10px] rounded shrink-0 transition-colors',
-                  h.isSafe ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}
-                title="안전자산(예금·채권) 토글">
-                {h.isSafe ? '안전' : '위험'}
-              </button>
-              <button onClick={() => { setHoldings(holdings.filter((_, j) => j !== i)); setDirty(true) }} className="p-2 text-gray-600 hover:text-red-400 transition-colors shrink-0 text-xs">삭제</button>
-            </div>
-          )
-        })}
-      </div>
-      {/* IRP 안전자산 30% 비율 표시 */}
-      {(() => {
-        const totalW = holdings.reduce((s, h) => s + Math.max(0, h.weight), 0)
-        const safeW = holdings.filter((h) => h.isSafe).reduce((s, h) => s + Math.max(0, h.weight), 0)
-        const safeRatio = totalW > 0 ? (safeW / totalW) * 100 : 0
-        const ok = safeRatio >= 30
-        return (
-          <div className={cn('rounded-lg p-2.5 border flex items-center justify-between gap-2',
-            ok ? 'bg-emerald-500/5 border-emerald-700/30' : 'bg-red-500/5 border-red-700/30')}>
-            <span className="text-[11px] text-gray-400">IRP 안전자산 비율</span>
-            <span className={cn('text-sm font-bold', ok ? 'text-emerald-400' : 'text-red-400')}>
-              {safeRatio.toFixed(0)}% {ok ? '✅' : '⚠️ 30% 미만'}
-            </span>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-gray-900/50 rounded-lg p-3">
+          <p className="text-[11px] text-gray-500 mb-1">연평균 배당률</p>
+          <div className="flex items-center gap-1">
+            <input type="number" inputMode="decimal"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
+              value={dividendYield || ''} onChange={(e) => { setDividendYield(Number(e.target.value)); setDirty(true) }} />
+            <span className="text-xs text-gray-500 shrink-0">%</span>
           </div>
-        )
-      })()}
-      <div className="flex flex-wrap gap-2 items-center">
-        <button onClick={() => { setHoldings([...holdings, { ticker: '', weight: 1 }]); setDirty(true) }}
-          className="px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">＋ 종목 추가</button>
-        <span className="text-xs text-blue-400 font-semibold">가중평균 배당 {yieldVal > 0 ? `${yieldVal}%` : '-'} · 상승률 {(() => {
-          const hs = holdings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
-          const tw = hs.reduce((s, h) => s + h.weight, 0)
-          return tw > 0 ? `${(hs.reduce((s, h) => s + (h.growthRate ?? 0) * h.weight / tw, 0)).toFixed(1)}%` : '-'
-        })()}</span>
+        </div>
+        <div className="bg-gray-900/50 rounded-lg p-3">
+          <p className="text-[11px] text-gray-500 mb-1">연평균 주가상승률</p>
+          <div className="flex items-center gap-1">
+            <input type="number" inputMode="decimal"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
+              value={growthRate || ''} onChange={(e) => { setGrowthRate(Number(e.target.value)); setDirty(true) }} />
+            <span className="text-xs text-gray-500 shrink-0">%</span>
+          </div>
+        </div>
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
     </Section>
   )
 }

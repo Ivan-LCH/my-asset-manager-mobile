@@ -951,7 +951,31 @@ export async function getPortfolio(): Promise<PortfolioSettings | null> {
   const row = await db.settings.get(PORTFOLIO_KEY)
   if (!row) return null
   try {
-    return JSON.parse(row.value) as PortfolioSettings
+    const parsed = JSON.parse(row.value) as Record<string, unknown>
+    // 마이그레이션: 종목 기반(holdings/blendedYield/manualYields) → 단순 배당률·상승률
+    const legacy = parsed as {
+      holdings?: { ticker?: string; weight?: number; growthRate?: number }[]
+      blendedYield?: number; manualYields?: { ticker?: string; yield?: number }[]
+      dividendYield?: number; growthRate?: number
+    }
+    if (legacy.holdings !== undefined && legacy.dividendYield === undefined) {
+      // 배당률: 저장된 blendedYield 우선, 없으면 manualYields 평균
+      let dy = typeof legacy.blendedYield === 'number' ? legacy.blendedYield : 0
+      if (dy <= 0 && legacy.manualYields && legacy.manualYields.length > 0) {
+        dy = legacy.manualYields.reduce((s, m) => s + (m.yield ?? 0), 0) / legacy.manualYields.length
+      }
+      // 상승률: holdings growthRate 가중평균
+      const holdings = legacy.holdings ?? []
+      const gH = holdings.filter((h) => (h.weight ?? 0) > 0 && (h.growthRate ?? 0) > 0)
+      const gW = gH.reduce((s, h) => s + (h.weight ?? 0), 0)
+      const gr = gW > 0 ? gH.reduce((s, h) => s + (h.growthRate ?? 0) * ((h.weight ?? 0) / gW), 0) : 0
+      parsed.dividendYield = dy > 0 ? dy : 4
+      parsed.growthRate = gr > 0 ? gr : 5
+      delete (parsed as { holdings?: unknown }).holdings
+      delete (parsed as { blendedYield?: unknown }).blendedYield
+      delete (parsed as { manualYields?: unknown }).manualYields
+    }
+    return parsed as unknown as PortfolioSettings
   } catch {
     return null
   }

@@ -248,12 +248,7 @@ export default function PensionSimPage() {
   const effectivePlan = plan
   // IRP 포트폴리오 상승률 (은퇴준비 IRP 포트폴리오) — IRP 퇴직시점 잔액 성장·수령액 산정용
   const { data: portfolio } = usePortfolio()
-  const irpHoldings = portfolio?.holdings ?? []
-  const irpWithGrowth = irpHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
-  const irpGrowthW = irpWithGrowth.reduce((s, h) => s + h.weight, 0)
-  const irpGrowthRate = irpGrowthW > 0
-    ? irpWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpGrowthW), 0)
-    : 0
+  const irpGrowthRate = portfolio?.growthRate ?? 0
   const h = computePensionVehiclePerPerson(effectivePlan, {
     husbandProperty: prop.husband,
     wifeProperty: prop.wife,

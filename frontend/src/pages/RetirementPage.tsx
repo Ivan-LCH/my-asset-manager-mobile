@@ -925,13 +925,8 @@ export default function RetirementPage() {
   const pensionAssetsAll = allAssets.filter((a) => a.type === 'PENSION')
   // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서) — 퇴직시점 잔액 성장·수령액 산정용
   const { data: portfolio } = usePortfolio()
-  const irpHoldings = portfolio?.holdings ?? []
-  const irpWithGrowth = irpHoldings.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
-  const irpGrowthW = irpWithGrowth.reduce((s, h) => s + h.weight, 0)
-  const irpGrowthRate = irpGrowthW > 0
-    ? irpWithGrowth.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / irpGrowthW), 0)
-    : 0
-  const irpDivYield = portfolio?.blendedYield ?? 0
+  const irpGrowthRate = portfolio?.growthRate ?? 0
+  const irpDivYield = portfolio?.dividendYield ?? 0
   // IRP 잔액(현재 PENSION 자산 가치 합)
   const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate)
   const irpInitial = irpAssets.reduce((s, a) => s + a.currentValue, 0)
