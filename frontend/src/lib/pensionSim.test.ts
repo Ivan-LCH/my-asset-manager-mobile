@@ -293,6 +293,26 @@ describe('pensionSim 계산', () => {
     expect(row.drawdownAnnual).toBe(1_000_000 * 12)  // 1200만 — 0년도로 skip되지 않아야 함
   })
 
+  it('sourcesFromAssets: pensionType NATIONAL(영어) → national 분류 (taxable 아님)', () => {
+    // 이창호-국민연금 pensionType="NATIONAL" 이 'taxable'로 잘못 분류되던 버그
+    const assets = [
+      { id: 'h', name: '이창호-국민연금', currentValue: 0,
+        detail: { pensionType: 'NATIONAL', expectedStartYear: 2037, expectedEndYear: 2099, expectedMonthlyPayout: 1_906_250, annualGrowthRate: 3 } },
+      { id: 'w', name: '최진숙-국민연금', currentValue: 0,
+        detail: { pensionType: '국민연금', expectedStartYear: 2038, expectedEndYear: 2088, expectedMonthlyPayout: 1_107_450, annualGrowthRate: 2 } },
+      { id: 'p', name: '개인연금', currentValue: 100_000_000, detail: { pensionType: 'PERSONAL' } },
+      { id: 'r', name: '퇴직연금', currentValue: 300_000_000, detail: { pensionType: '퇴직연금' } },
+    ]
+    const srcs = sourcesFromAssets(assets as any)
+    expect(srcs.find((s) => s.id === 'h')!.taxType).toBe('national')  // NATIONAL → national
+    expect(srcs.find((s) => s.id === 'w')!.taxType).toBe('national')  // 국민연금 → national
+    expect(srcs.find((s) => s.id === 'p')!.taxType).toBe('taxable')   // PERSONAL → taxable
+    expect(srcs.find((s) => s.id === 'r')!.taxType).toBe('irp')       // 퇴직연금 → irp
+    // 저장된 stale taxType 있어도 pensionType 우선 재산출
+    const stale = sourcesFromAssets(assets as any, [{ id: 'h', name: 'x', principal: 0, taxType: 'taxable', yieldRate: 0, owner: 'husband' }])
+    expect(stale.find((s) => s.id === 'h')!.taxType).toBe('national')
+  })
+
   it('pensionSchedule: IRP 퇴직금 인출은 퇴직연금 expectedStartYear(2031)부터 (2029엔 0)', () => {
     // plan.startYear=2029 이더라도, 퇴직연금(irp) 자산의 expectedStartYear=2031 이면
     // IRP 인출(목돈 분배 4.5억)은 2031부터. 2029에는 개인연금만.

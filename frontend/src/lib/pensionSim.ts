@@ -559,8 +559,14 @@ export function sourcesFromAssets(
   stockById?: Map<string, number>,
 ): PensionSource[] {
   return assets.map((a) => {
-    const pt = a.detail?.pensionType ?? ''
-    const taxType = pt.includes('퇴직') ? 'irp' : pt.includes('국민') ? 'national' : pt.includes('비과세') ? 'taxExempt' : 'taxable'
+    const pt = (a.detail?.pensionType ?? '').toLowerCase()
+    // 과세구분은 pensionType에서 재산출 (한글/영문 모두, 대소문자 무시) — 저장된 과거값에 우선.
+    // NATIONAL(영어)이 'taxable'로 잘못 분류되던 버그 수정.
+    const taxType: PensionSource['taxType'] =
+      pt.includes('퇴직') || pt.includes('irp') ? 'irp'
+      : (pt.includes('국민') || pt.includes('national')) ? 'national'
+      : (pt.includes('비과세') || pt.includes('exempt')) ? 'taxExempt'
+      : 'taxable'
     const existingSrc = existing.find((s) => s.id === a.id)
     // 연동된 주식계좌가 있으면 그 현재가치를 원금으로 (주가 하락 반영)
     const principal = a.detail?.linkedStockId && stockById?.has(a.detail.linkedStockId)
@@ -570,7 +576,7 @@ export function sourcesFromAssets(
       id: a.id,
       name: a.name,
       principal,
-      taxType: existingSrc?.taxType ?? taxType,
+      taxType,   // 항상 pensionType에서 산출 (stale 저장값 무시)
       yieldRate: existingSrc?.yieldRate ?? 4,
       owner: existingSrc?.owner ?? 'husband',
       // 수령 모델 필드 (자산 detail에서 자동 채움) — 비과세·과세 연금저축의 등록 월수령액

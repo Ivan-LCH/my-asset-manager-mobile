@@ -960,7 +960,14 @@ export default function RetirementPage() {
       pensionSimPlanBase.sources,
       stockByAccount,
     )
-    return { ...pensionSimPlanBase, sources: augmented }
+    // stockGrowthRate를 종목별 가중평균으로 재계산 (저장된 값이 0/과거값일 수 있어 배당 성장 반영)
+    const sh = pensionSimPlanBase.stockHoldings ?? []
+    const sw = sh.filter((h) => h.weight > 0 && (h.growthRate ?? 0) > 0)
+    const swSum = sw.reduce((s, h) => s + h.weight, 0)
+    const stockGrowthRateComputed = swSum > 0
+      ? sw.reduce((s, h) => s + (h.growthRate ?? 0) * (h.weight / swSum), 0)
+      : (pensionSimPlanBase.stockGrowthRate ?? 0)
+    return { ...pensionSimPlanBase, sources: augmented, stockGrowthRate: stockGrowthRateComputed }
   })()
   const pensionLinked = linkMode === 'pension' && !!pensionSimPlan
   // 국민연금 자산(확정급여) 추출
