@@ -142,12 +142,12 @@ export default function PensionPage() {
     setSimPlan((p) => {
       const exists = p.sources.some((s) => s.id === assetId)
       if (exists) {
-        return { ...p, sources: p.sources.map((s) => s.id === assetId ? { ...s, taxType } : s) }
+        return { ...p, sources: p.sources.map((s) => s.id === assetId ? { ...s, taxType, taxTypeManual: true } : s) }
       }
       const asset = pensionAssets.find((a) => a.id === assetId)
       if (!asset) return p
       return { ...p, sources: [...p.sources, {
-        id: assetId, name: asset.name, principal: asset.currentValue, taxType, yieldRate: 4, owner: 'husband',
+        id: assetId, name: asset.name, principal: asset.currentValue, taxType, taxTypeManual: true, yieldRate: 4, owner: 'husband',
       }] }
     })
     setSimDirty(true)

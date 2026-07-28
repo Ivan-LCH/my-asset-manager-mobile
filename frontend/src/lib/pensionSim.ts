@@ -562,14 +562,17 @@ export function sourcesFromAssets(
 ): PensionSource[] {
   return assets.map((a) => {
     const pt = (a.detail?.pensionType ?? '').toLowerCase()
-    // 과세구분은 pensionType에서 재산출 (한글/영문 모두, 대소문자 무시) — 저장된 과거값에 우선.
-    // NATIONAL(영어)이 'taxable'로 잘못 분류되던 버그 수정.
-    const taxType: PensionSource['taxType'] =
+    // 과세구분 자동 산출 (한글/영문 모두, 대소문자 무시) — NATIONAL(영어) 분류 수정 반영.
+    const autoTaxType: PensionSource['taxType'] =
       pt.includes('퇴직') || pt.includes('irp') ? 'irp'
       : (pt.includes('국민') || pt.includes('national')) ? 'national'
       : (pt.includes('비과세') || pt.includes('exempt')) ? 'taxExempt'
       : 'taxable'
     const existingSrc = existing.find((s) => s.id === a.id)
+    // 과세구분: 사용자가 PensionPage에서 수동 설정(taxTypeManual)한 경우 그 값을 존중.
+    // 그렇지 않으면 pensionType에서 자동 산출 — PERSONAL 등 모호한 타입은 기본 taxable.
+    // (비과세 연금이 자꾸 0이 되던 원인: 수동 설정값이 매번 자동산출로 덮어씌워졌음)
+    const taxType: PensionSource['taxType'] = (existingSrc?.taxTypeManual && existingSrc?.taxType) ? existingSrc.taxType : autoTaxType
     // 연동된 주식계좌가 있으면 그 현재가치를 원금으로 (주가 하락 반영)
     const principal = a.detail?.linkedStockId && stockById?.has(a.detail.linkedStockId)
       ? effectivePensionValue(a, stockById)
@@ -578,7 +581,7 @@ export function sourcesFromAssets(
       id: a.id,
       name: a.name,
       principal,
-      taxType,   // 항상 pensionType에서 산출 (stale 저장값 무시)
+      taxType,
       yieldRate: existingSrc?.yieldRate ?? 4,
       owner: existingSrc?.owner ?? 'husband',
       // 수령 모델 필드 (자산 detail에서 자동 채움) — 비과세·과세 연금저축의 등록 월수령액

@@ -240,6 +240,7 @@ export interface PensionSource {
   taxType: PensionTaxType   // 과세 구분
   yieldRate: number         // 운용 수익률(%)
   owner: 'husband' | 'wife' // 명의 (기본 husband — 연금=남편 가정)
+  taxTypeManual?: boolean   // 사용자가 PensionPage에서 수동 설정한 과세구분 여부 (true면 taxType 존중, 아니면 pensionType으로 자동 산출)
   // ── 수령 모델 (자산 detail에서 자동 채움) ──
   // expectedMonthlyPayout > 0 이면 등록 월수령액 모델 사용 (비과세·과세 연금저축).
   // 미등록(IRP 등)이면 퇴직시점 성장 잔액 ÷ 수령기간 모델로 산정.

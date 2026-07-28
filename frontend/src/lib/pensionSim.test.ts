@@ -335,9 +335,12 @@ describe('pensionSim 계산', () => {
     expect(srcs.find((s) => s.id === 'w')!.taxType).toBe('national')  // 국민연금 → national
     expect(srcs.find((s) => s.id === 'p')!.taxType).toBe('taxable')   // PERSONAL → taxable
     expect(srcs.find((s) => s.id === 'r')!.taxType).toBe('irp')       // 퇴직연금 → irp
-    // 저장된 stale taxType 있어도 pensionType 우선 재산출
+    // taxTypeManual 미설정 stale taxType은 무시 → pensionType 우선 재산출 (NATIONAL 분류 마이그레이션)
     const stale = sourcesFromAssets(assets as any, [{ id: 'h', name: 'x', principal: 0, taxType: 'taxable', yieldRate: 0, owner: 'husband' }])
     expect(stale.find((s) => s.id === 'h')!.taxType).toBe('national')
+    // taxTypeManual=true면 사용자 수동 설정 존중 (PERSONAL → 비과세 등 pensionType만으로 모호한 경우)
+    const manual = sourcesFromAssets(assets as any, [{ id: 'p', name: 'x', principal: 0, taxType: 'taxExempt', taxTypeManual: true, yieldRate: 0, owner: 'husband' }])
+    expect(manual.find((s) => s.id === 'p')!.taxType).toBe('taxExempt')
   })
 
   it('pensionSchedule: IRP 퇴직금 인출은 퇴직연금 expectedStartYear(2031)부터 (2029엔 0)', () => {
