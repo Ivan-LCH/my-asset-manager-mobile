@@ -700,7 +700,7 @@ interface CashFlowRow {
   dividendMonthly:         number
   corpSalaryMonthly:       number
   corpReturnMonthly:       number
-  taxAnnual:               number  // 세금(연) — 종합·연금소득세는 연단위, +/- 조정열에서 차감
+  taxAnnual:               number  // 세금(연) — 종합·연금소득세는 연단위, 음수로 저장(지출 의미)
   expenseMonthly:          number
   travelMonthly:           number
   medicalMonthly:          number
@@ -790,20 +790,21 @@ function buildCashFlow(
     // 건보: 연동 시 연도별(재산·소득 매년 반영), 아니면 고정
     const hiMonthly = linked ? (linked.healthByYear.get(year) ?? 0) : healthInsuranceMonthly
 
-    // 세금(연) — 종합·연금소득세는 연단위 납부 → 월 지출에서 제외, +/- 조정열에서 차감.
+    // 세금(연) — 종합·연금소득세는 연단위 납부 → 음수로 저장(지출 의미) → 누적에서 그대로 합산.
     // 연동 시 연도별 1인별 산정, 아니면 근사(배당 15.4% + 급여 3%)×12 + 목돈 퇴직소득세
-    const taxAnnual = (linked
+    const taxAnnualRaw = (linked
       ? (linked.taxByYear.get(year) ?? 0)
       : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03) * 12)
       + lumpsumTaxAnnual
+    const taxAnnual = -Math.abs(taxAnnualRaw)   // 세금 = 음수
 
     // 세금은 월 지출에서 제외 (연간 조정항목)
     const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly
     const totalIncome  = nationalPensionMonthly + pensionMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     const balance      = totalIncome - totalExpense
 
-    // 세금(연)은 +/- 누적에서 차감
-    cumulative += balance * 12 - emergencyAnnual - taxAnnual + lumpsumReceived
+    // 누적: 세금(taxAnnual<0)·긴급지출(연간) 차감, 목돈 가산
+    cumulative += balance * 12 - emergencyAnnual + taxAnnual + lumpsumReceived
 
     rows.push({
       year, age,
@@ -1273,7 +1274,7 @@ export default function RetirementPage() {
                 <th className="text-right py-2 px-1 font-medium bg-red-950/20">월지출</th>
                 {/* 결과 그룹 */}
                 <th className="text-right py-2 px-1 font-medium">+/-</th>
-                <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">세금(연)</th>
+                <th className="text-right py-2 px-1 font-medium">세금(연)</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">목돈</th>
                 <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium">긴급지출</th>
                 <th className="text-right py-2 pl-1 font-medium">누적</th>
@@ -1325,8 +1326,8 @@ export default function RetirementPage() {
                     <td className={`text-right py-2 px-1 font-bold ${pnlColor(row.balance)}`}>
                       {row.balance >= 0 ? '+' : ''}{fmtM(row.balance)}
                     </td>
-                    <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.taxAnnual > 0 ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
-                      {row.taxAnnual > 0 ? '−' : ''}{row.taxAnnual > 0 ? fmtM(row.taxAnnual) : '—'}
+                    <td className={`text-right py-2 px-1 ${row.taxAnnual < 0 ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
+                      {row.taxAnnual < 0 ? fmtM(row.taxAnnual) : '—'}
                     </td>
                     <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.lumpsumReceived > 0 ? 'text-emerald-400 font-semibold' : 'text-gray-600'}`}>
                       {row.lumpsumReceived > 0 ? '+' : ''}{row.lumpsumReceived > 0 ? fmtM(row.lumpsumReceived) : '—'}
