@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { RefreshCw, Plus, TrendingUp, TrendingDown, Minus, ChevronRight } from 'lucide-react'
+import { RefreshCw, Plus, TrendingUp, TrendingDown, Minus, ChevronRight, Pencil, Check, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAssets, useAssetsByType } from '@/hooks/useAssets'
+import { useAssets, useAssetsByType, useRenameStockAccount } from '@/hooks/useAssets'
 import { useDividendSummary } from '@/hooks/useDividends'
 import { useSettings } from '@/hooks/useSettings'
 import AssetCreateForm from '@/components/assets/AssetCreateForm'
@@ -35,6 +35,7 @@ export default function StockPage() {
   const { data: settings }   = useSettings()
   const { data: accountOwners = {} } = useStockAccountOwnership()
   const saveAccountOwners = useSaveStockAccountOwnership()
+  const renameAccount = useRenameStockAccount()
   const qc = useQueryClient()
 
   // 계좌별 뷰: null=계좌 목록, string=선택된 계좌명
@@ -82,6 +83,16 @@ export default function StockPage() {
   // 계좌별 명의 (계좌 안 모든 종목 공유) — 저장 헬퍼
   const setAccountOwnership = (account: string, ownership: { husband: number; wife: number }) => {
     saveAccountOwners.mutate({ ...accountOwners, [account]: ownership })
+  }
+
+  // 계좌명 변경 — 종목/연금연동/명의까지 일괄. 변경 후에도 해당 계좌 뷰 유지
+  const handleRenameAccount = (oldName: string, newName: string) => {
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed === oldName) return
+    renameAccount.mutate(
+      { oldName, newName: trimmed },
+      { onSuccess: () => setActiveAccount(trimmed) },
+    )
   }
 
   const totalVal  = active.reduce((s, a) => s + a.currentValue, 0)
@@ -279,6 +290,8 @@ export default function StockPage() {
             name={activeAccount}
             stocks={currentStocks}
             settings={settings}
+            renaming={renameAccount.isPending}
+            onRename={(newName) => handleRenameAccount(activeAccount, newName)}
             onBack={() => setActiveAccount(null)}
           />
 
@@ -395,34 +408,68 @@ function AccountCard({
 
 /* ── 계좌 선택 후 요약 배너 ── */
 function AccountSummaryBanner({
-  name, stocks, settings, onBack,
+  name, stocks, settings, onBack, onRename, renaming,
 }: {
   name: string
   stocks: Asset[]
   settings: Settings | undefined
   onBack: () => void
+  onRename: (newName: string) => void
+  renaming: boolean
 }) {
   const val  = stocks.reduce((s, a) => s + a.currentValue, 0)
   const cost = stocks.reduce((s, a) => s + costKrw(a, settings), 0)
   const pnl  = val - cost
   const roi  = cost > 0 ? (pnl / cost) * 100 : 0
 
+  const [editing,  setEditing]  = useState(false)
+  const [draft,    setDraft]    = useState(name)
+
+  const submit = () => {
+    setEditing(false)
+    onRename(draft)
+  }
+  const cancel = () => { setEditing(false); setDraft(name) }
+
   return (
     <div className="bg-gray-800 border border-blue-500/30 rounded-xl p-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={onBack}
-            className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
+            className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors shrink-0"
           >
             ← 전체
           </button>
-          <div>
-            <p className="text-sm font-bold text-blue-400">{name}</p>
+          <div className="min-w-0">
+            {editing ? (
+              <div className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') cancel() }}
+                  className="w-40 bg-gray-700 border border-blue-500 rounded px-2 py-1 text-sm text-gray-100 outline-none"
+                />
+                <button onClick={submit}   disabled={renaming} className="p-1 text-emerald-400 hover:text-emerald-300 disabled:opacity-50"><Check className="w-4 h-4" /></button>
+                <button onClick={cancel}   className="p-1 text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-bold text-blue-400">{name}</p>
+                <button
+                  onClick={() => { setDraft(name); setEditing(true) }}
+                  className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
+                  title="계좌명 변경"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              </div>
+            )}
             <p className="text-xs text-gray-500">{stocks.length}개 종목</p>
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right shrink-0">
           <p className="text-lg font-bold text-gray-100">{formatManwon(val)}</p>
           <div className="flex items-center justify-end gap-1.5 mt-0.5">
             <span className={`text-sm font-semibold ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>

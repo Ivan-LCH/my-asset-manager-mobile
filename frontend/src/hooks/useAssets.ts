@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getAllAssets, getChartData, createAsset, updateAsset, deleteAsset } from '@/lib/db'
+import { getAllAssets, getChartData, createAsset, updateAsset, deleteAsset, renameStockAccount } from '@/lib/db'
 import type { Asset, AssetType, ChartParams } from '@/types'
 
 const ASSETS_KEY = ['assets'] as const
@@ -55,6 +55,21 @@ export function useDeleteAsset() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ASSETS_KEY })
       qc.invalidateQueries({ queryKey: ['chart'] })
+    },
+  })
+}
+
+/** 주식 계좌명 일괄 변경 — 종목/연금연동/계좌별 명의까지 모두 갱신 */
+export function useRenameStockAccount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ oldName, newName }: { oldName: string; newName: string }) =>
+      renameStockAccount(oldName, newName),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ASSETS_KEY })
+      qc.invalidateQueries({ queryKey: ['chart'] })
+      qc.invalidateQueries({ queryKey: ['stock_account_ownership'] })
+      qc.invalidateQueries({ queryKey: ['dividends', 'summary'] })
     },
   })
 }
