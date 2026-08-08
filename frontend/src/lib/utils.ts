@@ -54,6 +54,21 @@ export const TYPE_COLORS: Record<AssetType, string> = {
   ETC:         '#a3e635',
 }
 
+/** name/account 처럼 자산유형이 아닌 라벤을 위한 보조 팔레트 (안정 분배용) */
+export const EXTRA_PALETTE = ['#fbbf24', '#22d3ee', '#f472b6', '#2dd4bf', '#a78bfa', '#fb7185']
+
+/** 차트 라벨(🏠 부동산 등) → 색상. 단일 소스: TYPE_LABELS↔TYPE_COLORS 역매핑.
+ *  자산유형 라벨은 항상 TYPE_COLORS, 그 외 라벨(name/account)은 안정 해시로 팔레트 분배. */
+const _LABEL_COLOR: Record<string, string> = Object.fromEntries(
+  (Object.keys(TYPE_LABELS) as AssetType[]).map((t) => [TYPE_LABELS[t], TYPE_COLORS[t]]),
+)
+export function colorForLabel(label: string): string {
+  if (_LABEL_COLOR[label]) return _LABEL_COLOR[label]
+  let h = 0
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0
+  return EXTRA_PALETTE[h % EXTRA_PALETTE.length]
+}
+
 export const ASSET_TYPES: AssetType[] = [
   'REAL_ESTATE', 'STOCK', 'PENSION', 'SAVINGS', 'PHYSICAL', 'ETC',
 ]

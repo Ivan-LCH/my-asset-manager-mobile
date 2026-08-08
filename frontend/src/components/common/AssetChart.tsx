@@ -6,7 +6,7 @@ import {
 import { useChart } from '@/hooks/useAssets'
 import PeriodFilter, { Period } from './PeriodFilter'
 import type { AssetType, ChartDataPoint } from '@/types'
-import { TYPE_COLORS, cn } from '@/lib/utils'
+import { colorForLabel, cn } from '@/lib/utils'
 
 interface CustomTooltipProps {
   active?:  boolean
@@ -50,18 +50,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   )
 }
 
-// recharts용: label별 색상 반환
-const LABEL_COLOR_MAP: Record<string, string> = {
-  '🏠 부동산':   TYPE_COLORS.REAL_ESTATE,
-  '📈 주식':     TYPE_COLORS.STOCK,
-  '🛡️ 연금':    TYPE_COLORS.PENSION,
-  '💰 예적금':    TYPE_COLORS.SAVINGS,
-  '💰 예적금/현금': TYPE_COLORS.SAVINGS,
-  '💎 실물자산': TYPE_COLORS.PHYSICAL,
-  '🎸 기타':     TYPE_COLORS.ETC,
-}
-const FALLBACK_COLORS = ['#60a5fa', '#34d399', '#fb923c', '#c084fc', '#f87171', '#a3e635', '#fbbf24']
-
+// recharts용: label별 색상은 단일 소스(colorForLabel)에서 — 자산유형은 항상 TYPE_COLORS와 동일.
 interface AssetChartProps {
   type?:          AssetType
   groupBy?:       'type' | 'name' | 'account'
@@ -277,7 +266,7 @@ export default function AssetChart({
           <BarChart data={pivoted} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
             {commonAxes}
             {labels.map((label, i) => {
-              const color = LABEL_COLOR_MAP[label] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+              const color = colorForLabel(label)
               return (
                 <Bar
                   key={label}
@@ -293,18 +282,18 @@ export default function AssetChart({
           <AreaChart data={pivoted} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
             <defs>
               {labels.map((label, i) => {
-                const color = LABEL_COLOR_MAP[label] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+                const color = colorForLabel(label)
                 return (
                   <linearGradient key={label} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0}   />
+                    <stop offset="5%"  stopColor={color} stopOpacity={0.5} />
+                    <stop offset="95%" stopColor={color} stopOpacity={0.05} />
                   </linearGradient>
                 )
               })}
             </defs>
             {commonAxes}
             {labels.map((label, i) => {
-              const color = LABEL_COLOR_MAP[label] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+              const color = colorForLabel(label)
               return (
                 <Area
                   key={label}
