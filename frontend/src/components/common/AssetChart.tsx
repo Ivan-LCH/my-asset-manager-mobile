@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, Cell, ReferenceLine,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useChart } from '@/hooks/useAssets'
 import PeriodFilter, { Period } from './PeriodFilter'
@@ -171,9 +171,6 @@ export default function AssetChart({
         allowDataOverflow={!zeroBased}
       />
       <Tooltip content={<CustomTooltip />} cursor={isShortPeriod ? { fill: 'rgba(255,255,255,0.04)' } : undefined} />
-      {labels.length > 1 && (
-        <Legend wrapperStyle={{ fontSize: 10, color: '#9ca3af', paddingTop: 4, maxHeight: 56, overflowY: 'auto' }} />
-      )}
     </>
   )
 
@@ -233,6 +230,17 @@ export default function AssetChart({
         )}
         <PeriodFilter value={period} onChange={setPeriod} options={periodOptions} />
       </div>
+      {/* 범례 — 도넛(자산 비중)과 동일한 색점(colorForLabel)으로 통일 */}
+      {labels.length > 1 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2">
+          {labels.map((label) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colorForLabel(label) }} />
+              <span className="text-[10px] text-gray-400">{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <ResponsiveContainer width="100%" height={height}>
         {effectiveMode === 'daily' ? (
           <BarChart data={dailyData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
