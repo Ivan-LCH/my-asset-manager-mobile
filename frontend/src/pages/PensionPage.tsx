@@ -248,7 +248,7 @@ export default function PensionPage() {
             등록된 연금 자산이 없습니다.
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {active.map((a) => {
             const d = a.detail as PensionDetail | undefined
             const monthly = d?.expectedMonthlyPayout ?? 0
@@ -258,36 +258,35 @@ export default function PensionPage() {
 
             return (
               <div key={a.id}
-                className="rounded-xl border border-gray-700 bg-gray-800 hover:border-blue-500/60 transition-all duration-200 p-4 space-y-3 group cursor-pointer"
+                className="rounded-xl border border-gray-700 bg-gray-800 hover:border-blue-500/60 transition-all duration-200 p-3.5 group cursor-pointer"
                 onClick={() => setModalId(a.id)}
               >
-                {/* 상단 */}
-                <div className="flex items-start justify-between gap-2">
+                {/* 헤더: 이름/종류 + 월 수령액 */}
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">{a.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">{d?.pensionType ?? '연금'}<OwnershipBadge ownership={a.ownership} /></p>
+                    <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5">{d?.pensionType ?? '연금'}<OwnershipBadge ownership={a.ownership} /></p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] text-gray-500">월 수령</p>
+                    <p className="text-base font-bold text-gray-100 tracking-tight">{formatMoney(monthly)}</p>
                   </div>
                 </div>
-                {/* 월 수령 */}
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">월 수령 예상액</p>
-                  <p className="text-xl font-bold text-gray-100 tracking-tight">{formatMoney(monthly)}</p>
-                </div>
-                <div className="border-t border-gray-700/60" />
-                {/* 하단 */}
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
+
+                {/* 하단: 현재가치 + 연증가율 */}
+                <div className="grid grid-cols-2 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-[11px]">
+                  <div className="min-w-0">
                     <p className="text-gray-500 mb-0.5">현재 가치</p>
                     {(() => {
                       const acct = (d as { linkedStockId?: string } | undefined)?.linkedStockId
                       const linked = acct ? stockByAccount.get(acct) : undefined
                       return linked ? (
                         <>
-                          <p className="text-emerald-400">{formatManwon(linked.total)}</p>
-                          <p className="text-[10px] text-emerald-500/80">연동: {acct}</p>
+                          <p className="text-emerald-400 truncate">{formatManwon(linked.total)}</p>
+                          <p className="text-[10px] text-emerald-500/80 truncate">연동: {acct}</p>
                         </>
                       ) : (
-                        <p className="text-gray-300">{formatManwon(a.currentValue)}</p>
+                        <p className="text-gray-300 truncate">{formatManwon(a.currentValue)}</p>
                       )
                     })()}
                   </div>
@@ -296,10 +295,11 @@ export default function PensionPage() {
                     <p className="text-blue-400 font-semibold">{growth}%</p>
                   </div>
                 </div>
+
                 {/* 과세 구분 */}
-                <div className="pt-1 border-t border-gray-700/60" onClick={(e) => e.stopPropagation()}>
+                <div className="pt-2 mt-2 border-t border-gray-700/60" onClick={(e) => e.stopPropagation()}>
                   <p className="text-[10px] text-gray-500 mb-1">과세 구분</p>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 flex-wrap">
                     {(['irp', 'national', 'taxable', 'taxExempt'] as PensionTaxType[]).map((t) => (
                       <button
                         key={t}
@@ -322,7 +322,7 @@ export default function PensionPage() {
       {pensionLikeAssets.filter((a) => a.type !== 'PENSION').length > 0 && (
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-gray-400">연금형 포함 자산</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pensionLikeAssets.filter((a) => a.type !== 'PENSION').map((a) => (
               <button key={a.id} onClick={() => setModalId(a.id)}
                 className="text-left bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 hover:border-blue-500/60 transition-all group">

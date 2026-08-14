@@ -78,7 +78,7 @@ export default function AssetPage({ type }: Props) {
             보유 ({active.length})
             <span className="ml-1.5 text-gray-600">· 클릭하면 상세 확인</span>
           </h3>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {active.map((a) => (
               <AssetTile key={a.id} asset={a} isQtyBased={isQtyBased} onClick={() => setModalId(a.id)} />
             ))}
@@ -90,7 +90,7 @@ export default function AssetPage({ type }: Props) {
       {sold.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-400">매각 완료 ({sold.length})</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
             {sold.map((a) => (
               <AssetTile key={a.id} asset={a} isQtyBased={isQtyBased} onClick={() => setModalId(a.id)} />
             ))}
@@ -129,57 +129,56 @@ function AssetTile({
       onClick={onClick}
       className="w-full text-left rounded-xl border border-gray-700 bg-gray-800
         hover:border-blue-500/60 hover:shadow-lg hover:shadow-blue-500/5
-        transition-all duration-200 p-4 space-y-3 group"
+        transition-all duration-200 p-3.5 flex gap-3 group"
     >
-      {/* 상단: 손익 인디케이터 + 이름 */}
-      <div className="flex items-start gap-3">
-        <div className={`w-1 self-stretch rounded-full shrink-0 mt-0.5 ${
-          pnl > 0 ? 'bg-emerald-500' : pnl < 0 ? 'bg-red-500' : 'bg-gray-600'
-        }`} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">
-            {asset.name}
-          </p>
-          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
-            <span>{asset.acquisitionDate ?? '-'} 취득</span>
-            {isSold && <span className="text-red-400">· 매각</span>}
-            <OwnershipBadge ownership={asset.ownership} />
-          </p>
-        </div>
-      </div>
-
-      {/* 현재 가치 */}
-      <div>
-        <p className="text-lg font-bold text-gray-100 tracking-tight">{formatManwon(val)}</p>
-        {isQtyBased && (
-          <p className="text-xs text-gray-500 mt-0.5">{(asset.quantity ?? 0).toLocaleString()} 보유</p>
-        )}
-      </div>
-
-      <div className="border-t border-gray-700/60" />
-
-      {/* 하단 손익 */}
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-xs text-gray-500 mb-0.5">원금</p>
-          <p className="text-xs text-gray-400">{formatManwon(cost)}</p>
-        </div>
-        <div className="text-right">
-          <div className="flex items-center justify-end gap-1 mb-0.5">
-            {pnl > 0
-              ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              : pnl < 0
-              ? <TrendingDown className="w-3.5 h-3.5 text-red-400" />
-              : <Minus className="w-3.5 h-3.5 text-gray-500" />}
-            <span className={`text-sm font-bold ${
-              pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'
-            }`}>
-              {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
-            </span>
+      {/* 손익 인디케이터 바 */}
+      <div className={`w-1 self-stretch rounded-full shrink-0 ${
+        pnl > 0 ? 'bg-emerald-500' : pnl < 0 ? 'bg-red-500' : 'bg-gray-600'
+      }`} />
+      <div className="flex-1 min-w-0">
+        {/* 헤더: 이름/메타 + 가치 */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">
+              {asset.name}
+            </p>
+            <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5">
+              <span>{asset.acquisitionDate ?? '-'} 취득</span>
+              {isSold && <span className="text-red-400">· 매각</span>}
+              <OwnershipBadge ownership={asset.ownership} />
+            </p>
           </div>
-          <p className={`text-xs ${pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-            {pnl >= 0 ? '+' : ''}{formatManwon(pnl)}
-          </p>
+          <div className="text-right shrink-0">
+            <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(val)}</p>
+            {isQtyBased && (
+              <p className="text-[11px] text-gray-500 mt-0.5">{(asset.quantity ?? 0).toLocaleString()} 보유</p>
+            )}
+          </div>
+        </div>
+
+        {/* 하단: 원금 + 손익 */}
+        <div className="flex items-end justify-between gap-3 mt-2.5 pt-2.5 border-t border-gray-700/60">
+          <div>
+            <p className="text-[11px] text-gray-500 mb-0.5">원금</p>
+            <p className="text-[11px] text-gray-400">{formatManwon(cost)}</p>
+          </div>
+          <div className="text-right">
+            <div className="flex items-center justify-end gap-1 mb-0.5">
+              {pnl > 0
+                ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                : pnl < 0
+                ? <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+                : <Minus className="w-3.5 h-3.5 text-gray-500" />}
+              <span className={`text-sm font-bold ${
+                pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'
+              }`}>
+                {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+              </span>
+            </div>
+            <p className={`text-[11px] ${pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+              {pnl >= 0 ? '+' : ''}{formatManwon(pnl)}
+            </p>
+          </div>
         </div>
       </div>
     </button>

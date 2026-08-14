@@ -266,7 +266,7 @@ export default function StockPage() {
           {sold.length > 0 && (
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-gray-400">매각 완료 ({sold.length})</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
                 {sold.map((a) => (
                   <StockTile key={a.id} asset={a} settings={settings} onClick={() => setModalId(a.id)} />
                 ))}
@@ -300,7 +300,7 @@ export default function StockPage() {
               종목 ({currentStocks.length})
               <span className="ml-1.5 text-gray-600">· 클릭하면 상세 확인</span>
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {currentStocks.map((a) => (
                 <StockTile
                   key={a.id}
@@ -530,99 +530,96 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
       onClick={onClick}
       className="w-full text-left rounded-xl border border-gray-700 bg-gray-800
         hover:border-blue-500/60 hover:shadow-lg hover:shadow-blue-500/5
-        transition-all duration-200 p-4 space-y-3 group"
+        transition-all duration-200 p-3.5 flex gap-3 group"
     >
-      {/* 상단: 손익 인디케이터 + 이름 + 비중 */}
-      <div className="flex items-start gap-3">
-        <div className={`w-1 self-stretch rounded-full shrink-0 mt-0.5 ${
-          pnlKrw > 0 ? 'bg-emerald-500' : pnlKrw < 0 ? 'bg-red-500' : 'bg-gray-600'
-        }`} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
+      {/* 손익 인디케이터 바 */}
+      <div className={`w-1 self-stretch rounded-full shrink-0 ${
+        pnlKrw > 0 ? 'bg-emerald-500' : pnlKrw < 0 ? 'bg-red-500' : 'bg-gray-600'
+      }`} />
+      <div className="flex-1 min-w-0">
+        {/* 헤더: 이름/메타 + 평가액 */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">
               {asset.name}
             </p>
-            {weight != null && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium shrink-0">
-                {weight.toFixed(1)}%
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            {d?.ticker && (
-              <span className="text-xs text-gray-500 font-mono">{d.ticker}</span>
-            )}
-            {d?.currency && d.currency !== 'KRW' && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-medium">
-                {d.currency}
-              </span>
-            )}
-            {isSold && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">매각</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 평가액 */}
-      <div>
-        <p className="text-lg font-bold text-gray-100 tracking-tight">{formatManwon(valKrw)}</p>
-        {isFx && rate > 1 && (
-          <p className="text-xs text-blue-400 font-mono mt-0.5">{formatPrice(valFx, currency)}</p>
-        )}
-        <p className="text-xs text-gray-500 mt-0.5">{qty.toLocaleString()}주 보유</p>
-      </div>
-
-      <div className="border-t border-gray-700/60" />
-
-      {/* 하단: 현재가/평단가 + 손익 */}
-      <div className="flex items-end justify-between">
-        <div className="space-y-0.5">
-          {!isSold && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-500 w-10">현재가</span>
-              <span className="text-xs text-gray-200 font-mono">{formatAvgPrice(currentPrice, currency)}</span>
-              {hasDaily && (
-                <span className={`text-[10px] font-medium ${
-                  priceChange > 0 ? 'text-emerald-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-500'
-                }`}>
-                  (오늘 {priceChange >= 0 ? '+' : ''}{formatPrice(priceChange, currency)} {priceChangePct >= 0 ? '+' : ''}{priceChangePct.toFixed(2)}%)
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {d?.ticker && (
+                <span className="text-[11px] text-gray-500 font-mono">{d.ticker}</span>
+              )}
+              {d?.currency && d.currency !== 'KRW' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-medium">
+                  {d.currency}
+                </span>
+              )}
+              {isSold && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">매각</span>
+              )}
+              {weight != null && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">
+                  {weight.toFixed(1)}%
                 </span>
               )}
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-10">평단가</span>
-            <span className="text-xs text-gray-400 font-mono">{formatAvgPrice(avgPrice, currency)}</span>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(valKrw)}</p>
+            {isFx && rate > 1 && (
+              <p className="text-[11px] text-blue-400 font-mono mt-0.5">{formatPrice(valFx, currency)}</p>
+            )}
           </div>
         </div>
-        <div className="text-right">
-          <div className="flex items-center justify-end gap-1 mb-0.5">
-            {pnlKrw > 0
-              ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              : pnlKrw < 0
-              ? <TrendingDown className="w-3.5 h-3.5 text-red-400" />
-              : <Minus className="w-3.5 h-3.5 text-gray-500" />}
-            <span className={`text-sm font-bold ${
-              pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'
-            }`}>
-              {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
-            </span>
+
+        {/* 하단: 가격정보 + 손익 */}
+        <div className="flex items-end justify-between gap-3 mt-2.5 pt-2.5 border-t border-gray-700/60">
+          <div className="min-w-0 space-y-0.5">
+            {!isSold && (
+              <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                <span className="text-gray-500">현재가</span>
+                <span className="text-gray-200 font-mono">{formatAvgPrice(currentPrice, currency)}</span>
+                {hasDaily && (
+                  <span className={`font-medium ${
+                    priceChange > 0 ? 'text-emerald-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-500'
+                  }`}>
+                    {priceChange >= 0 ? '+' : ''}{priceChangePct.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className="text-gray-500">평단가</span>
+              <span className="text-gray-400 font-mono">{formatAvgPrice(avgPrice, currency)}</span>
+              <span className="text-gray-600">· {qty.toLocaleString()}주</span>
+            </div>
           </div>
-          {isFx && rate > 1 ? (
-            <>
-              <p className={`text-xs font-mono ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                {pnlFx >= 0 ? '+' : ''}{formatPrice(pnlFx, currency)}
-              </p>
-              <p className={`text-xs ${pnlKrw > 0 ? 'text-emerald-400/70' : pnlKrw < 0 ? 'text-red-400/70' : 'text-gray-500'}`}>
+          <div className="text-right shrink-0">
+            <div className="flex items-center justify-end gap-1">
+              {pnlKrw > 0
+                ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                : pnlKrw < 0
+                ? <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+                : <Minus className="w-3.5 h-3.5 text-gray-500" />}
+              <span className={`text-sm font-bold ${
+                pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'
+              }`}>
+                {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+              </span>
+            </div>
+            {isFx && rate > 1 ? (
+              <>
+                <p className={`text-[11px] font-mono ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                  {pnlFx >= 0 ? '+' : ''}{formatPrice(pnlFx, currency)}
+                </p>
+                <p className={`text-[11px] ${pnlKrw > 0 ? 'text-emerald-400/70' : pnlKrw < 0 ? 'text-red-400/70' : 'text-gray-500'}`}>
+                  {pnlKrw >= 0 ? '+' : ''}{formatManwon(pnlKrw)}
+                </p>
+              </>
+            ) : (
+              <p className={`text-[11px] ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                 {pnlKrw >= 0 ? '+' : ''}{formatManwon(pnlKrw)}
               </p>
-            </>
-          ) : (
-            <p className={`text-xs ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-              {pnlKrw >= 0 ? '+' : ''}{formatManwon(pnlKrw)}
-            </p>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </button>
