@@ -46,6 +46,7 @@ export interface StockDetail {
   accountName:      string
   currency:         Currency
   isPensionLike:    boolean
+  isAccountLevel?:  boolean  // 계좌 통합 모드 — 종목 없이 계좌 단위로 관리 (qty=1, 평가액=총액)
   pensionStartYear?: number
   pensionMonthly?:   number
   ticker?:           string

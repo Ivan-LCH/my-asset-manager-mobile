@@ -39,3 +39,16 @@
 - [O] **TILE-4. PensionPage 타일 1줄 1개 + 재배치**
 - [O] **TILE-5. AssetPage(실물/기타) 타일 1줄 1개 + 재배치**
 - [O] **TILE-6. 검증(tsc+69테스트 통과) + 모바일(390px) 렌더링 확인**
+
+### 🔵 주식 계좌 통합 관리 모드 (2026-08-23)
+> 개별 종목 관리가 번잡 → 계좌 단위 통합 입력 모드 추가. 간소화 목표.
+> 통합 계좌 = STOCK 자산 1개 (isAccountLevel 플래그, qty=1, 취득단가=총 원금)
+> → 손익/차트/연금연동/명의 기존 로직 그대로 재사용.
+
+- [O] **ACC-1. 데이터 모델: StockDetail/StockRow + isAccountLevel, putDetail 전파**
+- [O] **ACC-2. AssetCreateForm: 주식 추가 시 '개별 종목 / 계좌 통합' 모드 선택**
+  - 통합: 계좌명·평가액·원금·취득일·연간 배당금(선택). 티커/수량/통화 없음.
+- [O] **ACC-3. StockTile: 통합 계좌 표시 (평가액/원금/손익, 종목단위 정보 숨김)**
+- [O] **ACC-4. AssetDetail/AssetForm: 통합 계좌 라벨·평가액 직접 수정**
+- [O] **ACC-5. DividendSection: 통합 계좌는 '연간 배당금' 단일 입력**
+- [O] **ACC-6. 검증(tsc+69테스트) + 모바일 E2E(등록→타일→상세) 확인**

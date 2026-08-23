@@ -58,6 +58,7 @@ export interface StockRow {
   accountName:       string
   currency:          Currency
   isPensionLike:     boolean
+  isAccountLevel?:   boolean
   pensionStartYear?: number
   pensionMonthly?:   number
   ticker?:           string
@@ -214,6 +215,7 @@ async function putDetail(id: string, type: AssetType, detail: Record<string, any
         accountName:      detail.accountName ?? '',
         currency:         (detail.currency ?? 'KRW') as Currency,
         isPensionLike:    !!detail.isPensionLike,
+        isAccountLevel:   !!detail.isAccountLevel,
         pensionStartYear: detail.pensionStartYear,
         pensionMonthly:   detail.pensionMonthly,
         ticker:           detail.ticker,

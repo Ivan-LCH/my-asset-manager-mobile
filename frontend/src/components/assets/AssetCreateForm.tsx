@@ -35,12 +35,15 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
   const [ownership,     setOwnership]     = useState<Ownership>({ husband: 50, wife: 50 })
 
   // 주식
+  const [stockMode,     setStockMode]     = useState<'stock' | 'account'>('stock')
   const [accountName,   setAccountName]   = useState('')
   const [currency,      setCurrency]      = useState<Currency>('KRW')
   const [ticker,        setTicker]        = useState('')
   const [isPensionLike, setIsPensionLike] = useState(false)
   const [pensionStartYearStock, setPensionStartYearStock] = useState(0)
   const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState(0)
+  const [accountValue,    setAccountValue]    = useState(0)  // 계좌 통합: 현재 평가액
+  const [annualDividend,  setAnnualDividend]  = useState(0)  // 계좌 통합: 연간 배당금
 
   // 연금
   const [pensionType,            setPensionType]           = useState('')
@@ -67,9 +70,17 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
 
   const buildDetail = () => {
     if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant }
-    if (type === 'STOCK') return {
-      accountName, currency, ticker: ticker || undefined, isPensionLike,
-      ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
+    if (type === 'STOCK') {
+      // 계좌 통합 모드 — 계좌 하나가 자산 하나. 티커/수량 없음, 연간 배당금을 dps로 저장(수량=1)
+      if (stockMode === 'account') return {
+        accountName: accountName || name, currency: 'KRW', isAccountLevel: true, isPensionLike,
+        dividendDps: annualDividend || undefined, dividendCycle: '연간',
+        ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
+      }
+      return {
+        accountName, currency, ticker: ticker || undefined, isPensionLike,
+        ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
+      }
     }
     if (type === 'PENSION') return {
       pensionType: pensionType || undefined,
@@ -84,6 +95,19 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
 
   const handleSubmit = () => {
     if (!name.trim()) return
+    // 계좌 통합 모드 — 평가액 직접 입력, 수량=1, 취득단가=총 원금
+    if (type === 'STOCK' && stockMode === 'account') {
+      createMut.mutate({
+        type, name, acquisitionDate,
+        acquisitionPrice,
+        currentValue: accountValue,
+        quantity: 1,
+        ownership,
+        detail: buildDetail(),
+        initialHistory: { date: acquisitionDate, value: accountValue || null },
+      }, { onSuccess: onClose })
+      return
+    }
     createMut.mutate({
       type,
       name,
@@ -126,12 +150,16 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
       {/* 공통 */}
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <label className={labelCls}>자산명 *</label>
+          <label className={labelCls}>
+            {type === 'STOCK' && stockMode === 'account' ? '계좌명 *' : '자산명 *'}
+          </label>
           <input
             className={inputCls}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="예: 삼성전자, 강남 아파트..."
+            placeholder={type === 'STOCK' && stockMode === 'account'
+              ? '예: 키움 IRP 계좌'
+              : '예: 삼성전자, 강남 아파트...'}
           />
         </div>
         <div>
@@ -139,10 +167,18 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
           <input type="date" className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>{(type === 'STOCK' || type === 'PHYSICAL') ? '취득단가' : '취득가'}</label>
+          <label className={labelCls}>
+            {type === 'STOCK' && stockMode === 'account' ? '총 원금 (만원 아님, 원)' : (type === 'STOCK' || type === 'PHYSICAL') ? '취득단가' : '취득가'}
+          </label>
           <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
         </div>
-        {(type === 'STOCK' || type === 'PHYSICAL') && (
+        {type === 'STOCK' && stockMode === 'account' && (
+          <div className="col-span-2">
+            <label className={labelCls}>현재 평가액 (원)</label>
+            <input type="number" inputMode="decimal" className={inputCls} value={accountValue} onChange={(e) => setAccountValue(+e.target.value)} placeholder="계좌 전체 현재 가치" />
+          </div>
+        )}
+        {(type === 'STOCK' || type === 'PHYSICAL') && stockMode !== 'account' && (
           <div>
             <label className={labelCls}>수량</label>
             <input type="number" inputMode="decimal" className={inputCls} value={quantity} onChange={(e) => setQuantity(+e.target.value)} />
@@ -194,32 +230,56 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
       {/* 주식 */}
       {type === 'STOCK' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
-          <p className="text-xs text-gray-500 font-medium uppercase">주식 상세</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>계좌명</label>
-              <input
-                className={inputCls}
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                list="stock-accounts"
-                placeholder="선택 또는 신규 입력"
-              />
-              <datalist id="stock-accounts">
-                {existingAccounts.map((a) => <option key={a} value={a} />)}
-              </datalist>
-            </div>
-            <div>
-              <label className={labelCls}>통화</label>
-              <select className={inputCls} value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
-                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className={labelCls}>티커 (yfinance용, 예: 005930.KS)</label>
-              <input className={inputCls} value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="선택사항" />
-            </div>
+          {/* 모드 선택: 개별 종목 / 계좌 통합 */}
+          <div className="flex gap-1 bg-gray-700/50 rounded-lg p-1">
+            {([['stock', '📋 개별 종목'], ['account', '🏛️ 계좌 통합']] as const).map(([m, label]) => (
+              <button key={m} type="button"
+                onClick={() => setStockMode(m)}
+                className={cn('flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  stockMode === m ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200')}>
+                {label}
+              </button>
+            ))}
           </div>
+          <p className="text-[11px] text-gray-600">
+            {stockMode === 'stock'
+              ? '종목별로 티커·수량·평단가를 입력해 관리 (시세 자동 갱신·배당 상세 지원)'
+              : '계좌 전체를 자산 하나로 등록 — 평가액·원금만 입력 (연금 연동·명의는 계좌 단위 유지)'}
+          </p>
+
+          {stockMode === 'stock' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>계좌명</label>
+                <input
+                  className={inputCls}
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  list="stock-accounts"
+                  placeholder="선택 또는 신규 입력"
+                />
+                <datalist id="stock-accounts">
+                  {existingAccounts.map((a) => <option key={a} value={a} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className={labelCls}>통화</label>
+                <select className={inputCls} value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
+                  {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className={labelCls}>티커 (yfinance용, 예: 005930.KS)</label>
+                <input className={inputCls} value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="선택사항" />
+              </div>
+            </div>
+          )}
+          {stockMode === 'account' && (
+            <div className="col-span-2">
+              <label className={labelCls}>연간 배당금 (원, 선택)</label>
+              <input type="number" inputMode="decimal" className={inputCls} value={annualDividend} onChange={(e) => setAnnualDividend(+e.target.value)} placeholder="예: 1200000" />
+            </div>
+          )}
           <label className={checkCls}>
             <input type="checkbox" checked={isPensionLike} onChange={(e) => setIsPensionLike(e.target.checked)} className="accent-blue-500" />
             연금형 (pension simulation 포함)

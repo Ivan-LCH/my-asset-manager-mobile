@@ -6,6 +6,7 @@ import AssetForm from './AssetForm'
 import DividendSection from './DividendSection'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { useDeleteAsset, useUpdateAsset } from '@/hooks/useAssets'
+import { useUpdateHistory } from '@/hooks/useHistory'
 import { useSettings } from '@/hooks/useSettings'
 import { formatMoney, formatManwon, formatPnl, formatPrice, formatAvgPrice, TYPE_LABELS } from '@/lib/utils'
 import type { Asset, RealEstateDetail, Settings, StockDetail, PensionDetail } from '@/types'
@@ -31,13 +32,24 @@ export default function AssetDetail({ asset, chartData }: Props) {
   const [tab,           setTab]           = useState<Tab>('info')
   const [editingAvg,    setEditingAvg]    = useState(false)
   const [avgPriceInput, setAvgPriceInput] = useState('')
+  // 계좌 통합 모드 — 평가액 직접 갱신
+  const [editingVal,    setEditingVal]    = useState(false)
+  const [valInput,      setValInput]      = useState('')
   const deleteMut = useDeleteAsset()
   const updateMut = useUpdateAsset()
+  const updateHistMut = useUpdateHistory(asset.id)
   const { data: settings } = useSettings()
+
+  const todayStr = () => {
+    const n = new Date()
+    const p = (v: number) => String(v).padStart(2, '0')
+    return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}`
+  }
 
   const a     = asset
   const d     = a.detail as (RealEstateDetail & StockDetail & PensionDetail) | undefined
   const isSold = !!a.disposalDate
+  const isAccountLevel = a.type === 'STOCK' && !!(d as StockDetail | undefined)?.isAccountLevel
   const displayVal = isSold ? (a.disposalPrice ?? 0) : a.currentValue
 
   // KPI 계산
@@ -77,6 +89,14 @@ export default function AssetDetail({ asset, chartData }: Props) {
     c2 = 'default'
 
     k3 = '보유 수량'; v3 = `${qty.toLocaleString()}`; c3 = 'default'
+
+    // 계좌 통합 모드 — 단가·수량 대신 원금 표시
+    if ((d as StockDetail | undefined)?.isAccountLevel) {
+      k1 = isSold ? '매각 금액/손익' : '평가액/손익'
+      k2 = '총 원금'
+      v2 = formatMoney(costKrw)
+      k3 = '계좌 통합'; v3 = '-'; c3 = 'default'
+    }
   } else {
     k1 = '현재 가치';  v1 = formatMoney(displayVal)
     k2 = '취득가';     v2 = formatMoney(a.acquisitionPrice ?? 0)
@@ -196,6 +216,45 @@ export default function AssetDetail({ asset, chartData }: Props) {
         <KpiCard label={k2} value={v2} color={c2} />
         <KpiCard label={k3} value={v3} color={c3} />
       </div>}
+
+      {/* 계좌 통합 — 평가액 직접 갱신 */}
+      {isAccountLevel && !isSold && tab === 'info' && (
+        <div className="bg-gray-700/40 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 mb-0.5">현재 평가액</p>
+            {editingVal ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number" inputMode="decimal"
+                  className="w-40 bg-gray-600 text-gray-100 text-sm rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
+                  value={valInput}
+                  onChange={(e) => setValInput(e.target.value)}
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    const v = parseFloat(valInput)
+                    if (!isNaN(v) && v >= 0) updateHistMut.mutate({ date: todayStr(), data: { value: v } })
+                    setEditingVal(false)
+                  }}
+                  className="p-2 text-emerald-400 hover:text-emerald-300"
+                ><Check className="w-4 h-4" /></button>
+                <button onClick={() => setEditingVal(false)} className="p-2 text-gray-500 hover:text-gray-300">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => { setValInput(String(a.currentValue)); setEditingVal(true) }}
+                className="flex items-center gap-1.5 group/val">
+                <span className="text-sm font-semibold text-gray-100">{formatMoney(a.currentValue)}</span>
+                <Pencil className="w-3 h-3 text-gray-600 group-hover/val:text-blue-400 transition-colors" />
+                <span className="text-[10px] text-gray-500">평가액 갱신</span>
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-gray-600 text-right shrink-0">계좌 전체 금액을<br />직접 입력해 갱신</p>
+        </div>
+      )}
 
       {/* 미니 차트 */}
       {(asset.type !== 'STOCK' || tab === 'info') && miniChart.length > 1 && (

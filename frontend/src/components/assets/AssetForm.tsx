@@ -39,6 +39,7 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [currency,      setCurrency]      = useState<Currency>((d?.currency as Currency) ?? 'KRW')
   const [ticker,        setTicker]        = useState((d?.ticker         as string)  ?? '')
   const [isPensionLike, setIsPensionLike] = useState((d?.isPensionLike as boolean) ?? false)
+  const [isAccountLevel, setIsAccountLevel] = useState(!!(d?.isAccountLevel as boolean | undefined))
   const [pensionStartYearStock, setPensionStartYearStock] = useState((d?.pensionStartYear as number) ?? 0)
   const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState((d?.pensionMonthly   as number) ?? 0)
 
@@ -60,7 +61,7 @@ export default function AssetForm({ asset, onClose }: Props) {
     if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined }
     if (type === 'STOCK') return {
       accountName, currency, ticker: ticker || undefined,
-      isPensionLike,
+      isPensionLike, isAccountLevel,
       ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
     }
     if (type === 'PENSION') return { pensionType: pensionType || undefined, expectedStartYear, expectedEndYear, expectedMonthlyPayout, annualGrowthRate, hideInChart, linkedStockId: linkedStockId || undefined }
@@ -106,10 +107,10 @@ export default function AssetForm({ asset, onClose }: Props) {
           <input type="date" className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>{(asset.type === 'STOCK' || asset.type === 'PHYSICAL') ? '취득단가' : '취득가'}</label>
+          <label className={labelCls}>{(asset.type === 'STOCK' && isAccountLevel) ? '총 원금 (원)' : (asset.type === 'STOCK' || asset.type === 'PHYSICAL') ? '취득단가' : '취득가'}</label>
           <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
         </div>
-        {(asset.type === 'STOCK' || asset.type === 'PHYSICAL') && (
+        {(asset.type === 'STOCK' || asset.type === 'PHYSICAL') && !isAccountLevel && (
           <div>
             <label className={labelCls}>수량</label>
             <input type="number" inputMode="decimal" className={inputCls} value={quantity} onChange={(e) => setQuantity(+e.target.value)} />
@@ -176,22 +177,26 @@ export default function AssetForm({ asset, onClose }: Props) {
       {/* 주식 */}
       {asset.type === 'STOCK' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
-          <p className="text-xs text-gray-500 font-medium uppercase">주식 상세</p>
+          <p className="text-xs text-gray-500 font-medium uppercase">주식 상세 {isAccountLevel && <span className="text-violet-400 normal-case">(계좌 통합 모드)</span>}</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>계좌명</label>
               <input className={inputCls} value={accountName} onChange={(e) => setAccountName(e.target.value)} />
             </div>
-            <div>
-              <label className={labelCls}>통화</label>
-              <select className={inputCls} value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
-                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className={labelCls}>티커 (yfinance용, 예: 005930.KS)</label>
-              <input className={inputCls} value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="선택사항" />
-            </div>
+            {!isAccountLevel && (
+              <>
+                <div>
+                  <label className={labelCls}>통화</label>
+                  <select className={inputCls} value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
+                    {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className={labelCls}>티커 (yfinance용, 예: 005930.KS)</label>
+                  <input className={inputCls} value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="선택사항" />
+                </div>
+              </>
+            )}
           </div>
           <label className={checkCls}>
             <input type="checkbox" checked={isPensionLike} onChange={(e) => setIsPensionLike(e.target.checked)} className="accent-blue-500" />

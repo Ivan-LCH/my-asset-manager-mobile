@@ -19,6 +19,7 @@ export default function DividendSection({ asset }: Props) {
   const settingMut = useUpdateDividendSettings(asset.id)
 
   // 배당 설정 로컬 상태
+  const isAcct = !!d?.isAccountLevel   // 계좌 통합 모드 — 연간 배당금 단일 입력
   const [yld,   setYld]   = useState(String(d?.dividendYield  ?? 0))
   const [dps,   setDps]   = useState(String(d?.dividendDps    ?? 0))
   const [cycle, setCycle] = useState(d?.dividendCycle ?? '연간')
@@ -73,8 +74,39 @@ export default function DividendSection({ asset }: Props) {
 
       {/* 예상 배당 설정 */}
       <div className="bg-gray-700/40 rounded-xl p-4 space-y-3">
-        <p className="text-xs font-semibold text-gray-400">📊 배당 설정</p>
+        <p className="text-xs font-semibold text-gray-400">
+          📊 배당 설정 {isAcct && <span className="text-violet-400 font-normal">(계좌 통합 — 연간 배당금)</span>}
+        </p>
 
+        {isAcct ? (
+          /* 계좌 통합: 연간 배당금 단일 입력 (dps × qty 1) */
+          <div className="grid grid-cols-2 gap-3 items-end">
+            <div>
+              <p className="text-[10px] text-gray-500 mb-1">연간 배당금 (KRW)</p>
+              <input
+                type="number" inputMode="decimal" min="0"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                value={dps}
+                onChange={(e) => setDps(e.target.value)}
+                placeholder="예: 1200000"
+              />
+            </div>
+            <div className="flex items-end justify-end gap-3 pb-0.5">
+              <div className="text-right">
+                <p className="text-[10px] text-gray-500">월 환산</p>
+                <p className="text-sm font-bold text-emerald-400">{formatManwon((parseFloat(dps) || 0) / 12)}</p>
+              </div>
+              <button
+                onClick={handleSaveSettings}
+                disabled={settingMut.isPending}
+                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="grid grid-cols-3 gap-3">
           <div>
             <p className="text-[10px] text-gray-500 mb-1">배당수익률 (%)</p>
@@ -139,6 +171,8 @@ export default function DividendSection({ asset }: Props) {
             </button>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* 수령 이력 */}

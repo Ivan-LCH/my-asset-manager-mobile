@@ -497,6 +497,7 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
   const isSold   = !!asset.disposalDate
   const valKrw   = isSold ? (asset.disposalPrice ?? 0) : asset.currentValue
   const d        = asset.detail as StockDetail | undefined
+  const isAcct   = !!d?.isAccountLevel   // 계좌 통합 모드 — 단가·수량 대신 계좌 총액 표시
   const currency = d?.currency ?? 'KRW'
   const isFx     = currency !== 'KRW'
   const rate     = getRate(settings, currency)
@@ -544,6 +545,9 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
               {asset.name}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {isAcct && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-medium">계좌 통합</span>
+              )}
               {d?.ticker && (
                 <span className="text-[11px] text-gray-500 font-mono">{d.ticker}</span>
               )}
@@ -573,7 +577,7 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
         {/* 하단: 가격정보 + 손익 */}
         <div className="flex items-end justify-between gap-3 mt-2.5 pt-2.5 border-t border-gray-700/60">
           <div className="min-w-0 space-y-0.5">
-            {!isSold && (
+            {!isSold && !isAcct && (
               <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
                 <span className="text-gray-500">현재가</span>
                 <span className="text-gray-200 font-mono">{formatAvgPrice(currentPrice, currency)}</span>
@@ -587,9 +591,15 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
               </div>
             )}
             <div className="flex items-center gap-1.5 text-[11px]">
-              <span className="text-gray-500">평단가</span>
-              <span className="text-gray-400 font-mono">{formatAvgPrice(avgPrice, currency)}</span>
-              <span className="text-gray-600">· {qty.toLocaleString()}주</span>
+              {isAcct ? (
+                <span className="text-gray-500">원금 {formatManwon(avgPrice)}</span>
+              ) : (
+                <>
+                  <span className="text-gray-500">평단가</span>
+                  <span className="text-gray-400 font-mono">{formatAvgPrice(avgPrice, currency)}</span>
+                  <span className="text-gray-600">· {qty.toLocaleString()}주</span>
+                </>
+              )}
             </div>
           </div>
           <div className="text-right shrink-0">
