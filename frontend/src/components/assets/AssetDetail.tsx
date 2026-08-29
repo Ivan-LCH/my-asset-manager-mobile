@@ -229,6 +229,13 @@ export default function AssetDetail({ asset, chartData }: Props) {
                   className="w-40 bg-gray-600 text-gray-100 text-sm rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
                   value={valInput}
                   onChange={(e) => setValInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const v = parseFloat(valInput)
+                      if (!isNaN(v) && v >= 0) updateHistMut.mutate({ date: todayStr(), data: { value: v } })
+                      setEditingVal(false)
+                    }
+                  }}
                   autoFocus
                 />
                 <button

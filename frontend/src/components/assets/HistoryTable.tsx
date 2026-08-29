@@ -14,6 +14,9 @@ export default function HistoryTable({ asset }: Props) {
   const updateMut = useUpdateHistory(asset.id)
   const deleteMut = useDeleteHistory(asset.id)
 
+  // 연속 보기 — 기록 없는 날짜를 직전 값으로 채워 표시 (데이터는 쓰지 않음)
+  const [filled, setFilled] = useState(false)
+
   const [editing, setEditing]     = useState<HistoryItem | null>(null)
   const [delDate, setDelDate]      = useState<string | null>(null)
   const [addMode, setAddMode]      = useState(false)
@@ -27,6 +30,30 @@ export default function HistoryTable({ asset }: Props) {
   const qtyBased = isQtyBased(asset.type)
   const currency = (asset.detail as StockDetail | undefined)?.currency ?? 'KRW'
   const sorted   = [...asset.history].sort((a, b) => b.date.localeCompare(a.date))
+
+  // 연속 보기: 마지막 기록일~오늘 포함, 기록 사이 빈 날짜를 직전 기록값으로 채움.
+  // 범위가 길어지면 모바일 렌더가 무거워지므로 최근 1년으로 제한.
+  const rows: (HistoryItem & { filled?: boolean })[] = (() => {
+    if (!filled || sorted.length === 0) return sorted
+    const dayMs = 86_400_000
+    const today = new Date()
+    const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    const first = new Date(Math.max(
+      new Date(sorted[sorted.length - 1].date).getTime(),
+      today.getTime() - 365 * dayMs,
+    ))
+    const last = Math.max(new Date(todayStr).getTime(), new Date(sorted[0].date).getTime())
+    const byDate = new Map(sorted.map((h) => [h.date, h]))
+    const out: (HistoryItem & { filled?: boolean })[] = []
+    let carry: HistoryItem | null = null
+    for (let t = first.getTime(); t <= last; t += dayMs) {
+      const ds = new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+      const rec = byDate.get(ds)
+      if (rec) { out.push({ ...rec }); carry = rec }
+      else if (carry) out.push({ ...carry, date: ds, filled: true })
+    }
+    return out.reverse()
+  })()
 
   const openEdit = (h: HistoryItem) => {
     setEditing(h)
@@ -65,12 +92,22 @@ export default function HistoryTable({ asset }: Props) {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-gray-300">📝 이력 관리</h4>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-        >
-          <Plus className="w-3 h-3" /> 추가
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFilled((v) => !v)}
+            className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+              filled ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            연속 보기
+          </button>
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+          >
+            <Plus className="w-3 h-3" /> 추가
+          </button>
+        </div>
       </div>
 
       {/* 추가/수정 폼 */}
@@ -166,12 +203,14 @@ export default function HistoryTable({ asset }: Props) {
                 </td>
               </tr>
             )}
-            {sorted.map((h) => (
+            {rows.map((h) => (
               <tr
-                key={h.date}
-                className="border-t border-gray-700/50 hover:bg-gray-700/30 transition-colors"
+                key={h.date + (h.filled ? '-f' : '')}
+                className={`border-t border-gray-700/50 transition-colors ${
+                  h.filled ? 'opacity-45' : 'hover:bg-gray-700/30'
+                }`}
               >
-                <td className="px-3 py-2 text-gray-300">{h.date}</td>
+                <td className={`px-3 py-2 text-gray-300 ${h.filled ? 'italic' : ''}`}>{h.date}</td>
                 {qtyBased && (
                   <>
                     <td className="px-3 py-2 text-right text-gray-300 font-mono">
@@ -195,7 +234,8 @@ export default function HistoryTable({ asset }: Props) {
                     </button>
                     <button
                       onClick={() => setDelDate(h.date)}
-                      className="p-2 rounded text-gray-500 hover:text-red-400 transition-colors"
+                      disabled={h.filled}
+                      className="p-2 rounded text-gray-500 hover:text-red-400 transition-colors disabled:invisible"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

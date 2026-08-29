@@ -31,6 +31,8 @@ export default function Dashboard() {
       value,
       type:  type as AssetType,
     }))
+    // 막대 범례·영역차트와 동일한 순서(금액 내림차순)로 통일 — 색 배치 일관성
+    .sort((a, b) => b.value - a.value)
 
   if (isLoading) {
     return (

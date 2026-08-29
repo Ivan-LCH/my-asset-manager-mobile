@@ -6,12 +6,13 @@ import { TYPE_LABELS, ASSET_TYPES, cn } from '@/lib/utils'
 
 interface Props {
   defaultType?: AssetType
+  defaultAccountName?: string   // 계좌 내에서 추가 시 현재 계좌를 기본값으로
   onClose: () => void
 }
 
 const CURRENCIES: Currency[] = ['KRW', 'USD', 'JPY']
 
-export default function AssetCreateForm({ defaultType, onClose }: Props) {
+export default function AssetCreateForm({ defaultType, defaultAccountName, onClose }: Props) {
   const createMut = useCreateAsset()
   const existingStocks = useAssetsByType('STOCK')
   const existingAccounts = Array.from(new Set(
@@ -36,7 +37,9 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
 
   // 주식
   const [stockMode,     setStockMode]     = useState<'stock' | 'account'>('stock')
-  const [accountName,   setAccountName]   = useState('')
+  const [accountName,   setAccountName]   = useState(defaultAccountName ?? '')
+  // 사용자가 계좌명을 직접 고쳤으면 자동 채우기로 덮어쓰지 않음
+  const [accountTouched, setAccountTouched] = useState(false)
   const [currency,      setCurrency]      = useState<Currency>('KRW')
   const [ticker,        setTicker]        = useState('')
   const [isPensionLike, setIsPensionLike] = useState(false)
@@ -65,8 +68,9 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
     const d = (match as Asset).detail as StockDetail | undefined
     if (d?.ticker) setTicker(d.ticker)
     if (d?.currency) setCurrency(d.currency)
-    if (d?.accountName) setAccountName(d.accountName)
-  }, [name, type, existingStocks])
+    // 계좌명: 사용자가 직접 고쳤거나, 계좌 안에서 추가(기본 계좌 지정)한 경우에는 자동으로 덮어쓰지 않음
+    if (d?.accountName && !accountTouched && !defaultAccountName) setAccountName(d.accountName)
+  }, [name, type, existingStocks, accountTouched, defaultAccountName])
 
   const buildDetail = () => {
     if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant }
@@ -254,7 +258,7 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
                 <input
                   className={inputCls}
                   value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
+                  onChange={(e) => { setAccountTouched(true); setAccountName(e.target.value) }}
                   list="stock-accounts"
                   placeholder="선택 또는 신규 입력"
                 />
@@ -351,8 +355,8 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
         </div>
       )}
 
-      {/* 공용 명의 (모든 자산 공통) */}
-      <div className="space-y-2 pt-2 border-t border-gray-700">
+      {/* 공용 명의 (전 자산 공통) — 주식은 계좌 단위 명의 관리를 사용하므로 폼에서 제외 */}
+      {type !== 'STOCK' && <div className="space-y-2 pt-2 border-t border-gray-700">
         <p className="text-xs text-gray-500 font-medium uppercase">명의 지분 (전 자산 공통)</p>
         <p className="text-[11px] text-gray-600">부부 가정 시 보통 50:50. 퇴직연금·국민연금 등 본인 자산은 '내 100%'. 1인별 건보·세금 산정에 활용.</p>
         <div className="flex gap-1">
@@ -373,7 +377,7 @@ export default function AssetCreateForm({ defaultType, onClose }: Props) {
             <span className="text-xs text-gray-500 self-center">와이프 {ownership.wife}%</span>
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="flex gap-2 justify-end pt-2">
         <button

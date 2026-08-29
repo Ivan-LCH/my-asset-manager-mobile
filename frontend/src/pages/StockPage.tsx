@@ -161,7 +161,7 @@ export default function StockPage() {
 
       {showCreate && (
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-          <AssetCreateForm defaultType="STOCK" onClose={() => setShowCreate(false)} />
+          <AssetCreateForm defaultType="STOCK" defaultAccountName={activeAccount ?? undefined} onClose={() => setShowCreate(false)} />
         </div>
       )}
 
