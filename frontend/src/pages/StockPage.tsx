@@ -9,7 +9,7 @@ import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import { useStockAccountOwnership, useSaveStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
-import { updateHistory } from '@/lib/db'
+import { updateHistory, getAllAssets } from '@/lib/db'
 import { fetchPrices } from '@/lib/stockPrice'
 import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice, cn } from '@/lib/utils'
 import type { Asset, Settings, StockDetail } from '@/types'
@@ -63,6 +63,7 @@ export default function StockPage() {
     setUpdMsg('갱신 중...')
     const today = new Date()
     const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    const totalBefore = active.reduce((s, a) => s + a.currentValue, 0)
     const result = await fetchPrices(items.map(({ id, ticker }) => ({ id, ticker })))
     let cnt = 0
     await Promise.all(items.map(async (it) => {
@@ -74,8 +75,17 @@ export default function StockPage() {
     await qc.invalidateQueries({ queryKey: ['assets'] })
     await qc.invalidateQueries({ queryKey: ['chart'] })
     await qc.invalidateQueries({ queryKey: ['dividends', 'summary'] })
+    // 갱신 후 총액 변동 계산 (invalidate 로 assets 재조회된 값 사용)
+    const fresh = await qc.fetchQuery({ queryKey: ['assets'], queryFn: () => getAllAssets('STOCK') })
+    const totalAfter = fresh
+      .filter((a) => !a.disposalDate)
+      .reduce((s, a) => s + a.currentValue, 0)
+    const diff = totalAfter - totalBefore
+    const diffStr = cnt > 0 && Math.abs(diff) > 0
+      ? ` (${diff > 0 ? '+' : ''}${formatManwon(diff)})`
+      : ''
     setUpdating(false)
-    setUpdMsg(cnt > 0 ? `갱신 완료 ${cnt}/${items.length}` : '갱신 실패')
+    setUpdMsg(cnt > 0 ? `갱신 완료 ${cnt}/${items.length}${diffStr}` : '갱신 실패')
     setTimeout(() => setUpdMsg(''), 4000)
   }
 
@@ -145,9 +155,9 @@ export default function StockPage() {
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{updating ? '갱신 중...' : '시세 업데이트'}</span>
+            <span>{updating ? '갱신 중...' : '시세 업데이트'}</span>
           </button>
-          {updMsg && <span className="text-xs text-gray-400 hidden sm:inline">{updMsg}</span>}
+          {updMsg && <span className="text-xs text-gray-400">{updMsg}</span>}
           <button
             onClick={() => setShowCreate((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
