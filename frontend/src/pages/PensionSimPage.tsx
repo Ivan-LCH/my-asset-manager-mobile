@@ -176,7 +176,12 @@ export default function PensionSimPage() {
     if (saved === undefined) return
     if (pensionAssets.length === 0 && saved === null) return
     didInit.current = true
-    const base = saved ?? EMPTY_PENSION_PLAN
+    // 저장본에 일부 필드가 빠져 있어도 (구 버전 마이그레이션 등) 기본값으로 보완
+    const base = saved
+      ? { ...EMPTY_PENSION_PLAN, ...saved,
+          sources: saved.sources ?? EMPTY_PENSION_PLAN.sources,
+          allocations: saved.allocations ?? [] }
+      : EMPTY_PENSION_PLAN
     const auto = sourcesFromAssets(
       pensionAssets.map((a) => ({
         id: a.id, name: a.name, currentValue: a.currentValue,

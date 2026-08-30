@@ -58,6 +58,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
   let c2: 'default' | 'red' | 'blue' | 'green' = 'default'
   let c3: 'default' | 'red' | 'blue' | 'green' = 'blue'
   let pnlSub = ''   // 평가금액/손익 카드의 sub 문자열 (STOCK/PHYSICAL 전용)
+  let isStockItem = false          // 일반 주식 종목 (계좌 통합 아님)
+  let curPrice = 0                 // 현재 가격 (네이티브 통화)
+  let stockCurrency: string = 'KRW'
 
   if (a.type === 'REAL_ESTATE') {
     const liab   = (d?.loanAmount ?? 0) + (d?.tenantDeposit ?? 0)
@@ -96,6 +99,11 @@ export default function AssetDetail({ asset, chartData }: Props) {
       k2 = '총 원금'
       v2 = formatMoney(costKrw)
       k3 = '계좌 통합'; v3 = '-'; c3 = 'default'
+    } else if (a.type === 'STOCK') {
+      // 일반 종목 — 현재 가격(네이티브 통화) 계산: 현재가치 ÷ 수량, 외화는 환율 역산
+      isStockItem = true
+      stockCurrency = currency
+      curPrice = qty > 0 ? (isFx ? displayVal / rate / qty : displayVal / qty) : 0
     }
   } else {
     k1 = '현재 가치';  v1 = formatMoney(displayVal)
@@ -137,8 +145,74 @@ export default function AssetDetail({ asset, chartData }: Props) {
         <DividendSection asset={asset} />
       )}
 
+      {/* 기본 정보 — 주식 종목은 1줄 요약 (계좌 · 취득일 · 평단가 → 현재 가격) */}
+      {asset.type === 'STOCK' && tab === 'info' && (isStockItem || isAccountLevel) && (
+        <div className="flex items-center gap-2 text-xs bg-gray-700/40 rounded-lg px-3 py-2.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+          <span className="text-gray-500 shrink-0">계좌</span>
+          <span className="text-gray-200 font-medium truncate">{d?.accountName ?? '-'}</span>
+          {a.acquisitionDate && <span className="text-gray-500 shrink-0">{a.acquisitionDate.slice(0, 10)} 취득</span>}
+          {isStockItem && (() => {
+            const avg = a.acquisitionPrice ?? 0
+            const chg = avg > 0 ? ((curPrice - avg) / avg) * 100 : 0
+            const up = chg >= 0
+            return (
+              <>
+                <span className="text-gray-600 shrink-0">·</span>
+                <span className="text-gray-500 shrink-0">평단</span>
+                {editingAvg ? (
+                  <span className="flex items-center gap-1 shrink-0">
+                    <input
+                      type="number" inputMode="decimal"
+                      className="w-28 bg-gray-600 text-gray-100 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400"
+                      value={avgPriceInput}
+                      onChange={(e) => setAvgPriceInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = parseFloat(avgPriceInput)
+                          if (!isNaN(v) && v >= 0) updateMut.mutate({ id: a.id, data: { acquisitionPrice: v } })
+                          setEditingAvg(false)
+                        }
+                        if (e.key === 'Escape') setEditingAvg(false)
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        const v = parseFloat(avgPriceInput)
+                        if (!isNaN(v) && v >= 0) updateMut.mutate({ id: a.id, data: { acquisitionPrice: v } })
+                        setEditingAvg(false)
+                      }}
+                      className="text-emerald-400 hover:text-emerald-300"
+                    ><Check className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setEditingAvg(false)} className="text-gray-500 hover:text-gray-300">
+                      <X className="w-3.5 h-3.5" /></button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => { setAvgPriceInput(String(avg)); setEditingAvg(true) }}
+                    className="flex items-center gap-1 shrink-0 group/avg"
+                  >
+                    <span className="text-gray-200 font-mono">{formatAvgPrice(avg, stockCurrency)}</span>
+                    <Pencil className="w-3 h-3 text-gray-600 group-hover/avg:text-blue-400 transition-colors" />
+                  </button>
+                )}
+                <span className="text-gray-600 shrink-0">→</span>
+                <span className="text-gray-500 shrink-0">현재</span>
+                <span className={`font-mono font-semibold shrink-0 ${up ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : '-'}
+                  {avg > 0 && curPrice > 0 && ` (${up ? '▲' : '▼'}${Math.abs(chg).toFixed(1)}%)`}
+                </span>
+              </>
+            )
+          })()}
+          {d?.ticker && <span className="text-gray-600 shrink-0">· {d.ticker}</span>}
+          {isSold && <span className="text-red-400 font-semibold shrink-0">매각 ({a.disposalDate})</span>}
+          {!isSold && <span className="text-emerald-400 shrink-0">보유중</span>}
+        </div>
+      )}
+
       {/* 기본 정보 (info 탭 또는 비주식 자산) */}
-      {(asset.type !== 'STOCK' || tab === 'info') && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {(asset.type !== 'STOCK' || tab === 'info') && !(asset.type === 'STOCK' && (isStockItem || isAccountLevel)) && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <InfoCell
           label={a.type === 'REAL_ESTATE' ? '주소' : a.type === 'STOCK' ? '계좌' : '유형'}
           value={
@@ -149,20 +223,13 @@ export default function AssetDetail({ asset, chartData }: Props) {
         />
         <InfoCell label="취득일" value={a.acquisitionDate ?? '-'} />
         {a.type === 'STOCK' ? (
-          <AvgPriceCell
-            asset={a}
-            currency={(d as StockDetail | undefined)?.currency ?? 'KRW'}
-            editing={editingAvg}
-            input={avgPriceInput}
-            onInputChange={setAvgPriceInput}
-            onEdit={() => { setAvgPriceInput(String(a.acquisitionPrice ?? 0)); setEditingAvg(true) }}
-            onSave={() => {
-              const v = parseFloat(avgPriceInput)
-              if (!isNaN(v) && v >= 0) updateMut.mutate({ id: a.id, data: { acquisitionPrice: v } })
-              setEditingAvg(false)
-            }}
-            onCancel={() => setEditingAvg(false)}
-          />
+          // 현재 가격 (현재가치 ÷ 수량) — 계좌 통합 모드에선 단가가 없으므로 미표시
+          isStockItem ? (
+            <InfoCell
+              label={`현재 가격${stockCurrency !== 'KRW' ? ` (${stockCurrency})` : ''}`}
+              value={curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : '-'}
+            />
+          ) : <div className="hidden sm:block" />
         ) : (
           <InfoCell
             label={a.type === 'PHYSICAL' ? '투자원금' : '취득가'}
@@ -213,7 +280,16 @@ export default function AssetDetail({ asset, chartData }: Props) {
       {/* KPI 카드 */}
       {(asset.type !== 'STOCK' || tab === 'info') && <div className="grid grid-cols-3 gap-3">
         <KpiCard label={k1} value={v1} sub={pnlSub || undefined} color={c1} />
-        <KpiCard label={k2} value={v2} color={c2} />
+        {isStockItem ? (
+          // 현재 가격 (평단가는 위 1줄 요약에서 편집)
+          <KpiCard
+            label={`현재 가격${stockCurrency !== 'KRW' ? ` (${stockCurrency})` : ''}`}
+            value={curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : '-'}
+            color={c2}
+          />
+        ) : (
+          <KpiCard label={k2} value={v2} color={c2} />
+        )}
         <KpiCard label={k3} value={v3} color={c3} />
       </div>}
 
@@ -366,50 +442,6 @@ function InfoCell({
     <div className="bg-gray-700/40 rounded-lg px-3 py-2.5">
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       <p className={`text-sm font-medium truncate ${valueClass}`}>{value}</p>
-    </div>
-  )
-}
-
-function AvgPriceCell({ asset, currency, editing, input, onInputChange, onEdit, onSave, onCancel }: {
-  asset: Asset
-  currency: string
-  editing: boolean
-  input: string
-  onInputChange: (v: string) => void
-  onEdit: () => void
-  onSave: () => void
-  onCancel: () => void
-}) {
-  const isFx = currency !== 'KRW'
-  const avg  = asset.acquisitionPrice ?? 0
-  return (
-    <div className="bg-gray-700/40 rounded-lg px-3 py-2.5">
-      <p className="text-xs text-gray-500 mb-1">
-        평단가{isFx ? <span className="text-blue-400/80 ml-1">({currency})</span> : ''}
-      </p>
-      {editing ? (
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-400 shrink-0">{isFx ? '$' : '₩'}</span>
-          <input
-            type="number" inputMode="decimal"
-            step={isFx ? '0.01' : '1'}
-            placeholder={isFx ? '0.00' : '0'}
-            className="w-full bg-gray-600 text-gray-100 text-sm rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400"
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            autoFocus
-          />
-          <button onClick={onSave}  className="p-2 text-emerald-400 hover:text-emerald-300"><Check className="w-3.5 h-3.5" /></button>
-          <button onClick={onCancel} className="p-2 text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
-        </div>
-      ) : (
-        <button onClick={onEdit} className="flex items-center gap-1 group/avg">
-          <span className="text-sm font-medium text-gray-200 font-mono">
-            {formatAvgPrice(avg, currency)}
-          </span>
-          <Pencil className="w-3 h-3 text-gray-600 group-hover/avg:text-blue-400 transition-colors" />
-        </button>
-      )}
     </div>
   )
 }

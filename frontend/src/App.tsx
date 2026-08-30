@@ -3,14 +3,8 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { useEffect } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
 import Dashboard from '@/pages/Dashboard'
-import RealEstatePage from '@/pages/RealEstatePage'
-import AssetPage from '@/pages/AssetPage'
-import StockPage from '@/pages/StockPage'
-import PensionPage from '@/pages/PensionPage'
-import PensionSimPage from '@/pages/PensionSimPage'
-import RetirementPrepPage from '@/pages/RetirementPrepPage'
-import RetirementPage from '@/pages/RetirementPage'
-import CorpSimPage from '@/pages/CorpSimPage'
+import AssetsPage from '@/pages/AssetsPage'
+import AnalysisPage from '@/pages/AnalysisPage'
 import Settings from '@/pages/Settings'
 import { getAllAssets, getSettings, saveSettings, seedSampleData, migrateStockOwnershipToAccount, migrateInflowsToLumpsumAndAllocations, migrateSettingsToBirth, migrateWifeNationalPension } from '@/lib/db'
 
@@ -59,18 +53,22 @@ export default function App() {
         <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<Dashboard />} />
-            <Route path="real-estate" element={<RealEstatePage />} />
-            <Route path="stock"       element={<StockPage />} />
-            <Route path="pension"     element={<PensionPage />} />
-            <Route path="pension/sim" element={<PensionSimPage />} />
-            <Route path="prep"        element={<RetirementPrepPage />} />
-            <Route path="savings"     element={<AssetPage type="SAVINGS" />} />
-            <Route path="physical"    element={<AssetPage type="PHYSICAL" />} />
-            <Route path="etc"         element={<AssetPage type="ETC" />} />
-            <Route path="retirement"  element={<RetirementPage />} />
-            <Route path="corp-sim"    element={<CorpSimPage />} />
-            <Route path="portfolio"   element={<Navigate to="/prep" replace />} />
-            <Route path="settings"    element={<Settings />} />
+            {/* 간소화된 4-tab 구조 */}
+            <Route path="assets"   element={<AssetsPage />} />
+            <Route path="analysis" element={<AnalysisPage />} />
+            <Route path="settings" element={<Settings />} />
+            {/* 기존 라우트 호환 — 통합 페이지의 해당 칩/탭으로 리다이렉트 */}
+            <Route path="real-estate" element={<Navigate to="/assets?type=REAL_ESTATE" replace />} />
+            <Route path="stock"       element={<Navigate to="/assets?type=STOCK" replace />} />
+            <Route path="pension"     element={<Navigate to="/assets?type=PENSION" replace />} />
+            <Route path="pension/sim" element={<Navigate to="/analysis?tab=pension-sim" replace />} />
+            <Route path="prep"        element={<Navigate to="/analysis?tab=prep" replace />} />
+            <Route path="savings"     element={<Navigate to="/assets?type=SAVINGS" replace />} />
+            <Route path="physical"    element={<Navigate to="/assets?type=PHYSICAL" replace />} />
+            <Route path="etc"         element={<Navigate to="/assets?type=ETC" replace />} />
+            <Route path="retirement"  element={<Navigate to="/analysis?tab=cashflow" replace />} />
+            <Route path="corp-sim"    element={<Navigate to="/analysis?tab=corp-sim" replace />} />
+            <Route path="portfolio"   element={<Navigate to="/analysis" replace />} />
             <Route path="*"           element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
