@@ -16,8 +16,13 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    // range/interval 화이트리스트 — 기본은 당일 시세, range=3mo 등으로 과거 종가 조회
+    const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'max']
+    const INTERVALS = ['1d', '1wk', '1mo']
+    const range = RANGES.includes(String(req.query?.range)) ? req.query.range : '1d'
+    const interval = INTERVALS.includes(String(req.query?.interval)) ? req.query.interval : '1d'
     const r = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1d&interval=1d`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=${interval}`,
       { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
     )
     const text = await r.text()

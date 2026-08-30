@@ -6,6 +6,7 @@ import type {
   PortfolioHolding, PortfolioSettings, Settings, LumpsumItem,
 } from '@/types'
 import { generateChartData } from './chartData'
+import { fetchStockHistory } from './stockPrice'
 
 // ──────────────────────────────────────────────────────────────
 // IndexedDB 스키마 (Dexie)
@@ -1146,6 +1147,56 @@ export async function migrateInflowsToLumpsumAndAllocations(): Promise<boolean> 
  *  과거에는 시세를 가끔씩만 갱신해 6/18→7/26→8/23처럼 드문드문 남은 경우
  *  차트는 ffill으로 이어지지만 이력 데이터는 비어 있어 '연속 보기'가 끊긴다.
  *  첫~마지막 기록 사이의 모든 빈 날짜를 이전 행의 value/price/quantity로 채운다. */
+/** 실제 과거 종가 소급 반영 — 이미 기록된 날짜의 price를 실세가로 덮어쓰고 value 재계산.
+ *  보유 수량은 기존 기록 값 유지(과거 매수/매도 이력 보존). 존재하는 행만 갱신. */
+export async function applyPriceHistory(
+  assetId: string,
+  series: { date: string; close: number }[],
+): Promise<number> {
+  const stock = await db.stockDetails.get(assetId)
+  const rate = await getExchangeRate(stock?.currency ?? 'KRW')
+  let updated = 0
+  await db.transaction('rw', 'assetHistory', async () => {
+    for (const { date, close } of series) {
+      const existing = await db.assetHistory
+        .where('[assetId+date]').equals([assetId, date]).first()
+      if (!existing) continue   // 기록 없는 날은 건너뜀 (수량을 모르는 날 추정 불가)
+      const qty = existing.quantity ?? 0
+      await db.assetHistory.put({
+        ...existing,
+        price: close,
+        value: close * qty * rate,
+      })
+      updated++
+    }
+  })
+  return updated
+}
+
+/** 보유 주식 전체의 최근 N개월 실제 종가 소급 반영 (설정 페이지 버튼용).
+ *  Yahoo 일별 종가를 가져와 기존 이력 행의 price/value를 실세가로 덮어쓴다. */
+export async function backfillStockPrices(
+  months = 3,
+  onProgress?: (done: number, total: number, name: string) => void,
+): Promise<{ assets: number; updated: number; failed: string[] }> {
+  const stocks = (await getAllAssets('STOCK')).filter(
+    (a) => !a.disposalDate && (a.detail as { ticker?: string } | undefined)?.ticker,
+  )
+  const range = months <= 1 ? '1mo' : months <= 3 ? '3mo' : months <= 6 ? '6mo' : '1y'
+  let updated = 0
+  const failed: string[] = []
+  let done = 0
+  for (const a of stocks) {
+    const ticker = (a.detail as { ticker?: string }).ticker!
+    const hist = await fetchStockHistory(ticker, range)
+    if (hist) updated += await applyPriceHistory(a.id, hist)
+    else failed.push(a.name)
+    done++
+    onProgress?.(done, stocks.length, a.name)
+  }
+  return { assets: stocks.length, updated, failed }
+}
+
 export async function migrateBackfillHistory(): Promise<boolean> {
   const s = await getSettings()
   if ((s as Record<string, unknown>).historyBackfillMigrated) return false

@@ -45,3 +45,44 @@ export async function fetchPrices(
   await Promise.all(Array.from({ length: Math.min(concurrency, total) }, worker))
   return out
 }
+
+export interface StockDailyBar { date: string; close: number }
+
+/** 과거 일별 종가 조회 (range: 1mo/3mo/... Yahoo range). 실패 시 null.
+ *  timestamp를 거래소 현지 시간대 날짜(KRX=Asia/Seoul 등)로 변환해 'YYYY-MM-DD' 반환. */
+export async function fetchStockHistory(
+  ticker: string,
+  range = '3mo',
+  timeoutMs = 15000,
+): Promise<StockDailyBar[] | null> {
+  if (!ticker) return null
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(
+      `/api/price?ticker=${encodeURIComponent(ticker)}&range=${range}&interval=1d`,
+      { signal: ctrl.signal },
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const result = data?.chart?.result?.[0]
+    const ts: number[] | undefined = result?.timestamp
+    const closes: (number | null)[] | undefined = result?.indicators?.quote?.[0]?.close
+    if (!Array.isArray(ts) || !Array.isArray(closes)) return null
+    const tz: string = result?.meta?.exchangeTimezoneName ?? 'Asia/Seoul'
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    })
+    const out: StockDailyBar[] = []
+    for (let i = 0; i < ts.length; i++) {
+      const c = closes[i]
+      if (typeof c !== 'number' || !(c > 0)) continue
+      out.push({ date: fmt.format(new Date(ts[i] * 1000)), close: c })
+    }
+    return out.length > 0 ? out : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}

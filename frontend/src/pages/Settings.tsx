@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Download, Upload, Cloud, CloudOff, FolderOpen, RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
-import { exportBackup, importBackup, clearAllData, seedSampleData, type BackupData } from '@/lib/db'
+import { exportBackup, importBackup, clearAllData, seedSampleData, backfillStockPrices, type BackupData } from '@/lib/db'
 import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
 import { googleSignIn, logout, isLoggedIn, saveToDrive, listBackupFiles, loadFromDrive, pickFolder } from '@/lib/googleDrive'
 
@@ -22,6 +22,10 @@ export default function Settings() {
   const [driveFolder,    setDriveFolder]    = useState<{ id: string; name: string } | null>(null)
   const [driveFiles,     setDriveFiles]     = useState<{ id: string; name: string; modifiedTime: string }[]>([])
   const [driveLoading,   setDriveLoading]   = useState(false)
+  // 과거 시세 소급 업데이트 상태
+  const [priceBackfill, setPriceBackfill] = useState<{
+    running: boolean; done: boolean; ok: boolean; msg: string
+  }>({ running: false, done: false, ok: false, msg: '' })
 
   useEffect(() => {
     if (settings) {
@@ -43,6 +47,30 @@ export default function Settings() {
   const inputCls = 'bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500 w-36'
   // 미리보기: 현재 나이 · 65세(국민연금 개시) 연도
   const preview = { birthHusband, birthWife }
+
+  // ── 과거 시세 소급 업데이트 — 보유 주식 최근 3개월 실제 종가로 덮어쓰기 ──
+  const handleBackfillPrices = async () => {
+    if (priceBackfill.running) return
+    setPriceBackfill({ running: true, done: false, ok: false, msg: '준비 중...' })
+    try {
+      const r = await backfillStockPrices(3, (done, total, name) =>
+        setPriceBackfill((s) => ({ ...s, msg: `${done}/${total} (${name})` })),
+      )
+      await qc.invalidateQueries()
+      const failNote = r.failed.length > 0 ? ` · 실패: ${r.failed.join(', ')}` : ''
+      setPriceBackfill({
+        running: false, done: true, ok: r.updated > 0,
+        msg: r.updated > 0
+          ? `완료 — ${r.assets}개 종목에서 ${r.updated.toLocaleString()}일치 시세 반영${failNote}`
+          : `반영된 시세가 없습니다 (조회 실패 또는 이력 없음)${failNote}`,
+      })
+    } catch (e) {
+      setPriceBackfill({
+        running: false, done: true, ok: false,
+        msg: e instanceof Error ? e.message : '실패했습니다',
+      })
+    }
+  }
 
   // ── 데이터 백업/복원 (M-3) ──
   const handleExport = async () => {
@@ -338,6 +366,31 @@ export default function Settings() {
           <p className={`text-xs ${backupMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{backupMsg.text}</p>
         )}
         <p className="text-[11px] text-gray-600">가져오기·샘플 불러오기는 기존 데이터를 모두 덮어씁니다.</p>
+
+        {/* 최근 3개월 실제 시세 소급 반영 */}
+        <div className="border-t border-gray-700 pt-3 space-y-2">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-300">🕒 과거 시세 소급 업데이트</h4>
+            <p className="text-xs text-gray-500 mt-1">
+              보유 주식 전체의 최근 3개월치를 실제 종가(Yahoo)로 덮어씁니다. 빈 날짜를 직전 시세로 채운 구간을
+              실제 시세 흐름으로 교체할 때 사용하세요.
+            </p>
+          </div>
+          <button
+            onClick={handleBackfillPrices}
+            disabled={priceBackfill.running}
+            className="px-4 py-2 text-sm rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
+          >
+            {priceBackfill.running
+              ? `조회 중... ${priceBackfill.msg}`
+              : '최근 3개월 시세 소급 업데이트'}
+          </button>
+          {priceBackfill.done && !priceBackfill.running && (
+            <p className={`text-xs ${priceBackfill.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+              {priceBackfill.msg}
+            </p>
+          )}
+        </div>
         <p className="text-[10px] text-gray-700">앱 빌드: {__BUILD_TIME__} — 이 시각이 오래됐으면 새로고침(앱 완전 종료 후 재실행)으로 업데이트하세요.</p>
         <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-700">
           <button

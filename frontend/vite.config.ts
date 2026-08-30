@@ -12,8 +12,12 @@ function priceProxyDev(): PluginOption {
           const url = new URL(req.url ?? '', 'http://localhost')
           const ticker = url.searchParams.get('ticker')
           if (!ticker) { res.statusCode = 400; res.end('missing ticker'); return }
+          const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'max']
+          const INTERVALS = ['1d', '1wk', '1mo']
+          const range = RANGES.includes(url.searchParams.get('range') ?? '') ? url.searchParams.get('range') : '1d'
+          const interval = INTERVALS.includes(url.searchParams.get('interval') ?? '') ? url.searchParams.get('interval') : '1d'
           const r = await fetch(
-            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1d&interval=1d`,
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=${interval}`,
             { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
           )
           res.setHeader('Content-Type', 'application/json')
