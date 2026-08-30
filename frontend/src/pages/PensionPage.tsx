@@ -273,8 +273,14 @@ export default function PensionPage() {
                   </div>
                 </div>
 
-                {/* 하단: 현재가치 + 연증가율 */}
-                <div className="grid grid-cols-2 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-[11px]">
+                {/* 하단: 수령 기간 + 현재가치 + 연증가율 */}
+                <div className="grid grid-cols-3 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-[11px]">
+                  <div className="min-w-0">
+                    <p className="text-gray-500 mb-0.5">수령 기간</p>
+                    <p className="text-gray-300 truncate">
+                      {d?.expectedStartYear || '-'}~{d?.expectedEndYear || '-'}
+                    </p>
+                  </div>
                   <div className="min-w-0">
                     <p className="text-gray-500 mb-0.5">현재 가치</p>
                     {(() => {

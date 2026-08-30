@@ -559,6 +559,9 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
               {isSold && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">매각</span>
               )}
+              {asset.acquisitionDate && (
+                <span className="text-[10px] text-gray-500">{asset.acquisitionDate.slice(0, 7)} 취득</span>
+              )}
               {weight != null && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">
                   {weight.toFixed(1)}%
@@ -596,8 +599,10 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
               ) : (
                 <>
                   <span className="text-gray-500">평단가</span>
-                  <span className="text-gray-400 font-mono">{formatAvgPrice(avgPrice, currency)}</span>
-                  <span className="text-gray-600">· {qty.toLocaleString()}주</span>
+                  <span className="text-gray-300 font-mono">{formatAvgPrice(avgPrice, currency)}</span>
+                  <span className="text-gray-400">·</span>
+                  <span className="text-gray-500">수량</span>
+                  <span className="text-gray-300 font-mono">{qty.toLocaleString()}주</span>
                 </>
               )}
             </div>

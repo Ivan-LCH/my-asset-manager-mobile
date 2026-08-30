@@ -125,6 +125,7 @@ function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void 
             <p className="text-sm font-semibold text-gray-100 truncate group-hover:text-blue-300 transition-colors">{asset.name}</p>
             <p className="text-[11px] text-gray-500 truncate mt-0.5 flex items-center gap-1.5">
               <span className="truncate">{d?.address ?? '-'}</span>
+              {asset.acquisitionDate && <span className="shrink-0">· {asset.acquisitionDate.slice(0, 7)} 취득</span>}
               <OwnershipBadge ownership={asset.ownership} />
             </p>
           </div>
