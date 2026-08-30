@@ -2,7 +2,7 @@
 // 실행: npm i fake-indexeddb --no-save && npx vitest run src/lib/db.test.ts
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createAsset, addHistory, getAssetById, db } from '@/lib/db'
+import { createAsset, addHistory, getAssetById, importBackup, db } from '@/lib/db'
 
 const RE_DETAIL = { address: '', loanAmount: 0, tenantDeposit: 0, isOwned: true, hasTenant: false }
 
@@ -104,5 +104,36 @@ describe('자산 생성/이력 — 데이터 무결성 (M-1 버그 회귀 방지
     const a = await getAssetById(id)
     expect(a!.history.length).toBe(2)      // 백필 없음
     expect(a!.currentValue).toBe(600_000_000)
+  })
+
+  it('백업 복원(importBackup): 과거 갭(31일 초과 포함)이 소급 백필된다', async () => {
+    const id = await createAsset({
+      type: 'REAL_ESTATE', name: '아파트',
+      acquisitionDate: '2026-06-18', acquisitionPrice: 500_000_000,
+      detail: RE_DETAIL,
+    })
+    const asset = await getAssetById(id)
+    await addHistory(id, { date: '2026-07-26', value: 520_000_000 })   // 38일 갭
+
+    // 현재 DB 스냅샷을 백업으로 만들어 복원 → 복원 시 소급 백필 실행됨
+    const backup = {
+      app: 'asset_manager_m', version: 1, exportedAt: new Date().toISOString(),
+      tables: {
+        assets: await db.assets.toArray(),
+        assetHistory: await db.assetHistory.toArray(),
+        dividendHistory: await db.dividendHistory.toArray(),
+        settings: await db.settings.toArray(),
+      },
+    } as Parameters<typeof importBackup>[0]
+    await importBackup(backup)
+
+    const restored = await getAssetById(id)
+    const dates = restored!.history.map((h) => h.date).sort()
+    expect(dates).toContain('2026-06-19')   // 갭 시작
+    expect(dates).toContain('2026-07-10')   // 갭 중간
+    expect(dates).toContain('2026-07-25')   // 갭 끝
+    expect(dates).not.toContain('2026-07-27') // 마지막 기록 이후로는 안 채움
+    const mid = restored!.history.find((h) => h.date === '2026-07-10')
+    expect(mid?.value).toBe(500_000_000)    // 직전값 유지
   })
 })

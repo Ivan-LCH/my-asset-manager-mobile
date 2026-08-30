@@ -775,6 +775,8 @@ export async function importBackup(data: BackupData): Promise<void> {
       if (rows && rows.length > 0) await t.bulkAdd(rows as Record<string, unknown>[])
     }
   })
+  // 복원된 과거 이력의 빈 날짜도 즉시 소급 백필 (Bootstrap 마이그레이션은 이미 지나갔을 수 있음)
+  await backfillAllHistoryGaps()
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1138,6 +1140,55 @@ export async function migrateInflowsToLumpsumAndAllocations(): Promise<boolean> 
   }
   await saveSettings({ inflowsToLumpsumMigrated: '1' })
   return inflows.length > 0
+}
+
+/** 마이그레이션(1회): 기존 이력의 빈 날짜를 직전 기록값으로 소급 백필.
+ *  과거에는 시세를 가끔씩만 갱신해 6/18→7/26→8/23처럼 드문드문 남은 경우
+ *  차트는 ffill으로 이어지지만 이력 데이터는 비어 있어 '연속 보기'가 끊긴다.
+ *  첫~마지막 기록 사이의 모든 빈 날짜를 이전 행의 value/price/quantity로 채운다. */
+export async function migrateBackfillHistory(): Promise<boolean> {
+  const s = await getSettings()
+  if ((s as Record<string, unknown>).historyBackfillMigrated) return false
+  await saveSettings({ historyBackfillMigrated: '1' })
+  return backfillAllHistoryGaps()
+}
+
+/** 전 자산의 이력에서 첫~마지막 기록 사이 모든 빈 날짜를 직전값으로 소급 채움 (갭 길이 무제한) */
+async function backfillAllHistoryGaps(): Promise<boolean> {
+  const fmt = (dt: Date) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+
+  const all = await db.assets.toArray()
+  let added = 0
+  for (const a of all) {
+    const rows = (await db.assetHistory.where('assetId').equals(a.id).toArray())
+      .sort((x, y) => x.date.localeCompare(y.date))
+    if (rows.length < 2) continue
+
+    const have = new Set(rows.map((r) => r.date))
+    const fills: { assetId: string; date: string; value: number | null; price: number | null; quantity: number | null }[] = []
+    for (let i = 1; i < rows.length; i++) {
+      const prev = rows[i - 1]
+      const start = new Date(prev.date + 'T00:00:00')
+      const end   = new Date(rows[i].date + 'T00:00:00')
+      const gapDays = Math.round((end.getTime() - start.getTime()) / 86_400_000)
+      for (let k = 1; k < gapDays; k++) {
+        const dt = new Date(start)
+        dt.setDate(dt.getDate() + k)
+        const ds = fmt(dt)
+        if (have.has(ds)) continue
+        fills.push({
+          assetId: a.id, date: ds,
+          value: prev.value ?? null, price: prev.price ?? null, quantity: prev.quantity ?? null,
+        })
+      }
+    }
+    if (fills.length > 0) {
+      await db.assetHistory.bulkAdd(fills)
+      added += fills.length
+    }
+  }
+  return added > 0
 }
 
 /** 마이그레이션: 구 currentAge/retirementAge(나이) → 생년월(YYYY.MM)+은퇴예정연도(연도).

@@ -6,7 +6,7 @@ import Dashboard from '@/pages/Dashboard'
 import AssetsPage from '@/pages/AssetsPage'
 import AnalysisPage from '@/pages/AnalysisPage'
 import Settings from '@/pages/Settings'
-import { getAllAssets, getSettings, saveSettings, seedSampleData, migrateStockOwnershipToAccount, migrateInflowsToLumpsumAndAllocations, migrateSettingsToBirth, migrateWifeNationalPension } from '@/lib/db'
+import { getAllAssets, getSettings, saveSettings, seedSampleData, migrateStockOwnershipToAccount, migrateInflowsToLumpsumAndAllocations, migrateSettingsToBirth, migrateWifeNationalPension, migrateBackfillHistory } from '@/lib/db'
 
 const qc = new QueryClient()
 
@@ -35,6 +35,11 @@ function Bootstrap() {
         if (migrated) {
           c.invalidateQueries({ queryKey: ['pension-sim'] })
           c.invalidateQueries({ queryKey: ['retirement'] })
+        }
+        // 기존 이력의 빈 날짜 소급 백필 (1회)
+        if (await migrateBackfillHistory()) {
+          c.invalidateQueries({ queryKey: ['assets'] })
+          c.invalidateQueries({ queryKey: ['chart'] })
         }
         c.invalidateQueries()
       } catch {
