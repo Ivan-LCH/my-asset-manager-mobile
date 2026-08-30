@@ -75,4 +75,34 @@ describe('자산 생성/이력 — 데이터 무결성 (M-1 버그 회귀 방지
     const latest = a!.history[a!.history.length - 1]
     expect(latest.value).toBe(80_000 * 100)
   })
+
+  it('빈 날짜 백필: 31일 이하 갭은 빈 날짜가 직전값으로 채워진다', async () => {
+    const id = await createAsset({
+      type: 'REAL_ESTATE', name: '아파트',
+      acquisitionDate: '2024-07-25', acquisitionPrice: 500_000_000,
+      detail: RE_DETAIL,
+    })
+    // 7/25 → 8/10 갭 (16일) → 중간 15일치 백필 후 신규 행 = 17행
+    await addHistory(id, { date: '2024-08-10', value: 520_000_000 })
+    const a = await getAssetById(id)
+    expect(a!.history.length).toBe(17)   // 7/25 + 7/26~8/9 백필 + 8/10
+    // 백필된 날짜는 직전값(취득가) 유지
+    const mid = a!.history.find((h) => h.date === '2024-08-01')
+    expect(mid?.value).toBe(500_000_000)
+    // 마지막 행은 새 값
+    expect(a!.history[a!.history.length - 1].value).toBe(520_000_000)
+    expect(a!.currentValue).toBe(520_000_000)
+  })
+
+  it('빈 날짜 백필: 31일 초과 갭은 채우지 않는다', async () => {
+    const id = await createAsset({
+      type: 'REAL_ESTATE', name: '아파트',
+      acquisitionDate: '2024-01-01', acquisitionPrice: 500_000_000,
+      detail: RE_DETAIL,
+    })
+    await addHistory(id, { date: '2024-06-01', value: 600_000_000 })   // 갭 5개월
+    const a = await getAssetById(id)
+    expect(a!.history.length).toBe(2)      // 백필 없음
+    expect(a!.currentValue).toBe(600_000_000)
+  })
 })

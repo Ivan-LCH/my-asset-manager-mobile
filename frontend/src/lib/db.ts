@@ -424,9 +424,51 @@ export async function getHistory(assetId: string): Promise<HistoryItem[]> {
 }
 
 /**
+ * 이력 빈 날짜 백필 — 마지막 기록일과 새 기록일 사이의 빈 날짜를
+ * 직전 기록값으로 채운다. 갭이 31일 이하일 때만 (한 달 이상 비면 임의 생성 안 함).
+ * 호출부의 transaction 안에서 실행해야 원자성이 보장된다.
+ */
+const MAX_BACKFILL_DAYS = 31
+
+async function backfillGaps(assetId: string, newDate: string): Promise<number> {
+  const rows = await db.assetHistory.where('assetId').equals(assetId).toArray()
+  const prev = rows
+    .filter((r) => r.date < newDate)
+    .sort((a, b) => b.date.localeCompare(a.date))[0]
+  if (!prev) return 0
+
+  const start = new Date(prev.date + 'T00:00:00')
+  const end   = new Date(newDate + 'T00:00:00')
+  const gapDays = Math.round((end.getTime() - start.getTime()) / 86_400_000)
+  if (gapDays <= 1 || gapDays > MAX_BACKFILL_DAYS) return 0
+
+  const have = new Set(rows.map((r) => r.date))
+  const fmt  = (dt: Date) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+
+  const fills: { assetId: string; date: string; value: number | null; price: number | null; quantity: number | null }[] = []
+  for (let i = 1; i < gapDays; i++) {
+    const dt = new Date(start)
+    dt.setDate(dt.getDate() + i)
+    const ds = fmt(dt)
+    if (have.has(ds)) continue
+    fills.push({
+      assetId,
+      date:     ds,
+      value:    prev.value ?? null,
+      price:    prev.price ?? null,
+      quantity: prev.quantity ?? null,
+    })
+  }
+  if (fills.length > 0) await db.assetHistory.bulkAdd(fills)
+  return fills.length
+}
+
+/**
  * 이력 추가 (원본 add_history + value 계산/currentValue 동기화 보강).
  * - value 없고 price·수량 있으면 price*수량*환율로 자동 계산
  * - 추가 후 최신 이력 기준으로 currentValue 동기화 → 타일 시세에 즉시 반영
+ * - 마지막 기록과의 갭이 31일 이하면 빈 날짜를 직전값으로 백필
  */
 export async function addHistory(assetId: string, data: HistoryItem): Promise<void> {
   const stock = await db.stockDetails.get(assetId)
@@ -437,6 +479,7 @@ export async function addHistory(assetId: string, data: HistoryItem): Promise<vo
     if (value == null && data.price != null && data.quantity != null) {
       value = data.price * data.quantity * rate
     }
+    await backfillGaps(assetId, data.date)
     await db.assetHistory.add({
       assetId,
       date:     data.date,
@@ -479,7 +522,8 @@ export async function updateHistory(
     }
 
     if (!existing) {
-      // 신규 추가 (upsert)
+      // 신규 추가 (upsert) — 이전 기록과의 빈 날짜 백필(31일 이하 갭)
+      await backfillGaps(assetId, date)
       await db.assetHistory.add({
         assetId,
         date,
