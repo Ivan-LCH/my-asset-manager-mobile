@@ -51,6 +51,13 @@ export default function AssetDetail({ asset, chartData }: Props) {
   const isSold = !!a.disposalDate
   const isAccountLevel = a.type === 'STOCK' && !!(d as StockDetail | undefined)?.isAccountLevel
   const displayVal = isSold ? (a.disposalPrice ?? 0) : a.currentValue
+  // 최근 갱신일 — 이력의 마지막 기록 날짜 (asset.history 또는 chartData prop)
+  const lastUpdate = a.history
+    ?.map((h) => h.date)
+    .filter(Boolean)
+    .sort()
+    .pop()
+    ?? (chartData && chartData.length > 0 ? chartData[chartData.length - 1].date : undefined)
 
   // KPI 계산
   let k1: string, v1: string, k2: string, v2: string, k3: string, v3: string
@@ -207,7 +214,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
           })()}
           {d?.ticker && <span className="text-gray-600 shrink-0">· {d.ticker}</span>}
           {isSold && <span className="text-red-400 font-semibold shrink-0">매각 ({a.disposalDate})</span>}
-          {!isSold && <span className="text-emerald-400 shrink-0">보유중</span>}
+          {!isSold && lastUpdate && (
+            <span className="text-gray-500 shrink-0" title="이력 마지막 기록일">· 갱신 {lastUpdate}</span>
+          )}
         </div>
       )}
 
@@ -332,6 +341,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
                 <span className="text-sm font-semibold text-gray-100">{formatMoney(a.currentValue)}</span>
                 <Pencil className="w-3 h-3 text-gray-600 group-hover/val:text-blue-400 transition-colors" />
                 <span className="text-[10px] text-gray-500">평가액 갱신</span>
+                {lastUpdate && <span className="text-[10px] text-gray-600">· {lastUpdate}</span>}
               </button>
             )}
           </div>
