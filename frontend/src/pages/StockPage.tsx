@@ -8,7 +8,6 @@ import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
-import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { useStockAccountOwnership, useSaveStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { updateHistory } from '@/lib/db'
 import { fetchPrices } from '@/lib/stockPrice'
@@ -383,11 +382,9 @@ function AccountCard({
             <div key={a.id} className="flex items-center justify-between text-xs">
               <span className="text-gray-400 truncate flex items-center gap-1.5">
                 {a.name}
-                {(() => {
-                  const acct = (a.detail as { accountName?: string } | undefined)?.accountName
-                  const o = (acct && accountOwners[acct]) || a.ownership
-                  return <OwnershipBadge ownership={o} />
-                })()}
+                <span className="text-gray-600 shrink-0">
+                  {(a.quantity ?? 0).toLocaleString()}주 · 평단 {formatAvgPrice(a.acquisitionPrice ?? 0, (a.detail as StockDetail | undefined)?.currency ?? 'KRW')}
+                </span>
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-gray-300">{formatManwon(a.currentValue)}</span>

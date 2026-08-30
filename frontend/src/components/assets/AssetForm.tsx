@@ -16,6 +16,9 @@ export default function AssetForm({ asset, onClose }: Props) {
   const stockAssets = useAssetsByType('STOCK')
   const d = asset.detail as Record<string, unknown> | undefined
 
+  // 상세 옵션 접기 — 기본 필드만 먼저 보이고 유형별 상세는 펼쳐서 수정
+  const [showDetail, setShowDetail] = useState(false)
+
   // 공통 필드
   const [name,             setName]             = useState(asset.name)
   const [acquisitionDate,  setAcquisitionDate]  = useState(asset.acquisitionDate ?? '')
@@ -96,6 +99,13 @@ export default function AssetForm({ asset, onClose }: Props) {
     <div className="bg-gray-700/30 border border-gray-600 rounded-xl p-5 space-y-4">
       <p className="text-sm font-semibold text-gray-200">속성 수정</p>
 
+      <button type="button"
+        onClick={() => setShowDetail((v) => !v)}
+        className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+      >
+        {showDetail ? '▾' : '▸'} 상세 옵션 (유형별 상세 정보)
+      </button>
+
       {/* 공통 */}
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
@@ -129,7 +139,7 @@ export default function AssetForm({ asset, onClose }: Props) {
       </div>
 
       {/* 부동산 */}
-      {asset.type === 'REAL_ESTATE' && (
+      {showDetail && asset.type === 'REAL_ESTATE' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
           <p className="text-xs text-gray-500 font-medium uppercase">부동산 상세</p>
           <div>
@@ -175,7 +185,7 @@ export default function AssetForm({ asset, onClose }: Props) {
       )}
 
       {/* 주식 */}
-      {asset.type === 'STOCK' && (
+      {showDetail && asset.type === 'STOCK' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
           <p className="text-xs text-gray-500 font-medium uppercase">주식 상세 {isAccountLevel && <span className="text-violet-400 normal-case">(계좌 통합 모드)</span>}</p>
           <div className="grid grid-cols-2 gap-3">
@@ -218,7 +228,7 @@ export default function AssetForm({ asset, onClose }: Props) {
       )}
 
       {/* 연금 */}
-      {asset.type === 'PENSION' && (
+      {showDetail && asset.type === 'PENSION' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
           <p className="text-xs text-gray-500 font-medium uppercase">연금 상세</p>
           <div>
@@ -282,7 +292,7 @@ export default function AssetForm({ asset, onClose }: Props) {
       )}
 
       {/* 예적금 */}
-      {asset.type === 'SAVINGS' && (
+      {showDetail && asset.type === 'SAVINGS' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
           <p className="text-xs text-gray-500 font-medium uppercase">예적금 상세</p>
           <label className={checkCls}>

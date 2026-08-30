@@ -127,6 +127,17 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   const labelCls = 'text-xs text-gray-400 mb-1 block'
   const checkCls = 'flex items-center gap-2 text-sm text-gray-300 cursor-pointer'
 
+  // 상세 옵션 접기 — 필수 항목만 먼저 보이고 나머지는 펼쳐서 입력
+  const [showDetail, setShowDetail] = useState(false)
+  const detailToggle = (
+    <button type="button"
+      onClick={() => setShowDetail((v) => !v)}
+      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+    >
+      {showDetail ? '▾' : '▸'} 상세 옵션
+    </button>
+  )
+
   return (
     <div className="space-y-4">
       {/* 자산 유형 */}
@@ -193,41 +204,35 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
       {/* 부동산 */}
       {type === 'REAL_ESTATE' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
-          <p className="text-xs text-gray-500 font-medium uppercase">부동산 상세</p>
           <div>
             <label className={labelCls}>주소</label>
             <input className={inputCls} value={address} onChange={(e) => setAddress(e.target.value)} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>대출금</label>
-              <input type="number" inputMode="decimal" className={inputCls} value={loanAmount} onChange={(e) => setLoanAmount(+e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>보증금</label>
-              <input type="number" inputMode="decimal" className={inputCls} value={tenantDeposit} onChange={(e) => setTenantDeposit(+e.target.value)} />
-            </div>
-          </div>
-          <div className="flex gap-5">
-            <label className={checkCls}>
-              <input type="checkbox" checked={isOwned} onChange={(e) => setIsOwned(e.target.checked)} className="accent-blue-500" />
-              자가 거주
-            </label>
-            <label className={checkCls}>
-              <input type="checkbox" checked={hasTenant} onChange={(e) => setHasTenant(e.target.checked)} className="accent-blue-500" />
-              세입자 있음
-            </label>
-          </div>
-          <div className="flex gap-5">
-            <label className={checkCls}>
-              <input type="checkbox" checked={isOwned} onChange={(e) => setIsOwned(e.target.checked)} className="accent-blue-500" />
-              자가 거주
-            </label>
-            <label className={checkCls}>
-              <input type="checkbox" checked={hasTenant} onChange={(e) => setHasTenant(e.target.checked)} className="accent-blue-500" />
-              세입자 있음
-            </label>
-          </div>
+          {detailToggle}
+          {showDetail && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>대출금</label>
+                  <input type="number" inputMode="decimal" className={inputCls} value={loanAmount} onChange={(e) => setLoanAmount(+e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>보증금</label>
+                  <input type="number" inputMode="decimal" className={inputCls} value={tenantDeposit} onChange={(e) => setTenantDeposit(+e.target.value)} />
+                </div>
+              </div>
+              <div className="flex gap-5">
+                <label className={checkCls}>
+                  <input type="checkbox" checked={isOwned} onChange={(e) => setIsOwned(e.target.checked)} className="accent-blue-500" />
+                  자가 거주
+                </label>
+                <label className={checkCls}>
+                  <input type="checkbox" checked={hasTenant} onChange={(e) => setHasTenant(e.target.checked)} className="accent-blue-500" />
+                  세입자 있음
+                </label>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -252,53 +257,60 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
           </p>
 
           {stockMode === 'stock' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>계좌명</label>
-                <input
-                  className={inputCls}
-                  value={accountName}
-                  onChange={(e) => { setAccountTouched(true); setAccountName(e.target.value) }}
-                  list="stock-accounts"
-                  placeholder="선택 또는 신규 입력"
-                />
-                <datalist id="stock-accounts">
-                  {existingAccounts.map((a) => <option key={a} value={a} />)}
-                </datalist>
-              </div>
-              <div>
-                <label className={labelCls}>통화</label>
-                <select className={inputCls} value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
-                  {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className={labelCls}>티커 (yfinance용, 예: 005930.KS)</label>
-                <input className={inputCls} value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="선택사항" />
-              </div>
+            <div>
+              <label className={labelCls}>계좌명</label>
+              <input
+                className={inputCls}
+                value={accountName}
+                onChange={(e) => { setAccountTouched(true); setAccountName(e.target.value) }}
+                list="stock-accounts"
+                placeholder="선택 또는 신규 입력"
+              />
+              <datalist id="stock-accounts">
+                {existingAccounts.map((a) => <option key={a} value={a} />)}
+              </datalist>
             </div>
           )}
           {stockMode === 'account' && (
-            <div className="col-span-2">
+            <div>
               <label className={labelCls}>연간 배당금 (원, 선택)</label>
               <input type="number" inputMode="decimal" className={inputCls} value={annualDividend} onChange={(e) => setAnnualDividend(+e.target.value)} placeholder="예: 1200000" />
             </div>
           )}
-          <label className={checkCls}>
-            <input type="checkbox" checked={isPensionLike} onChange={(e) => setIsPensionLike(e.target.checked)} className="accent-blue-500" />
-            연금형 (pension simulation 포함)
-          </label>
-          {isPensionLike && (
-            <div className="grid grid-cols-2 gap-3 pl-2">
-              <div>
-                <label className={labelCls}>연금 개시 연도</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={pensionStartYearStock} onChange={(e) => setPensionStartYearStock(+e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>월 수령액</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlyStock} onChange={(e) => setPensionMonthlyStock(+e.target.value)} />
-              </div>
-            </div>
+          {detailToggle}
+          {showDetail && (
+            <>
+              {stockMode === 'stock' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>통화</label>
+                    <select className={inputCls} value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
+                      {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>티커</label>
+                    <input className={inputCls} value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="예: 005930.KS (선택)" />
+                  </div>
+                </div>
+              )}
+              <label className={checkCls}>
+                <input type="checkbox" checked={isPensionLike} onChange={(e) => setIsPensionLike(e.target.checked)} className="accent-blue-500" />
+                연금형 (pension simulation 포함)
+              </label>
+              {isPensionLike && (
+                <div className="grid grid-cols-2 gap-3 pl-2">
+                  <div>
+                    <label className={labelCls}>연금 개시 연도</label>
+                    <input type="number" inputMode="decimal" className={inputCls} value={pensionStartYearStock} onChange={(e) => setPensionStartYearStock(+e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>월 수령액</label>
+                    <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlyStock} onChange={(e) => setPensionMonthlyStock(+e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -320,37 +332,44 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
               <label className={labelCls}>수령 종료 연도</label>
               <input type="number" inputMode="decimal" className={inputCls} value={expectedEndYear} onChange={(e) => setExpectedEndYear(+e.target.value)} />
             </div>
-            <div>
+            <div className="col-span-2">
               <label className={labelCls}>월 수령 예상액</label>
               <input type="number" inputMode="decimal" className={inputCls} value={expectedMonthlyPayout} onChange={(e) => setExpectedMonthlyPayout(+e.target.value)} />
             </div>
+          </div>
+          {detailToggle}
+          {showDetail && (
             <div>
               <label className={labelCls}>연 증가율 (%)</label>
               <input type="number" inputMode="decimal" step="0.1" className={inputCls} value={annualGrowthRate} onChange={(e) => setAnnualGrowthRate(+e.target.value)} />
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* 예적금 */}
       {type === 'SAVINGS' && (
         <div className="space-y-3 pt-2 border-t border-gray-700">
-          <p className="text-xs text-gray-500 font-medium uppercase">예적금 상세</p>
-          <label className={checkCls}>
-            <input type="checkbox" checked={isPensionLikeSav} onChange={(e) => setIsPensionLikeSav(e.target.checked)} className="accent-blue-500" />
-            연금형 (pension simulation 포함)
-          </label>
-          {isPensionLikeSav && (
-            <div className="grid grid-cols-2 gap-3 pl-2">
-              <div>
-                <label className={labelCls}>연금 개시 연도</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={pensionStartYearSav} onChange={(e) => setPensionStartYearSav(+e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>월 수령액</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlySav} onChange={(e) => setPensionMonthlySav(+e.target.value)} />
-              </div>
-            </div>
+          {detailToggle}
+          {showDetail && (
+            <>
+              <label className={checkCls}>
+                <input type="checkbox" checked={isPensionLikeSav} onChange={(e) => setIsPensionLikeSav(e.target.checked)} className="accent-blue-500" />
+                연금형 (pension simulation 포함)
+              </label>
+              {isPensionLikeSav && (
+                <div className="grid grid-cols-2 gap-3 pl-2">
+                  <div>
+                    <label className={labelCls}>연금 개시 연도</label>
+                    <input type="number" inputMode="decimal" className={inputCls} value={pensionStartYearSav} onChange={(e) => setPensionStartYearSav(+e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>월 수령액</label>
+                    <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlySav} onChange={(e) => setPensionMonthlySav(+e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
