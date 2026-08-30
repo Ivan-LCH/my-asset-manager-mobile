@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useDividends, useAddDividend, useDeleteDividend, useUpdateDividendSettings } from '@/hooks/useDividends'
 import { formatMoney, formatManwon } from '@/lib/utils'
+import KpiCard from '@/components/common/KpiCard'
 import type { Asset, StockDetail } from '@/types'
 
 const CYCLE_OPTIONS = ['월', '분기', '반기', '연간']
@@ -45,6 +46,15 @@ export default function DividendSection({ asset }: Props) {
 
   const totalReceived = history.reduce((s, r) => s + r.amountKrw, 0)
 
+  // 요약 수치 — 배당률(평가액 대비)과 최근 12개월 수령액
+  const divYield    = val > 0 ? (annualKrw / val) * 100 : 0
+  const oneYearAgo  = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  const yAgoStr     = oneYearAgo.toISOString().slice(0, 10)
+  const received1y  = history
+    .filter((r) => r.date >= yAgoStr)
+    .reduce((s, r) => s + r.amountKrw, 0)
+
   const handleSaveSettings = () => {
     settingMut.mutate({ dividendYield: yldNum, dividendDps: dpsNum, dividendCycle: cycle })
   }
@@ -71,6 +81,26 @@ export default function DividendSection({ asset }: Props) {
 
   return (
     <div className="space-y-5">
+
+      {/* 요약 수치 */}
+      <div className="grid grid-cols-3 gap-3">
+        <KpiCard
+          label="연간 예상 배당"
+          value={formatManwon(annualKrw)}
+          sub={annualKrw > 0 ? `월 ${formatManwon(annualKrw / 12)}` : undefined}
+          color="blue"
+        />
+        <KpiCard
+          label="배당률 (평가액 대비)"
+          value={annualKrw > 0 ? `${divYield.toFixed(2)}%` : '-'}
+          color="green"
+        />
+        <KpiCard
+          label="최근 1년 수령"
+          value={received1y > 0 ? formatManwon(received1y) : '-'}
+          sub={`총 누적 ${formatManwon(totalReceived)}`}
+        />
+      </div>
 
       {/* 예상 배당 설정 */}
       <div className="bg-gray-700/40 rounded-xl p-4 space-y-3">
