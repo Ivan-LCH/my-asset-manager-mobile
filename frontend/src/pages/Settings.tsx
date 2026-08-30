@@ -338,6 +338,7 @@ export default function Settings() {
           <p className={`text-xs ${backupMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{backupMsg.text}</p>
         )}
         <p className="text-[11px] text-gray-600">가져오기·샘플 불러오기는 기존 데이터를 모두 덮어씁니다.</p>
+        <p className="text-[10px] text-gray-700">앱 빌드: {__BUILD_TIME__} — 이 시각이 오래됐으면 새로고침(앱 완전 종료 후 재실행)으로 업데이트하세요.</p>
         <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-700">
           <button
             onClick={handleLoadSample}

@@ -169,6 +169,10 @@ function searchProxyDev(): PluginOption {
 }
 
 export default defineConfig({
+  // 빌드 시각 — Settings 하단 버전 표시로 "새 버전이 폰에 적용됐는지" 확인용
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
+  },
   plugins: [
     react(),
     priceProxyDev(),
