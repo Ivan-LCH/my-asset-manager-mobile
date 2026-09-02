@@ -214,3 +214,13 @@
 - [C] **BF-3** — 기존 이력 소급 백필 마이그레이션: 앱 시작 1회(갭 무제한) + importBackup/Drive 복원 시 즉시 실행 + 테스트 (d5c5c4c)
 - [C] **BF-4** — 설정 '최근 3개월 시세 소급 업데이트' 버튼: /api/price range 확장 · fetchStockHistory(Yahoo 일별 종가, 거래소 시간대 변환) · applyPriceHistory(실제 종가로 price/value 덮어쓰기, 수량 보존) · 진행률/결과 표시 (ce7fd98)
 - [C] **BF-5** — 설정에 앱 빌드 시각 표시(__BUILD_TIME__) — PWA 캐시로 옛 버전 실행 여부 확인 (1d37077)
+
+## 2026-08-30 — 주식 등록·이력 입력 자동화 (사용자 확인 대기 → [O] 이관)
+> 시세/검색 자동화로 수동 입력 최소화. 커밋: 8c2e3f9 (feat) + ESM import fix.
+
+### 주식 등록·이력 입력 간소화 (2026-08-30)
+- [O] **AT-1** — HistoryTable 이력 추가 시 티커로 현재 시세 자동 채움(수동 수정 가능)
+- [O] **AT-2** — AssetCreateForm 종목명에 StockSearch 연동 — 선택 시 티커·통화·현재가 자동
+- [O] **AT-3** — stockPresets.ts 주요 국내/미국 주식·ETF 40종 프리셋 (한글 별칭, API 결과 병합)
+- [O] **AT-4** — /api/search Vercel 서버리스 추가 + 공통 로직 api/_search.ts 추출
+- [O] **AT-5** — 검증(tsc+72테스트) + E2E + push
