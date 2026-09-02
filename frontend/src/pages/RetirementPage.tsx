@@ -128,6 +128,8 @@ const EMPTY_PLAN: RetirementPlan = {
   healthInsurance: DEFAULT_HI,
   linkCorpSim:     false,
   linkPensionSim:  false,
+  holdingTaxAnnual:    4_100_000,   // 보유세(재산세+종부세) 기본 추정치
+  holdingTaxStartYear: 2030,        // 매탄주공 입주(29년 말) 다음 핸드오버부터 부과
 }
 
 // ── 유틸 ───────────────────────────────────────────────────
@@ -792,10 +794,15 @@ function buildCashFlow(
 
     // 세금(연) — 종합·연금소득세는 연단위 납부 → 음수로 저장(지출 의미) → 누적에서 그대로 합산.
     // 연동 시 연도별 1인별 산정, 아니면 근사(배당 15.4% + 급여 3%)×12 + 목돈 퇴직소득세
+    // + 보유세(재산세+종부세): 개시 연도부터 매년 합산 (예: 2030 입주 후 부과)
+    const holdingTaxAnnual = year >= (plan.holdingTaxStartYear ?? Infinity)
+      ? (plan.holdingTaxAnnual ?? 0)
+      : 0
     const taxAnnualRaw = (linked
       ? (linked.taxByYear.get(year) ?? 0)
       : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03) * 12)
       + lumpsumTaxAnnual
+      + holdingTaxAnnual
     const taxAnnual = -Math.abs(taxAnnualRaw)   // 세금 = 음수
 
     // 세금은 월 지출에서 제외 (연간 조정항목)
@@ -849,6 +856,8 @@ export default function RetirementPage() {
         healthInsurance: saved.healthInsurance  ? { ...DEFAULT_HI, ...saved.healthInsurance } : DEFAULT_HI,
         linkCorpSim:     saved.linkCorpSim ?? false,
         linkPensionSim:  saved.linkPensionSim ?? false,
+        holdingTaxAnnual:    saved.holdingTaxAnnual    ?? 4_100_000,
+        holdingTaxStartYear: saved.holdingTaxStartYear ?? 2030,
       })
     }
   }, [saved])
@@ -1191,6 +1200,39 @@ export default function RetirementPage() {
         <p className="text-[11px] text-blue-200/80 leading-relaxed">
           💡 세금·건보는 위 <b>연동 설정</b>(법인/연금)에서 자동 산출됩니다.
           {linkMode === 'none' && ' (현재 연동 안함 — 시뮬 페이지에서 설정하거나 연동하면 정확한 값이 반영됩니다.)'}
+        </p>
+      </div>
+
+      {/* 보유세(재산세+종부세) — 시뮬 외 수동 항목, 개시 연도부터 세금(연)에 합산 */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <h3 className="text-sm font-semibold text-gray-200">🏠 보유세 (재산세 + 종부세)</h3>
+          <InfoTooltip text={
+            "매탄주공 입주(29년 말) 이후 부과되는\n재산세 + 종합부동산세의 연간 추정치입니다.\n\n" +
+            "개시 연도부터 매년 세금(연)에 합산되어\n누적 자산에서 차감됩니다."
+          } />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 w-24 shrink-0">연간 보유세</span>
+          <div className="flex-1">
+            <AmountInput
+              value={plan.holdingTaxAnnual ?? 0}
+              onChange={(v) => update('holdingTaxAnnual', v)}
+              placeholder="재산세 + 종부세 합계 (연)"
+            />
+          </div>
+          <span className="text-xs text-gray-400 shrink-0">부과 개시</span>
+          <input
+            type="number" inputMode="decimal"
+            className="w-20 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100
+              focus:outline-none focus:border-blue-500 text-center"
+            value={plan.holdingTaxStartYear ?? ''}
+            onChange={(e) => update('holdingTaxStartYear', Number(e.target.value) || undefined)}
+          />
+          <span className="text-xs text-gray-500">년~</span>
+        </div>
+        <p className="text-[10px] text-gray-500 mt-1.5">
+          기본 410만원 / 2030년~ (매탄주공 입주 이후). 비우면 미반영.
         </p>
       </div>
 

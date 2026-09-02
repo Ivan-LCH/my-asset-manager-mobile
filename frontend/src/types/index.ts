@@ -176,6 +176,9 @@ export interface RetirementPlan {
   healthInsurance: HealthInsuranceInputs
   linkCorpSim:     boolean
   linkPensionSim:  boolean
+  /** 보유세(재산세+종부세) — 연간 금액(원)과 부과 개시 연도. 개시 연도부터 세금(연)에 합산. */
+  holdingTaxAnnual?:   number
+  holdingTaxStartYear?: number
 }
 
 // ── 투자법인 시뮬레이터 ────────────────────────────────────
