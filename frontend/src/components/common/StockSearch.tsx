@@ -3,11 +3,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { matchPresets } from '@/lib/stockPresets'
 
 export interface StockSearchResult {
   ticker: string
   name: string
   exchange: string     // 'KRX' | 'NASDAQ' | 'NYSE' 등
+  currency?: 'KRW' | 'USD'
   yield?: number
   growth?: number
 }
@@ -29,6 +31,7 @@ export default function StockSearch({ koreanOnly, onSelect, placeholder = '종�
   const [mName, setMName] = useState('')
   const [mYield, setMYield] = useState('')
   const [mGrowth, setMGrowth] = useState('')
+  const [mCurrency, setMCurrency] = useState<'KRW' | 'USD'>('KRW')
   const boxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -42,14 +45,26 @@ export default function StockSearch({ koreanOnly, onSelect, placeholder = '종�
   const search = async (q: string) => {
     setQuery(q)
     setShowManual(false)
+    // 프리셋 즉시 매칭 — API 결과와 병합(중복 티커 제거, 프리셋 우선)
+    const presets = matchPresets(q).map((p) => ({
+      ticker: p.ticker, name: p.name, currency: p.currency,
+      exchange: p.currency === 'KRW' ? 'KRX' : 'US',
+    }))
     if (q.trim().length < 1) { setResults([]); setOpen(false); return }
+    if (presets.length > 0) { setResults(presets); setOpen(true) }
     setLoading(true)
     try {
       const r = await fetch(`/api/search?q=${encodeURIComponent(q)}${koreanOnly ? '&krOnly=1' : ''}`)
       const d = await r.json()
-      setResults(d.results ?? [])
+      const api: StockSearchResult[] = d.results ?? []
+      const seen = new Set(presets.map((p) => p.ticker))
+      const merged = [...presets, ...api.filter((a) => !seen.has(a.ticker))]
+      setResults(merged)
       setOpen(true)
-    } catch { setResults([]); setOpen(true) }
+    } catch {
+      if (presets.length === 0) setResults([])
+      setOpen(true)
+    }
     setLoading(false)
   }
 
@@ -65,10 +80,11 @@ export default function StockSearch({ koreanOnly, onSelect, placeholder = '종�
       ticker,
       name: mName.trim() || ticker,
       exchange: koreanOnly ? 'KRX' : 'MANUAL',
+      currency: mCurrency,
       yield: mYield ? Number(mYield) : undefined,
       growth: mGrowth ? Number(mGrowth) : undefined,
     })
-    setMTicker(''); setMName(''); setMYield(''); setMGrowth('')
+    setMTicker(''); setMName(''); setMYield(''); setMGrowth(''); setMCurrency('KRW')
     setShowManual(false)
   }
 
@@ -125,6 +141,11 @@ export default function StockSearch({ koreanOnly, onSelect, placeholder = '종�
             onChange={(e) => setMName(e.target.value)}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500" />
           <div className="flex gap-2">
+            <select value={mCurrency} onChange={(e) => setMCurrency(e.target.value as 'KRW' | 'USD')}
+              className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500">
+              <option value="KRW">KRW</option>
+              <option value="USD">USD</option>
+            </select>
             <input type="number" placeholder="배당률%" value={mYield}
               onChange={(e) => setMYield(e.target.value)}
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-emerald-300 text-right focus:outline-none focus:border-emerald-500" />

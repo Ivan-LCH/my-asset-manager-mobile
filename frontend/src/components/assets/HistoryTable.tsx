@@ -3,6 +3,7 @@ import { Trash2, Pencil, Plus } from 'lucide-react'
 import { useAddHistory, useUpdateHistory, useDeleteHistory } from '@/hooks/useHistory'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { formatMoney, formatPrice } from '@/lib/utils'
+import { fetchStockPrice } from '@/lib/stockPrice'
 import type { Asset, HistoryItem, StockDetail } from '@/types'
 
 interface Props { asset: Asset }
@@ -26,6 +27,7 @@ export default function HistoryTable({ asset }: Props) {
   const [fPrice, setFPrice] = useState(0)
   const [fQty, setFQty]     = useState(0)
   const [fVal, setFVal]     = useState(0)
+  const [priceMsg, setPriceMsg] = useState('')   // 단가 자동 조회 피드백
 
   const qtyBased = isQtyBased(asset.type)
   const currency = (asset.detail as StockDetail | undefined)?.currency ?? 'KRW'
@@ -69,6 +71,20 @@ export default function HistoryTable({ asset }: Props) {
     setAddMode(true)
     setFDate(new Date().toISOString().slice(0, 10))
     setFPrice(0); setFQty(asset.quantity ?? 0); setFVal(0)
+    setPriceMsg('')
+    // 주식 종목 — 티커가 있으면 현재 시세로 단가 자동 채움 (수동 수정 가능)
+    const ticker = (asset.detail as StockDetail | undefined)?.ticker
+    if (asset.type === 'STOCK' && ticker) {
+      setPriceMsg('시세 조회 중...')
+      void fetchStockPrice(ticker).then((p) => {
+        if (p != null) {
+          setFPrice(p)
+          setPriceMsg(`현재가 ${p.toLocaleString()} 자동 입력`)
+        } else {
+          setPriceMsg('시세 조회 실패 — 직접 입력하세요')
+        }
+      })
+    }
   }
 
   const handleSave = () => {
@@ -136,6 +152,7 @@ export default function HistoryTable({ asset }: Props) {
                     type="number" inputMode="decimal" value={fPrice} onChange={(e) => setFPrice(+e.target.value)}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
                   />
+                  {!editing && priceMsg && <p className="text-[10px] text-blue-400/80 mt-1">{priceMsg}</p>}
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">수량</label>

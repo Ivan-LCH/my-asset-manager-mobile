@@ -3,6 +3,8 @@ import { useCreateAsset, useAssetsByType } from '@/hooks/useAssets'
 import type { Asset, AssetType, Currency, StockDetail, Ownership, OwnershipPreset } from '@/types'
 import { ownershipFromPreset, presetFromOwnership } from '@/types'
 import { TYPE_LABELS, ASSET_TYPES, cn } from '@/lib/utils'
+import StockSearch from '@/components/common/StockSearch'
+import { fetchStockPrice } from '@/lib/stockPrice'
 
 interface Props {
   defaultType?: AssetType
@@ -71,6 +73,31 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
     // 계좌명: 사용자가 직접 고쳤거나, 계좌 안에서 추가(기본 계좌 지정)한 경우에는 자동으로 덮어쓰지 않음
     if (d?.accountName && !accountTouched && !defaultAccountName) setAccountName(d.accountName)
   }, [name, type, existingStocks, accountTouched, defaultAccountName])
+
+  // 종목 검색 선택 — 이름/티커/통화 자동 채움 + 현재 시세로 취득단가 자동 조회
+  const [priceLoading, setPriceLoading] = useState(false)
+  const [priceHint,    setPriceHint]    = useState('')
+  const handlePickStock = (r: { ticker: string; name: string; exchange: string; currency?: string }) => {
+    setName(r.name)
+    setTicker(r.ticker)
+    const cur = r.currency ?? (r.ticker.endsWith('.KS') || r.ticker.endsWith('.KQ') ? 'KRW' : 'USD')
+    setCurrency(cur as Currency)
+    // 취득단가 자동 조회 — 티커 있으면 현재가로 채움 (수동 수정 가능)
+    if (acquisitionPrice === 0) {
+      setPriceLoading(true)
+      setPriceHint('시세 조회 중...')
+      void fetchStockPrice(r.ticker).then((p) => {
+        setPriceLoading(false)
+        if (p != null) {
+          setAcquisitionPrice(p)
+          setPriceHint(`현재가 ${p.toLocaleString()} ${cur} 자동 입력 (수정 가능)`)
+        } else {
+          setPriceHint('시세 조회 실패 — 직접 입력하세요')
+        }
+        setTimeout(() => setPriceHint(''), 4000)
+      })
+    }
+  }
 
   const buildDetail = () => {
     if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant }
@@ -168,6 +195,22 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
           <label className={labelCls}>
             {type === 'STOCK' && stockMode === 'account' ? '계좌명 *' : '자산명 *'}
           </label>
+          {type === 'STOCK' && stockMode === 'stock' ? (
+            // 개별 종목 — 검색 자동완성 (프리셋 즉시 + Yahoo API)
+            <>
+              <StockSearch
+                placeholder="종목명 검색 (예: 삼성전자, 나스닥, SCHD)"
+                onSelect={handlePickStock}
+              />
+              {name && (
+                <p className="text-xs text-blue-400 mt-1">
+                  ✓ {name}{ticker ? ` (${ticker})` : ''}
+                  <button type="button" onClick={() => { setName(''); setTicker('') }}
+                    className="ml-2 text-gray-500 hover:text-gray-300 underline underline-offset-2">초기화</button>
+                </p>
+              )}
+            </>
+          ) : (
           <input
             className={inputCls}
             value={name}
@@ -176,6 +219,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
               ? '예: 키움 IRP 계좌'
               : '예: 삼성전자, 강남 아파트...'}
           />
+          )}
         </div>
         <div>
           <label className={labelCls}>취득일</label>
@@ -184,8 +228,12 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
         <div>
           <label className={labelCls}>
             {type === 'STOCK' && stockMode === 'account' ? '총 원금 (만원 아님, 원)' : (type === 'STOCK' || type === 'PHYSICAL') ? '취득단가' : '취득가'}
+            {type === 'STOCK' && stockMode === 'stock' && priceLoading && <span className="text-blue-400"> (조회 중...)</span>}
           </label>
           <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
+          {type === 'STOCK' && stockMode === 'stock' && priceHint && (
+            <p className="text-[10px] text-blue-400/80 mt-1">{priceHint}</p>
+          )}
         </div>
         {type === 'STOCK' && stockMode === 'account' && (
           <div className="col-span-2">

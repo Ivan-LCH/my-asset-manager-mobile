@@ -90,78 +90,8 @@ function searchProxyDev(): PluginOption {
           const q = url.searchParams.get('q')
           const krOnly = url.searchParams.get('krOnly') === '1'
           if (!q) { res.statusCode = 400; res.end('missing query'); return }
-          const sr = await fetch(
-            `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`,
-            { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
-          )
-          const sd = await sr.json()
-          const quotes = (sd?.quotes ?? []).filter((x: any) => {
-            const s: string = x.symbol ?? ''
-            if (krOnly) return s.endsWith('.KS') || s.endsWith('.KQ')
-            return true
-          }).slice(0, 8)
-          // 검색 결과가 없고 입력이 티커 형식이면 직접 차트 API 조회 (폴백)
-          if (quotes.length === 0 && /^[0-9]{6}\.(KS|KQ)$/i.test(q.toUpperCase())) {
-            try {
-              const cr = await fetch(
-                `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(q.toUpperCase())}?range=3y&interval=1d&events=div`,
-                { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
-              )
-              if (cr.ok) {
-                const cd = await cr.json()
-                const result = cd?.chart?.result?.[0]
-                if (result) {
-                  const price = result?.meta?.regularMarketPrice ?? result?.meta?.previousClose
-                  const name = result?.meta?.longName ?? result?.meta?.shortName ?? q.toUpperCase()
-                  let yld: number | undefined
-                  let growth: number | undefined
-                  const divs = result?.events?.dividends ?? {}
-                  const amounts = Object.values(divs).map((v: any) => v.amount).filter((a: number) => a > 0)
-                  if (amounts.length > 0 && price > 0) yld = Math.round((amounts.reduce((s: number, a: number) => s + a, 0) / 3 / price) * 10000) / 100
-                  const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
-                  const valid = closes.filter((c: number) => c > 0)
-                  if (valid.length > 0 && price > 0) {
-                    const years = Math.max(0.5, valid.length / 252)
-                    growth = Math.round((Math.pow(price / valid[0], 1 / years) - 1) * 10000) / 100
-                  }
-                  quotes.push({ symbol: q.toUpperCase(), longname: name, exchange: 'KRX' })
-                  // 결과에 직접 주입
-                  const directResults = [{ ticker: q.toUpperCase(), name, exchange: 'KRX', yield: yld, growth }]
-                  res.setHeader('Content-Type', 'application/json')
-                  res.setHeader('Cache-Control', 'public, max-age=300')
-                  res.statusCode = 200
-                  res.end(JSON.stringify({ results: directResults }))
-                  return
-                }
-              }
-            } catch { /* 폴백 실패 시 빈 결과 */ }
-          }
-          const results = await Promise.all(quotes.map(async (x: any) => {
-            const ticker = x.symbol
-            let yld: number | undefined
-            let growth: number | undefined
-            try {
-              const yr = await fetch(
-                `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3y&interval=1d&events=div`,
-                { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
-              )
-              const yd = await yr.json()
-              const result = yd?.chart?.result?.[0]
-              const price = result?.meta?.regularMarketPrice ?? result?.meta?.previousClose
-              const divs = result?.events?.dividends ?? {}
-              const amounts = Object.values(divs).map((v: any) => v.amount).filter((a: number) => a > 0)
-              if (amounts.length > 0 && price > 0) {
-                yld = Math.round((amounts.reduce((s: number, a: number) => s + a, 0) / 3 / price) * 10000) / 100
-              }
-              const closes: number[] = result?.indicators?.quote?.[0]?.close ?? []
-              const valid = closes.filter((c: number) => c > 0)
-              if (valid.length > 0 && price > 0) {
-                const years = Math.max(0.5, valid.length / 252)
-                growth = Math.round((Math.pow(price / valid[0], 1 / years) - 1) * 10000) / 100
-              }
-            } catch { /* skip */ }
-            return { ticker, name: x.longname ?? x.shortname ?? ticker, exchange: x.exchange ?? '', yield: yld, growth }
-          }))
+          const { searchStocks } = await import('./api/_search')
+          const results = await searchStocks(q, krOnly)
           res.setHeader('Content-Type', 'application/json')
           res.setHeader('Cache-Control', 'public, max-age=300')
           res.statusCode = 200
