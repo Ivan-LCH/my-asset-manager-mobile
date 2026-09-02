@@ -2,7 +2,7 @@
 // 앱과 같은 출처(/api/search)라 브라우저 CORS 제약이 없다.
 // 클라이언트: GET /api/search?q=삼성전자&krOnly=1 → { results: [{ticker,name,exchange,yield,growth}] }
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { searchStocks } from './_search'
+import { searchStocks } from './_search.js'
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*')
