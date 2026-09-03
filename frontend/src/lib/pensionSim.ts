@@ -30,6 +30,25 @@ export function severanceTax(amount: number): number {
   return taxable * 0.42 - 31_900_000
 }
 
+/** 국민연금 비과세(공제연금소득) 비율 — 2005년 이전 불입분 상당액 등.
+ *  1970년대생 가입자는 대부분 2006년 이후 불입이라 사실상 0에 가깝다고 보고 0으로 둔다.
+ *  (실제는 가입기간별 비과세 비율 계산 필요 — 시뮬레이션 단순화) */
+export const NATIONAL_PENSION_NONTAX_RATE = 0
+
+/** 연금소득세(사적+공적 합산) — 세법대로:
+ *  연금소득 과세표준 = (사적 과세연금 − 연금소득공제 1,200만, 0 하한) + 국민연금 과세분.
+ *  연금소득공제는 사적연금(IRP·연금저축)에만 적용 — 국민연금(공적연금)은 공제 없이 합산.
+ *  합산 과세표준에 단일 누진(3~6%) 적용. */
+export function pensionTaxCombined(
+  privateTaxable: number,
+  nationalAnnual: number,
+  deduction: number,
+): number {
+  const privateBase = Math.max(0, privateTaxable - deduction)
+  const nationalTaxable = nationalAnnual * (1 - NATIONAL_PENSION_NONTAX_RATE)
+  return pensionIncomeTax(privateBase + nationalTaxable)
+}
+
 /** 종합소득세 누진세율 (2024년 기준, 단순화) */
 export function comprehensiveTax(taxableIncome: number): number {
   const t = Math.max(0, taxableIncome)
@@ -385,7 +404,8 @@ export function perPersonYearTaxHealth(
 
   const pensionTaxableH = row.taxableAnnual
   const pensionExemptH = row.exemptAnnual
-  const pensionTaxH = pensionIncomeTax(Math.max(0, pensionTaxableH - plan.pensionDeduction))
+  // 연금소득세 — 국민연금(공적)은 연금소득공제 대상 아님: 사적분에만 공제 후 합산 누진
+  const pensionTaxH = pensionTaxCombined(row.taxableAnnual - row.nationalAnnual, row.nationalAnnual, plan.pensionDeduction)
 
   const finH = row.financialHusbandAnnual
   const finW = row.financialWifeAnnual
@@ -474,7 +494,9 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   const pensionRow = refRow ?? peakRow
   const annualPensionTaxableH = (pensionRow?.taxableAnnual ?? (taxableSrc + irpInflow + nationalFallback) / years)
   const annualPensionExemptH = pensionRow?.exemptAnnual ?? exemptSrc / years
-  const pensionTaxH = pensionIncomeTax(Math.max(0, annualPensionTaxableH - plan.pensionDeduction))
+  // 연금소득세 — 국민연금(공적)은 연금소득공제 대상 아님: 사적분에만 공제 후 합산 누진
+  const annualNationalH = pensionRow?.nationalAnnual ?? nationalFallback / years
+  const pensionTaxH = pensionTaxCombined(annualPensionTaxableH - annualNationalH, annualNationalH, plan.pensionDeduction)
 
   // 기준년도 주식 배당 (본인 계좌 배당률·상승률 적용) — pensionRow의 1인별 배당 사용
   const fin = {

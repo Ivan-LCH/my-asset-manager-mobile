@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   EMPTY_PENSION_PLAN, pensionIncomeTax, computePensionVehiclePerPerson,
   computePensionVehicle, computePerPersonComprehensiveDeduction, pensionSchedule,
-  severanceTax, perPersonYearTaxHealth,
+  severanceTax, perPersonYearTaxHealth, pensionTaxCombined,
   stockBalanceFromInflows, stockAccountBalances, totalInflows, sourcesFromAssets,
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
   FINANCIAL_INCOME_LIMIT,
@@ -24,6 +24,17 @@ describe('pensionSim 계산', () => {
   it('comprehensiveTaxBreakdown: 한도 내 분리과세, 초과 종합합산', () => {
     expect(comprehensiveTaxBreakdown(10_000_000, 0, 1_500_000).consolidatedFinancial).toBe(0)
     expect(comprehensiveTaxBreakdown(30_000_000, 0, 1_500_000).consolidatedFinancial).toBe(10_000_000)
+  })
+
+  it('pensionTaxCombined: 연금소득공제 1,200만은 사적연금에만 적용, 국민연금은 공제 없이 합산 누진', () => {
+    const DED = 12_000_000
+    // 사적 2,000만 + 국민 1,000만: 과표 = (2,000−1,200) + 1,000 = 1,800만 (구계산: 3,000−1,200=1,800만과 동일)
+    expect(pensionTaxCombined(20_000_000, 10_000_000, DED)).toBe(pensionIncomeTax(18_000_000))
+    // 사적 500만(공제 소진) + 국민 1,000만: 과표 = 0 + 1,000만 ≠ 구계산 300만 (국민연금에 공제 침범 수정)
+    expect(pensionTaxCombined(5_000_000, 10_000_000, DED)).toBe(pensionIncomeTax(10_000_000))
+    expect(pensionTaxCombined(5_000_000, 10_000_000, DED)).not.toBe(pensionIncomeTax(3_000_000))
+    // 사적 0 + 국민 5,000만: 전액 과세 (공제 미적용)
+    expect(pensionTaxCombined(0, 50_000_000, DED)).toBe(pensionIncomeTax(50_000_000))
   })
 
   it('comprehensiveTaxBreakdown: 초과분 원천징수 15.4%는 기납부세액으로 공제 (이중과세 방지)', () => {
