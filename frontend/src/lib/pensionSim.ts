@@ -57,6 +57,8 @@ export interface TaxBreakdown {
   consolidatedFinancial:  number
   comprehensiveTaxable:   number
   comprehensiveTax:       number
+  /** 종합합산된 금융소득에 이미 원천징수된 15.4% — 기납부세액 공제 */
+  withheldCredit:         number
   totalFinancialTax:      number
 }
 export function comprehensiveTaxBreakdown(
@@ -69,11 +71,16 @@ export function comprehensiveTaxBreakdown(
   const consolidatedFinancial = Math.max(0, financialIncome - FINANCIAL_INCOME_LIMIT)
   const comprehensiveBase = consolidatedFinancial + Math.max(0, otherIncome)
   const comprehensiveTaxable = Math.max(0, comprehensiveBase - deduction)
-  const compTax = comprehensiveTax(comprehensiveTaxable)
+  const compTaxRaw = comprehensiveTax(comprehensiveTaxable)
+  // 초과분도 수령 시 15.4% 원천징수되며, 종합소득세 신고 시 기납부세액으로 공제된다.
+  // 공제 없이 누진세 전액을 매기면 이중과세로 세금이 과대 계상됨.
+  const withheldCredit = Math.round(consolidatedFinancial * SEPARATED_TAX_RATE)
+  const compTax = Math.max(0, compTaxRaw - withheldCredit)
   return {
     financialIncome, separatedTax,
     consolidatedFinancial, comprehensiveTaxable,
     comprehensiveTax: compTax,
+    withheldCredit,
     totalFinancialTax: separatedTax + compTax,
   }
 }

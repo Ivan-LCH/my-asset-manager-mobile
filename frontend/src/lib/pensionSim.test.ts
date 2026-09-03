@@ -26,6 +26,23 @@ describe('pensionSim 계산', () => {
     expect(comprehensiveTaxBreakdown(30_000_000, 0, 1_500_000).consolidatedFinancial).toBe(10_000_000)
   })
 
+  it('comprehensiveTaxBreakdown: 초과분 원천징수 15.4%는 기납부세액으로 공제 (이중과세 방지)', () => {
+    // 금융소득 3,000만: 2,000만 분리과세 308만 + 초과 1,000만 종합합산
+    const t = comprehensiveTaxBreakdown(30_000_000, 0, 1_500_000)
+    expect(t.separatedTax).toBe(Math.round(20_000_000 * 0.154))
+    expect(t.withheldCredit).toBe(Math.round(10_000_000 * 0.154))
+    // 종합세(과표 850만 = 60만) − 기납부 154만 → 0 하한
+    expect(t.comprehensiveTax).toBe(0)
+    // 금융소득 6,000만: 초과 4,000만, 과표 3,850만 → 종합세 450만 − 기납부 616만 → 0 하한
+    const t2 = comprehensiveTaxBreakdown(60_000_000, 0, 1_500_000)
+    expect(t2.withheldCredit).toBe(Math.round(40_000_000 * 0.154))
+    expect(t2.comprehensiveTax).toBe(0)
+    // 금융소득 1억: 초과 8,000만, 과표 7,850만 → 종합세 1,308만 − 기납부 1,232만 = 76만
+    const t3 = comprehensiveTaxBreakdown(100_000_000, 0, 1_500_000)
+    expect(t3.comprehensiveTax).toBe(comprehensiveTax(78_500_000) - Math.round(80_000_000 * 0.154))
+    expect(t3.totalFinancialTax).toBe(t3.separatedTax + t3.comprehensiveTax)
+  })
+
   it('stockBalanceFromInflows / totalInflows: 분배된 IRP·주식 합산', () => {
     const allocations = [
       { lumpsumId: 'a', irpAmount: 100_000_000, stockAmount: 0 },
