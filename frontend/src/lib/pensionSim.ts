@@ -47,6 +47,13 @@ export function comprehensiveTax(taxableIncome: number): number {
 /** 분리과세율 (이자·배당 15.4%) */
 export const SEPARATED_TAX_RATE = 0.154
 
+/** 배당가산율 — 종합과세되는 배당(2천만 초과분)에 법인세액상당액 가산.
+ *  현행(법인세 최저세율 기준) 추정치 10%. 대주주·비상장 원칙, 상장 소액주주는 미적용이지만
+ *  시뮬레이션 단순화로 종합과세 배당 전체에 균일 적용. */
+export const DIVIDEND_GROSS_UP_RATE = 0.10
+/** 배당세액공제율 — 배당가산액의 13% (이중과세 경감 세액공제) */
+export const DIVIDEND_TAX_CREDIT_RATE = 0.13
+
 /** 금융소득종합과세 기준 — 연 2천만원 초과분은 종합소득세 합산 (1인별 적용) */
 export const FINANCIAL_INCOME_LIMIT = 20_000_000
 
@@ -55,10 +62,14 @@ export interface TaxBreakdown {
   financialIncome:        number
   separatedTax:           number
   consolidatedFinancial:  number
+  /** 배당가산액 — 종합과세 배당의 법인세액상당 (과세표준에 가산) */
+  dividendGrossUp:        number
   comprehensiveTaxable:   number
   comprehensiveTax:       number
   /** 종합합산된 금융소득에 이미 원천징수된 15.4% — 기납부세액 공제 */
   withheldCredit:         number
+  /** 배당세액공제 — 배당가산액 × 13% */
+  dividendCredit:         number
   totalFinancialTax:      number
 }
 export function comprehensiveTaxBreakdown(
@@ -69,18 +80,23 @@ export function comprehensiveTaxBreakdown(
   const separated = Math.min(financialIncome, FINANCIAL_INCOME_LIMIT)
   const separatedTax = Math.round(separated * SEPARATED_TAX_RATE)
   const consolidatedFinancial = Math.max(0, financialIncome - FINANCIAL_INCOME_LIMIT)
-  const comprehensiveBase = consolidatedFinancial + Math.max(0, otherIncome)
+  // 배당가산: 종합과세되는 배당에 법인세액상당액 가산 → 과세표준 확대
+  const grossUp = Math.round(consolidatedFinancial * DIVIDEND_GROSS_UP_RATE)
+  const comprehensiveBase = consolidatedFinancial + grossUp + Math.max(0, otherIncome)
   const comprehensiveTaxable = Math.max(0, comprehensiveBase - deduction)
   const compTaxRaw = comprehensiveTax(comprehensiveTaxable)
   // 초과분도 수령 시 15.4% 원천징수되며, 종합소득세 신고 시 기납부세액으로 공제된다.
   // 공제 없이 누진세 전액을 매기면 이중과세로 세금이 과대 계상됨.
   const withheldCredit = Math.round(consolidatedFinancial * SEPARATED_TAX_RATE)
-  const compTax = Math.max(0, compTaxRaw - withheldCredit)
+  // 배당세액공제: 가산액의 13% — 법인단계 이중과세 경감
+  const dividendCredit = Math.round(grossUp * DIVIDEND_TAX_CREDIT_RATE)
+  const compTax = Math.max(0, compTaxRaw - withheldCredit - dividendCredit)
   return {
     financialIncome, separatedTax,
-    consolidatedFinancial, comprehensiveTaxable,
+    consolidatedFinancial, dividendGrossUp: grossUp,
+    comprehensiveTaxable,
     comprehensiveTax: compTax,
-    withheldCredit,
+    withheldCredit, dividendCredit,
     totalFinancialTax: separatedTax + compTax,
   }
 }
