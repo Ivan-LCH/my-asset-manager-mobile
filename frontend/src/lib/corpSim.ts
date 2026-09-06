@@ -2,16 +2,29 @@
 // 모든 수치는 사용자 가정에 기반한 추정치. 세율/공식은 plan.tax 로 편집 가능.
 import type { CorpSimPlan, CorpTaxParams } from '@/types'
 
-/** 세제 파라미터 기본값 (2024년 경 기준 추정치 — 실제는 세무사 확인) */
+/** 세제 파라미터 기본값 (2026년 세제개편 반영 — 실제는 세무사 확인)
+ *  법인세율: 2026년 귀속분부터 1%p 인상 (9%→10%, 19%→20%, 국세청 법인세법 §55) */
 export const DEFAULT_CORP_TAX: CorpTaxParams = {
-  corpTaxRateLow:       0.09,
-  corpTaxRateMid:       0.19,
+  corpTaxRateLow:       0.10,
+  corpTaxRateMid:       0.20,
   corpTaxThreshold:     200_000_000,
   dividendTaxRate:      0.154,
   finIncomeCombinedThr: 20_000_000,
   giftTaxRate:          0.30,
   salaryTaxRate:        0.03,
   healthInsRate:        0.0801,  // 건강보험(7.09%)+장기요양(건보×12.95%) ≈ 8.01% (본인부담 50% 별도)
+}
+
+/** 저장된 세제 파라미터를 신규 기본값과 병합.
+ *  2026 세제개편 마이그레이션: 구 기본값(9%/19%) 그대로 저장된 경우 신규 기본값(10%/20%)으로 갱신.
+ *  (사용자가 의도적으로 커스터마이즈한 값은 존중 — 구 기본값과 정확히 일치할 때만 교체) */
+export function mergeCorpTax(saved?: Partial<CorpTaxParams>): CorpTaxParams {
+  const t = { ...DEFAULT_CORP_TAX, ...(saved ?? {}) }
+  if (t.corpTaxRateLow === 0.09 && t.corpTaxRateMid === 0.19) {
+    t.corpTaxRateLow = DEFAULT_CORP_TAX.corpTaxRateLow
+    t.corpTaxRateMid = DEFAULT_CORP_TAX.corpTaxRateMid
+  }
+  return t
 }
 
 /** 입력 기본값 (보고서 기준 샘플) */

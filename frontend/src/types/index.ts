@@ -183,8 +183,8 @@ export interface RetirementPlan {
 
 // ── 투자법인 시뮬레이터 ────────────────────────────────────
 export interface CorpTaxParams {
-  corpTaxRateLow:        number   // 0.09  (과세표준 2억 이하)
-  corpTaxRateMid:        number   // 0.19  (2억 초과)
+  corpTaxRateLow:        number   // 0.10  (과세표준 2억 이하, 2026년 귀속분부터 10%)
+  corpTaxRateMid:        number   // 0.20  (2억 초과, 2026년 귀속분부터 20%)
   corpTaxThreshold:      number   // 200_000_000
   dividendTaxRate:       number   // 0.154 (배당소득세)
   finIncomeCombinedThr:  number   // 20_000_000 (금융소득종합과세 기준, 연)

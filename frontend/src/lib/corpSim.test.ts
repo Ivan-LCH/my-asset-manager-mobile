@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  EMPTY_CORP_PLAN, grossDividend, corpTaxOn, computeCorp, computePersonal,
+  EMPTY_CORP_PLAN, mergeCorpTax, grossDividend, corpTaxOn, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway,
   salariedCount, computeTwoPhase, blendedYield, comprehensiveTax,
 } from '@/lib/corpSim'
@@ -16,15 +16,26 @@ describe('corpSim 계산', () => {
     expect(grossDividend(plan({ targetDividendTotal: 50_000_000 }))).toBe(50_000_000)
   })
 
-  it('법인세: 2억 이하 low(9%)', () => {
+  it('법인세: 2억 이하 low(2026 세제개편 10%)', () => {
     const t = EMPTY_CORP_PLAN.tax
-    expect(corpTaxOn(48_000_000, t)).toBeCloseTo(48_000_000 * 0.09)
+    expect(t.corpTaxRateLow).toBe(0.10)
+    expect(corpTaxOn(48_000_000, t)).toBeCloseTo(48_000_000 * 0.10)
   })
   it('법인세: 2억 초과 누진', () => {
     const t = EMPTY_CORP_PLAN.tax
     const income = 300_000_000
-    const expected = 200_000_000 * 0.09 + 100_000_000 * 0.19
+    const expected = 200_000_000 * t.corpTaxRateLow + 100_000_000 * t.corpTaxRateMid
     expect(corpTaxOn(income, t)).toBeCloseTo(expected)
+  })
+
+  it('mergeCorpTax: 2026 세제개편 마이그레이션 — 구 기본값 9%/19%는 10%/20%로 갱신', () => {
+    // 구 기본값 그대로 저장된 경우 → 신규 기본값
+    expect(mergeCorpTax({ corpTaxRateLow: 0.09, corpTaxRateMid: 0.19 }).corpTaxRateLow).toBe(0.10)
+    expect(mergeCorpTax({ corpTaxRateLow: 0.09, corpTaxRateMid: 0.19 }).corpTaxRateMid).toBe(0.20)
+    // 사용자 커스터마이즈 값은 존중
+    expect(mergeCorpTax({ corpTaxRateLow: 0.05 }).corpTaxRateLow).toBe(0.05)
+    // 미저장(undefined) → 신규 기본값
+    expect(mergeCorpTax(undefined).corpTaxRateMid).toBe(0.20)
   })
 
   it('지분 4:4:2 분배: 배당가능의 40/40/20', () => {
@@ -69,9 +80,10 @@ describe('corpSim 계산', () => {
   })
 
   it('권고 배당: 미취업 아들 한계 1천만 역산', () => {
-    const rec = recommendDividendForSon(plan({ sonEmployed: false, shareSon: 20 }))
-    // 역산: 아들 net = rec × 0.91 × 0.2 × 0.846 ≈ 10,000,000
-    const sonNet = rec * 0.91 * 0.2 * (1 - 0.154)
+    const p = plan({ sonEmployed: false, shareSon: 20 })
+    const rec = recommendDividendForSon(p)
+    // 역산: 아들 net = rec × (1−법인세율 10%) × 0.2 × (1−배당세율) ≈ 10,000,000
+    const sonNet = rec * (1 - p.tax.corpTaxRateLow) * 0.2 * (1 - p.tax.dividendTaxRate)
     expect(sonNet).toBeCloseTo(10_000_000, -5)
   })
 

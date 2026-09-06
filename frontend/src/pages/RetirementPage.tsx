@@ -5,7 +5,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { useDividendSummary } from '@/hooks/useDividends'
 import { useCorpSim } from '@/hooks/useCorpSim'
-import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, DEFAULT_CORP_TAX } from '@/lib/corpSim'
+import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, mergeCorpTax } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { resolveAge } from '@/lib/people'
 import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountBalances, perPersonYearTaxHealth } from '@/lib/pensionSim'
@@ -893,7 +893,7 @@ export default function RetirementPage() {
   // + 목돈 분배(corpInflow)를 가수금(loanAmount)에 합산 — CorpSimPage와 일치
   const corpAllocTotal = (rawCorpPlan?.lumpsumCorp ?? []).reduce((s, c) => s + c.corpAmount, 0)
   const corpPlan = rawCorpPlan
-    ? { ...EMPTY_CORP_PLAN, ...rawCorpPlan, tax: { ...DEFAULT_CORP_TAX, ...(rawCorpPlan.tax ?? {}) },
+    ? { ...EMPTY_CORP_PLAN, ...rawCorpPlan, tax: mergeCorpTax(rawCorpPlan.tax),
         loanAmount: (rawCorpPlan.loanAmount ?? EMPTY_CORP_PLAN.loanAmount) + corpAllocTotal }
     : null
   const linked = plan.linkCorpSim && !!corpPlan

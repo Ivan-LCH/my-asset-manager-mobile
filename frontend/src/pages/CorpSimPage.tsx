@@ -6,7 +6,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { useRetirement } from '@/hooks/useRetirement'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import {
-  EMPTY_CORP_PLAN, DEFAULT_CORP_TAX, grossDividend, computeCorp, computePersonal,
+  EMPTY_CORP_PLAN, mergeCorpTax, grossDividend, computeCorp, computePersonal,
   sonAccumulation, returnMonths, recommendDividendForSon, shareSum, simulateRunway, totalInvest,
   computeTwoPhase, salariedCount, comprehensiveTax, corpHealthMonthly,
 } from '@/lib/corpSim'
@@ -127,7 +127,7 @@ export default function CorpSimPage() {
       ...EMPTY_CORP_PLAN,
       ...saved,
       loanAmount: saved.loanAmount ?? (oldInvest ?? EMPTY_CORP_PLAN.loanAmount),
-      tax: { ...DEFAULT_CORP_TAX, ...(saved.tax ?? {}) },
+      tax: mergeCorpTax(saved.tax),
     })
   }, [saved])
 
