@@ -288,41 +288,6 @@ export default function PensionSimPage() {
   // 은퇴계획 목돈수입 (분배 대상, 단일 소스)
   const lumpsums = retirement?.lumpsum ?? []
 
-  const PersonKpi = ({ person, label, color }: { person: typeof h.husband; label: string; color: string }) => {
-    const monthlyNet = Math.round(person.netAnnual / 12) - person.healthMonthly
-    return (
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-300">{label}</p>
-          <span className="text-[10px] text-gray-500">건보 {formatManwon(person.healthMonthly)}/월</span>
-        </div>
-        {/* 월 순소득 강조 */}
-        <div className="bg-gray-900/60 rounded-lg p-2.5">
-          <p className="text-[10px] text-gray-500">월 순소득 (순취득÷12 − 건보)</p>
-          <p className={`text-xl font-bold ${color}`}>{formatManwon(monthlyNet)}<span className="text-xs text-gray-500 font-normal">/월</span></p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
-          <div>
-            <p className="text-gray-500">연금수령</p>
-            <p className="text-gray-100 font-semibold">{formatManwon(person.annualPensionTaxable + person.annualPensionExempt)}</p>
-            <p className="text-red-400/80 text-[10px]">연금소득세 {formatManwon(person.pensionTax)}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">금융소득</p>
-            <p className="text-gray-100 font-semibold">{formatManwon(person.financialIncome)}</p>
-            <p className="text-red-400/80 text-[10px]">금융소득세 {formatManwon(person.financialTax)}{person.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(person.separatedDividendTax)}</span>}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">총세금(연)</p>
-            <p className="text-red-400 font-semibold">{formatManwon(person.totalAnnualTax)}</p>
-            <p className="text-gray-600 text-[10px]">연금 {formatManwon(person.pensionTax)} · 금융 {formatManwon(person.financialTax)}</p>
-          </div>
-          <div><p className="text-gray-500">순취득(연)</p><p className="text-emerald-400 font-semibold">{formatManwon(person.netAnnual)}</p></div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-xl mx-auto">
       {/* 헤더 */}
