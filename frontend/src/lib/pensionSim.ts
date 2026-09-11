@@ -75,13 +75,28 @@ export const DIVIDEND_GROSS_UP_RATE = 10 / 90
 /** 배당세액공제율 — 배당가산액의 13% (이중과세 경감 세액공제) */
 export const DIVIDEND_TAX_CREDIT_RATE = 0.13
 
+/** 2026 세제개편 배당 선택분리과세(성장배당) 누진 — 지방소득세 10% 포함.
+ *  현금배당액 기준: 2천만 이하 15.4% / ~3억 22% / ~50억 27.5% / 초과 33%
+ *  (기본 14/20/25/30% + 지방세). 2026년분 배당부터 2028년까지 한시 —
+ *  시뮬 수령개시(2029~)는 연장 가정. 첫 구간 15.4%가 기본 원천징수율과 동일. */
+export function separatedDividendTax(dividend: number): number {
+  const d = Math.max(0, dividend)
+  if (d <= 20_000_000) return Math.round(d * 0.154)
+  if (d <= 300_000_000) return Math.round(3_080_000 + (d - 20_000_000) * 0.22)
+  if (d <= 5_000_000_000) return Math.round(64_680_000 + (d - 300_000_000) * 0.275)
+  return Math.round(1_357_180_000 + (d - 5_000_000_000) * 0.33)
+}
+
 /** 금융소득종합과세 기준 — 연 2천만원 초과분은 종합소득세 합산 (1인별 적용) */
 export const FINANCIAL_INCOME_LIMIT = 20_000_000
 
-/** 금융소득 과세 분해 (1인분) */
+/** 금융소득 과세 분해 (1인분). opts.separatedDividend = 성장배당 선택분리과세 적용분 */
 export interface TaxBreakdown {
   financialIncome:        number
   separatedTax:           number
+  /** 성장배당(선택분리과세) 적용 배당 — 종합합산·가산 제외, 별도 누진 분리과세 */
+  separatedDividend:      number
+  separatedDividendTax:   number
   consolidatedFinancial:  number
   /** 배당가산액 — 종합과세 배당의 법인세액상당 (과세표준에 가산) */
   dividendGrossUp:        number
@@ -97,10 +112,16 @@ export function comprehensiveTaxBreakdown(
   financialIncome: number,
   otherIncome: number,
   deduction: number,
+  opts?: { separatedDividend?: number },
 ): TaxBreakdown {
-  const separated = Math.min(financialIncome, FINANCIAL_INCOME_LIMIT)
+  // 성장배당(선택분리과세): 금융소득에서 분리해 자체 누진으로만 과세.
+  // 첫 구간 15.4%가 기본 원천징수율과 동일해 2천만 이하 배당은 결과 동일.
+  const gDiv = Math.max(0, Math.min(opts?.separatedDividend ?? 0, financialIncome))
+  const gTax = separatedDividendTax(gDiv)
+  const ordinary = financialIncome - gDiv
+  const separated = Math.min(ordinary, FINANCIAL_INCOME_LIMIT)
   const separatedTax = Math.round(separated * SEPARATED_TAX_RATE)
-  const consolidatedFinancial = Math.max(0, financialIncome - FINANCIAL_INCOME_LIMIT)
+  const consolidatedFinancial = Math.max(0, ordinary - FINANCIAL_INCOME_LIMIT)
   // 배당가산: 종합과세되는 배당에 법인세액상당액 가산 → 과세표준 확대
   const grossUp = Math.round(consolidatedFinancial * DIVIDEND_GROSS_UP_RATE)
   const comprehensiveBase = consolidatedFinancial + grossUp + Math.max(0, otherIncome)
@@ -114,11 +135,12 @@ export function comprehensiveTaxBreakdown(
   const compTax = Math.max(0, compTaxRaw - withheldCredit - dividendCredit)
   return {
     financialIncome, separatedTax,
+    separatedDividend: gDiv, separatedDividendTax: gTax,
     consolidatedFinancial, dividendGrossUp: grossUp,
     comprehensiveTaxable,
     comprehensiveTax: compTax,
     withheldCredit, dividendCredit,
-    totalFinancialTax: separatedTax + compTax,
+    totalFinancialTax: separatedTax + compTax + gTax,
   }
 }
 
@@ -176,8 +198,8 @@ export const EMPTY_PENSION_PLAN: PensionSimPlan = {
   ],
   allocations: [],
   stockAccount: {
-    husband: { extraAmount: 0, dividendYield: 4, growthRate: 5 },
-    wife:    { extraAmount: 0, dividendYield: 4, growthRate: 5 },
+    husband: { extraAmount: 0, dividendYield: 4, growthRate: 5, growthDividendRatio: 0 },
+    wife:    { extraAmount: 0, dividendYield: 4, growthRate: 5, growthDividendRatio: 0 },
   },
   stockOwnership: { husband: 50, wife: 50 },
   otherIncome: 0,
@@ -221,6 +243,8 @@ export interface PersonVehicleResult {
   financialIncome:      number        // 본인 금융소득(배당+연간유입)
   financialTax:         number
   separatedTax:         number
+  separatedDividend:    number        // 성장배당(선택분리과세) 적용 배당
+  separatedDividendTax: number        // 선택분리과세 세액 (지방세 포함 누진)
   consolidatedFinancial:number
   comprehensiveTaxable: number        // 과세표준
   comprehensiveTax:     number
@@ -411,8 +435,12 @@ export function perPersonYearTaxHealth(
 
   const finH = row.financialHusbandAnnual
   const finW = row.financialWifeAnnual
-  const ftH = comprehensiveTaxBreakdown(finH, plan.otherIncome, ded.husband)
-  const ftW = comprehensiveTaxBreakdown(finW, 0, ded.wife)
+  const ftH = comprehensiveTaxBreakdown(finH, plan.otherIncome, ded.husband, {
+    separatedDividend: finH * (plan.stockAccount.husband.growthDividendRatio ?? 0) / 100,
+  })
+  const ftW = comprehensiveTaxBreakdown(finW, 0, ded.wife, {
+    separatedDividend: finW * (plan.stockAccount.wife.growthDividendRatio ?? 0) / 100,
+  })
 
   const husbandTax = pensionTaxH + ftH.totalFinancialTax
   const wifeTax = ftW.totalFinancialTax
@@ -517,7 +545,10 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
     const personFin = isHusband ? fin.husband : fin.wife
     const personOther = isHusband ? other.husband : other.wife
     const personDeduction = (isHusband ? perPersonDed.husband : perPersonDed.wife)
-    const ft = comprehensiveTaxBreakdown(personFin, personOther, personDeduction)
+    const personGrowthRatio = (isHusband ? plan.stockAccount.husband : plan.stockAccount.wife).growthDividendRatio ?? 0
+    const ft = comprehensiveTaxBreakdown(personFin, personOther, personDeduction, {
+      separatedDividend: personFin * personGrowthRatio / 100,
+    })
 
     const stockBalance = isHusband ? sb.husband.total : sb.wife.total
     const prop = isHusband ? opts?.husbandProperty : opts?.wifeProperty
@@ -540,6 +571,7 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
       annualPensionTaxable, annualPensionExempt, pensionTax,
       stockBalance, financialIncome: personFin,
       financialTax: ft.totalFinancialTax, separatedTax: ft.separatedTax,
+      separatedDividend: ft.separatedDividend, separatedDividendTax: ft.separatedDividendTax,
       consolidatedFinancial: ft.consolidatedFinancial,
       comprehensiveTaxable: ft.comprehensiveTaxable,
       comprehensiveTax: ft.comprehensiveTax,

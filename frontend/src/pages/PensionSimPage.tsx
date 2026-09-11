@@ -310,7 +310,7 @@ export default function PensionSimPage() {
           <div>
             <p className="text-gray-500">금융소득</p>
             <p className="text-gray-100 font-semibold">{formatManwon(person.financialIncome)}</p>
-            <p className="text-red-400/80 text-[10px]">금융소득세 {formatManwon(person.financialTax)}</p>
+            <p className="text-red-400/80 text-[10px]">금융소득세 {formatManwon(person.financialTax)}{person.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(person.separatedDividendTax)}</span>}</p>
           </div>
           <div>
             <p className="text-gray-500">총세금(연)</p>
@@ -391,6 +391,7 @@ export default function PensionSimPage() {
           <p className="text-[11px] text-blue-200/90 leading-relaxed">
             잔액 = <b>목돈 분배(stock) 합계 × 명의지분</b> + <b>추가 금액</b>. 종목 입력 없이
             <b> 계좌 단위 배당률·상승률</b>만 입력 → 연배당·연도별 성장 자동 산정.
+            <b> 성장배당 비율</b> = 2026 세제개편 선택분리과세 적용 배당 비중 (0% = 기존 종합과세).
           </p>
           <p className="text-[10px] text-blue-200/70 mt-1">
             목돈 분배금 변경: 위 '목돈 분배' 섹션. 현재 stock 분배 합계 {formatManwon(stockBalance)}.
@@ -421,11 +422,19 @@ export default function PensionSimPage() {
                   <Row label="주가상승률">
                     <NumInput value={cfg.growthRate} onChange={(v) => updateStockAccount(who, { growthRate: v })} suffix="%" />
                   </Row>
+                  <Row label="성장배당 비율" hint="2026 개편 선택분리과세(15.4~33% 누진) 신청 배당 비중 · 0 = 기존 종합과세">
+                    <NumInput value={cfg.growthDividendRatio ?? 0} onChange={(v) => updateStockAccount(who, { growthDividendRatio: v })} suffix="%" />
+                  </Row>
                 </div>
                 <div className="border-t border-gray-700/60 pt-1.5 space-y-0.5 text-[11px]">
                   <div className="flex justify-between"><span className="text-gray-500">잔액</span><span className="text-gray-100 font-semibold">{formatManwon(b.total)}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">연배당</span><span className="text-emerald-400 font-semibold">{formatManwon(Math.round(b.dividendBase))}</span></div>
                   <p className="text-[10px] text-gray-600">{formatManwon(Math.round(b.dividendBase / 12))}/월 · 상승률로 매년 증가</p>
+                  {(cfg.growthDividendRatio ?? 0) > 0 && (
+                    <p className="text-[10px] text-amber-400/80">
+                      성장배당 {cfg.growthDividendRatio}% 선택분리과세 (15.4/22/27.5/33% 누진)
+                    </p>
+                  )}
                 </div>
               </div>
             )
@@ -567,7 +576,7 @@ export default function PensionSimPage() {
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(Math.round(h.husband.totalAnnualTax / 12))}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.totalAnnualTax)})</span>
-                <p className="text-[10px] text-gray-600">연금 {formatManwon(Math.round(h.husband.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.husband.financialTax / 12))}</p>
+                <p className="text-[10px] text-gray-600">연금 {formatManwon(Math.round(h.husband.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.husband.financialTax / 12))}{h.husband.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.husband.separatedDividendTax / 12))}</span>}</p>
               </td>
               <td className="py-2 px-3 text-right">
                 <span className="text-gray-100 font-semibold">{formatManwon(husbandHI.grandTotal)}</span>
@@ -580,7 +589,7 @@ export default function PensionSimPage() {
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(Math.round(h.wife.totalAnnualTax / 12))}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(h.wife.totalAnnualTax)})</span>
-                <p className="text-[10px] text-gray-600">연금 {formatManwon(Math.round(h.wife.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.wife.financialTax / 12))}</p>
+                <p className="text-[10px] text-gray-600">연금 {formatManwon(Math.round(h.wife.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.wife.financialTax / 12))}{h.wife.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.wife.separatedDividendTax / 12))}</span>}</p>
               </td>
               <td className="py-2 px-3 text-right">
                 <span className="text-gray-100 font-semibold">{formatManwon(wifeHI.grandTotal)}</span>

@@ -5,7 +5,7 @@ import {
   severanceTax, perPersonYearTaxHealth, pensionTaxCombined,
   stockBalanceFromInflows, stockAccountBalances, totalInflows, sourcesFromAssets,
   comprehensiveTax, comprehensiveTaxBreakdown, estimateHealthInsurance,
-  FINANCIAL_INCOME_LIMIT,
+  separatedDividendTax, FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
 import { realEstatePropertyBases, calcHealthInsurance, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { blendedYield } from '@/lib/corpSim'
@@ -68,6 +68,63 @@ describe('pensionSim 계산', () => {
       - Math.round(40_000_000 * 0.154)
       - Math.round(4_444_444 * 0.13),
     ))
+  })
+
+  it('separatedDividendTax: 2026 선택분리과세(성장배당) 누진 — 지방세 포함', () => {
+    expect(separatedDividendTax(0)).toBe(0)
+    // 2천만 이하 15.4% (기본 원천징수율과 동일)
+    expect(separatedDividendTax(20_000_000)).toBe(Math.round(20_000_000 * 0.154))
+    // 2천만~3억: 308만 + 초과분 22% → 6,000만 = 1,188만
+    expect(separatedDividendTax(60_000_000)).toBe(Math.round(3_080_000 + 40_000_000 * 0.22))
+    // 3억 경계: 308만 + 2.8억×22% = 6,468만
+    expect(separatedDividendTax(300_000_000)).toBe(Math.round(3_080_000 + 280_000_000 * 0.22))
+    // 50억 경계: 6,468만 + 47억×27.5% = 13억5,718만
+    expect(separatedDividendTax(5_000_000_000)).toBe(Math.round(64_680_000 + 4_700_000_000 * 0.275))
+    // 50억 초과: +33%
+    expect(separatedDividendTax(6_000_000_000)).toBe(Math.round(1_357_180_000 + 1_000_000_000 * 0.33))
+  })
+
+  it('comprehensiveTaxBreakdown: 성장배당 선택분리과세 — 종합합산·가산 제외', () => {
+    // 금융소득 6,000만 전액 선택분리과세 → 종합합산 0, 가산 0, 세금 = 누진 분리과세만
+    const t = comprehensiveTaxBreakdown(60_000_000, 0, 1_500_000, { separatedDividend: 60_000_000 })
+    expect(t.separatedDividend).toBe(60_000_000)
+    expect(t.consolidatedFinancial).toBe(0)
+    expect(t.dividendGrossUp).toBe(0)
+    expect(t.comprehensiveTax).toBe(0)
+    expect(t.totalFinancialTax).toBe(separatedDividendTax(60_000_000))
+    // 절반만 성장배당: 일반 3,000만(2천만 분리 + 1천만 종합) + 성장 3,000만 별도 누진
+    const half = comprehensiveTaxBreakdown(60_000_000, 0, 1_500_000, { separatedDividend: 30_000_000 })
+    expect(half.separatedTax).toBe(Math.round(20_000_000 * 0.154))
+    expect(half.consolidatedFinancial).toBe(10_000_000)
+    expect(half.totalFinancialTax).toBe(
+      Math.round(20_000_000 * 0.154) + half.comprehensiveTax + separatedDividendTax(30_000_000))
+    // 초과 지정은 금융소득으로 클램프
+    expect(comprehensiveTaxBreakdown(10_000_000, 0, 1_500_000, { separatedDividend: 50_000_000 }).separatedDividend)
+      .toBe(10_000_000)
+    // 고소득(기타소득 3억)에서는 선택분리과세가 종합과세보다 유리
+    const conv = comprehensiveTaxBreakdown(60_000_000, 300_000_000, 1_500_000)
+    const sel = comprehensiveTaxBreakdown(60_000_000, 300_000_000, 1_500_000, { separatedDividend: 60_000_000 })
+    expect(sel.totalFinancialTax).toBeLessThan(conv.totalFinancialTax)
+  })
+
+  it('growthDividendRatio: 계좌 설정 비율이 1인별 선택분리과세로 반영', () => {
+    const p = plan({
+      sources: [],
+      stockAccount: {
+        husband: { extraAmount: 0, dividendYield: 6, growthRate: 0, growthDividendRatio: 100 },
+        wife:    { extraAmount: 0, dividendYield: 6, growthRate: 0 },
+      },
+      stockOwnership: { husband: 100, wife: 0 },
+      allocations: [{ lumpsumId: 's', irpAmount: 0, stockAmount: 500_000_000 }],
+      startYear: 2029, refYear: 2029,
+    })
+    const r = computePensionVehiclePerPerson(p, { nationalPensions: [] })
+    // 남편 배당 3,000만(5억×6%) 전액 선택분리과세 → 종합합산 0
+    expect(r.husband.separatedDividend).toBe(30_000_000)
+    expect(r.husband.consolidatedFinancial).toBe(0)
+    expect(r.husband.financialTax).toBe(separatedDividendTax(30_000_000))
+    // 와이프는 비율 미설정(0) → 기존 종합과세 경로, 선택분리과세 없음
+    expect(r.wife.separatedDividend).toBe(0)
   })
 
   it('stockBalanceFromInflows / totalInflows: 분배된 IRP·주식 합산', () => {

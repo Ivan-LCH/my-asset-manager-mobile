@@ -267,6 +267,7 @@ export interface StockAccountConfig {
   extraAmount: number     // 연결금액(목돈 분배) 외 추가 수동 금액(원)
   dividendYield: number   // 계좌 전체 배당률 (%)
   growthRate: number      // 계좌 전체 연평균 주가상승률 (%)
+  growthDividendRatio?: number // 성장배당(선택분리과세) 비율 (%) — 0/미설정=기존 종합과세. 2026~2028 한시 제도
 }
 
 export interface PensionSimPlan {
