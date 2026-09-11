@@ -48,25 +48,25 @@ describe('pensionSim 계산', () => {
     const t2 = comprehensiveTaxBreakdown(60_000_000, 0, 1_500_000)
     expect(t2.withheldCredit).toBe(Math.round(40_000_000 * 0.154))
     expect(t2.comprehensiveTax).toBe(0)
-    // 금융소득 1억: 초과 8,000만 + 가산 800만 − 공제 150만 → 과표 8,650만
-    // 종합세 − 기납부 1,232만 − 배당공제 104만 (0 하한)
+    // 금융소득 1억: 초과 8,000만 + 가산 889만(10/90) − 공제 150만 → 과표 8,739만
+    // 종합세 − 기납부 1,232만 − 배당공제 116만 (0 하한)
     const t3 = comprehensiveTaxBreakdown(100_000_000, 0, 1_500_000)
-    expect(t3.comprehensiveTaxable).toBe(86_500_000)
+    expect(t3.comprehensiveTaxable).toBe(87_388_889)
     expect(t3.totalFinancialTax).toBe(t3.separatedTax + t3.comprehensiveTax)
   })
 
-  it('comprehensiveTaxBreakdown: 배당가산(10%)·배당세액공제(가산액×13%) 반영', () => {
-    // 금융소득 6,000만: 초과 4,000만 → 가산 400만 → 과표 4,000+400-150 = 4,250만
+  it('comprehensiveTaxBreakdown: 배당가산(10/90≈11.1%)·배당세액공제(가산액×13%) 반영', () => {
+    // 금융소득 6,000만: 초과 4,000만 → 가산 444만(10/90) → 과표 4,000+444-150 = 4,294만
     const t = comprehensiveTaxBreakdown(60_000_000, 0, 1_500_000)
-    expect(t.dividendGrossUp).toBe(4_000_000)
-    expect(t.dividendCredit).toBe(Math.round(4_000_000 * 0.13))
-    expect(t.comprehensiveTaxable).toBe(42_500_000)
-    // 종합세 = 누진세(4,250만) − 기납부(4,000만×15.4%) − 배당공제(52만), 0 하한
+    expect(t.dividendGrossUp).toBe(4_444_444)
+    expect(t.dividendCredit).toBe(Math.round(4_444_444 * 0.13))
+    expect(t.comprehensiveTaxable).toBe(42_944_444)
+    // 종합세 = 누진세(4,294만) − 기납부(4,000만×15.4%) − 배당공제(58만), 0 하한
     expect(t.comprehensiveTax).toBe(Math.max(
       0,
-      comprehensiveTax(42_500_000)
+      comprehensiveTax(42_944_444)
       - Math.round(40_000_000 * 0.154)
-      - Math.round(4_000_000 * 0.13),
+      - Math.round(4_444_444 * 0.13),
     ))
   })
 

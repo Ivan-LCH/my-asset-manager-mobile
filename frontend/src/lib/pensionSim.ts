@@ -67,9 +67,11 @@ export function comprehensiveTax(taxableIncome: number): number {
 export const SEPARATED_TAX_RATE = 0.154
 
 /** 배당가산율 — 종합과세되는 배당(2천만 초과분)에 법인세액상당액 가산.
- *  현행(법인세 최저세율 기준) 추정치 10%. 대주주·비상장 원칙, 상장 소액주주는 미적용이지만
+ *  배당은 법인세 후 금액이므로 가산율 = t/(1−t). 2026 세제개편 최저세율 t=10% 기준
+ *  10/90 ≈ 11.11%. (구 최저세율 9% 시 9/91 ≈ 9.89%여서 종전엔 10% 근사치 사용)
+ *  대주주·비상장 원칙, 상장 소액주주는 미적용이지만
  *  시뮬레이션 단순화로 종합과세 배당 전체에 균일 적용. */
-export const DIVIDEND_GROSS_UP_RATE = 0.10
+export const DIVIDEND_GROSS_UP_RATE = 10 / 90
 /** 배당세액공제율 — 배당가산액의 13% (이중과세 경감 세액공제) */
 export const DIVIDEND_TAX_CREDIT_RATE = 0.13
 
