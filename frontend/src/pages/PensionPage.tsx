@@ -157,7 +157,8 @@ export default function PensionPage() {
 
   const modalAsset = allAssets.find((a) => a.id === modalId) ?? null
   const currentAge = resolveAge(settings)
-  const retirementAge = resolveRetirementYear(settings) - currentAge
+  // 은퇴 연령 = 현재 나이 + (은퇴 예정 연도 − 올해). resolveRetirementYear은 '연도'를 반환하므로 나이에서 직접 빼면 안 됨
+  const retirementAge = currentAge + Math.max(0, resolveRetirementYear(settings) - new Date().getFullYear())
   const pensionLikeAssets = allAssets.filter((a) => {
     if (a.type === 'PENSION') return true
     if ((a.type === 'STOCK' || a.type === 'SAVINGS') && (a.detail as StockDetail & SavingsDetail)?.isPensionLike) return true
@@ -165,7 +166,7 @@ export default function PensionPage() {
   })
   const { rows: simData, sources: simSources } = buildSimulation(pensionLikeAssets, currentAge, retirementAge)
   const peakMonthly = Math.max(...simData.map((r) => r.total), 0)
-  const retirementYear = new Date().getFullYear() + (retirementAge - currentAge)
+  const retirementYear = resolveRetirementYear(settings)
   const retirementRow = simData.find((r) => r.year >= retirementYear)
   const active = pensionAssets.filter((a) => !a.disposalDate)
 
