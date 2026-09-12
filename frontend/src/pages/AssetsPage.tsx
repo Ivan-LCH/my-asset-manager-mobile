@@ -4,17 +4,18 @@ import RealEstatePage from './RealEstatePage'
 import StockPage from './StockPage'
 import PensionPage from './PensionPage'
 import AssetPage from './AssetPage'
+import { SegmentedTabs } from '@/components/common/SegmentedTabs'
 import type { AssetType } from '@/types'
 
 // 유형별 아이콘/색 (칩)
-const CHIPS: { type: AssetType | 'ALL'; label: string; emoji: string }[] = [
-  { type: 'ALL',         label: '전체',   emoji: '📋' },
-  { type: 'STOCK',       label: '주식',   emoji: '📈' },
-  { type: 'REAL_ESTATE', label: '부동산', emoji: '🏠' },
-  { type: 'PENSION',     label: '연금',   emoji: '🛡️' },
-  { type: 'SAVINGS',     label: '예적금', emoji: '💰' },
-  { type: 'PHYSICAL',    label: '실물',   emoji: '💎' },
-  { type: 'ETC',         label: '기타',   emoji: '🎵' },
+const CHIPS: { value: AssetType | 'ALL'; label: string; emoji: string }[] = [
+  { value: 'ALL',         label: '전체',   emoji: '📋' },
+  { value: 'STOCK',       label: '주식',   emoji: '📈' },
+  { value: 'REAL_ESTATE', label: '부동산', emoji: '🏠' },
+  { value: 'PENSION',     label: '연금',   emoji: '🛡️' },
+  { value: 'SAVINGS',     label: '예적금', emoji: '💰' },
+  { value: 'PHYSICAL',    label: '실물',   emoji: '💎' },
+  { value: 'ETC',         label: '기타',   emoji: '🎵' },
 ]
 
 /**
@@ -35,23 +36,7 @@ export default function AssetsPage() {
   return (
     <div>
       {/* 유형 칩 — 스크롤해도 상단 고정 */}
-      <div className="sticky top-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 py-2 flex gap-1.5 overflow-x-auto no-scrollbar">
-          {CHIPS.map((c) => (
-            <button
-              key={c.type}
-              onClick={() => setType(c.type)}
-              className={`shrink-0 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                type === c.type
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-              }`}
-            >
-              {c.emoji} {c.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SegmentedTabs tabs={CHIPS} value={type} onChange={setType} />
 
       {/* 선택 유형의 기존 페이지 (그대로 재사용) */}
       {type === 'STOCK'       && <StockPage />}

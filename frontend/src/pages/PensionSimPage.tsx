@@ -2,7 +2,8 @@
 // 일반주식계좌 = 남편/와이프 각 계좌(잔액·배당률·상승률 입력). 종목 단위 입력은 사용 안 함.
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Save, ChevronDown, AlertTriangle, ArrowLeft } from 'lucide-react'
+import { Save, AlertTriangle, ArrowLeft } from 'lucide-react'
+import { Expander, AmountInput, NumInput, Row } from '@/components/sim'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
@@ -21,67 +22,6 @@ import {
 } from '@/types'
 
 const uid = () => Math.random().toString(36).slice(2, 9)
-
-// ── 헬퍼 ───────────────────────────────────────────────────
-function numFmt(v: number) { return v > 0 ? Math.round(v).toLocaleString() : '' }
-function parseNum(s: string) { return Number(s.replace(/,/g, '')) || 0 }
-
-function Expander({ title, badge, children, defaultOpen = false }: {
-  title: string; badge?: string; children: React.ReactNode; defaultOpen?: boolean
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-      <button onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 text-left hover:bg-gray-750 transition-colors">
-        <span className="text-sm font-semibold text-gray-200">{title}</span>
-        <div className="flex items-center gap-2 shrink-0">
-          {badge && <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded-full whitespace-nowrap">{badge}</span>}
-          <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </div>
-      </button>
-      {open && <div className="px-4 sm:px-5 pb-5 pt-1 border-t border-gray-700 space-y-3">{children}</div>}
-    </div>
-  )
-}
-
-function AmountInput({ value, onChange, placeholder = '금액' }: {
-  value: number; onChange: (v: number) => void; placeholder?: string
-}) {
-  const [raw, setRaw] = useState(value > 0 ? numFmt(value) : '')
-  useEffect(() => { setRaw(value > 0 ? numFmt(value) : '') }, [value])
-  return (
-    <input type="text" inputMode="numeric"
-      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
-      placeholder={placeholder} value={raw}
-      onChange={(e) => setRaw(e.target.value)}
-      onBlur={() => { const n = parseNum(raw); onChange(n); setRaw(n > 0 ? numFmt(n) : '') }}
-    />
-  )
-}
-
-function NumInput({ value, onChange, suffix }: { value: number; onChange: (v: number) => void; suffix?: string }) {
-  return (
-    <div className="flex items-center gap-1">
-      <input type="number" inputMode="decimal"
-        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
-        value={value || ''} onChange={(e) => onChange(Number(e.target.value))} />
-      {suffix && <span className="text-xs text-gray-500 shrink-0">{suffix}</span>}
-    </div>
-  )
-}
-
-function Row({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <div className="py-1">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-gray-400 shrink-0">{label}</span>
-        <div className="w-40 sm:w-48 shrink-0">{children}</div>
-      </div>
-      {hint && <p className="text-[11px] text-gray-600 mt-0.5 sm:text-right sm:mr-48">{hint}</p>}
-    </div>
-  )
-}
 
 /** 명의 프리셋 버튼행 */
 function OwnershipPreset({ value, onChange, disabled, locked }: {

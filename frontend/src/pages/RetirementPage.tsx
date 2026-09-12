@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, RotateCcw, Save, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Save } from 'lucide-react'
+import { Expander, AmountInput, TextInput, YearInput, Section, InfoTooltip } from '@/components/sim'
 import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
@@ -133,11 +134,6 @@ const EMPTY_PLAN: RetirementPlan = {
 }
 
 // ── 유틸 ───────────────────────────────────────────────────
-function numFmt(v: number | string) {
-  const n = typeof v === 'string' ? Number(v.replace(/,/g, '')) : v
-  return isNaN(n) ? '' : n.toLocaleString()
-}
-function parseNum(s: string) { return Number(s.replace(/,/g, '')) || 0 }
 /** 안전 숫자 변환 (undefined/문자열/NaN → 0). 가져온 plan 항목의 누락 필드 대비 */
 const num = (v: unknown): number => {
   const n = Number(v)
@@ -153,117 +149,7 @@ function pnlColor(v: number) {
   return 'text-gray-400'
 }
 
-// ── 섹션 래퍼 ─────────────────────────────────────────────
-function Section({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-3">{children}</div>
-}
-
-// ── Expander ───────────────────────────────────────────────
-function Expander({
-  title, badge, children, defaultOpen = false,
-}: {
-  title: string
-  badge?: string
-  children: React.ReactNode
-  defaultOpen?: boolean
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 text-left hover:bg-gray-750 transition-colors"
-      >
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <span className="text-sm font-semibold text-gray-200 truncate">{title}</span>
-          {badge && <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">{badge}</span>}
-        </div>
-        <ChevronDown
-          className={`w-4 h-4 text-gray-500 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open && (
-        <div className="px-5 pb-5 pt-1 border-t border-gray-700 space-y-5">
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── 인풋 ──────────────────────────────────────────────────
-function AmountInput({
-  value, onChange, placeholder = '금액',
-}: { value: number; onChange: (v: number) => void; placeholder?: string }) {
-  const [raw, setRaw] = useState(value > 0 ? numFmt(value) : '')
-  useEffect(() => { setRaw(value > 0 ? numFmt(value) : '') }, [value])
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
-        focus:outline-none focus:border-blue-500 text-right"
-      placeholder={placeholder}
-      value={raw}
-      onChange={(e) => setRaw(e.target.value)}
-      onBlur={() => { const n = parseNum(raw); onChange(n); setRaw(n > 0 ? numFmt(n) : '') }}
-    />
-  )
-}
-
-function TextInput({
-  value, onChange, placeholder = '',
-}: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <input
-      type="text"
-      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
-        focus:outline-none focus:border-blue-500"
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  )
-}
-
-// ── 정보 툴팁 ──────────────────────────────────────────────
-function InfoTooltip({ text }: { text: string }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <span className="relative inline-flex items-center">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className="w-4 h-4 rounded-full bg-gray-600 hover:bg-gray-500 text-gray-300 text-[10px] font-bold
-          flex items-center justify-center leading-none transition-colors shrink-0"
-      >
-        ?
-      </button>
-      {open && (
-        <span className="absolute left-6 top-1/2 -translate-y-1/2 z-50 w-64
-          bg-gray-900 border border-gray-600 rounded-xl px-3 py-2.5 shadow-2xl
-          text-[11px] text-gray-300 leading-relaxed whitespace-pre-line pointer-events-none">
-          {text}
-        </span>
-      )}
-    </span>
-  )
-}
-
-function YearInput({
-  value, onChange,
-}: { value: number; onChange: (v: number) => void }) {
-  return (
-    <input
-      type="number" inputMode="decimal"
-      className="w-24 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
-        focus:outline-none focus:border-blue-500"
-      value={value || ''}
-      onChange={(e) => onChange(Number(e.target.value))}
-    />
-  )
-}
+// ── 섹션 래퍼 · Expander · 인풋 · 정보 툴팁: @/components/sim 공용 사용 ──
 
 // ── 월 생활비 섹션 ─────────────────────────────────────────
 function ExpensesSection({

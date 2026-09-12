@@ -2,7 +2,8 @@
 // 생활비/여행/의료비 + 목돈수입/긴급자금 + IRP 투자 포트폴리오.
 // 결과는 연금시뮬 / 법인시뮬 / 현금흐름(은퇴계획)에서 확인.
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, RotateCcw, Save, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Save } from 'lucide-react'
+import { Expander, AmountInput, TextInput, YearInput, TimesInput, Section } from '@/components/sim'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { usePortfolio, useSavePortfolio, DEFAULT_PORTFOLIO } from '@/hooks/usePortfolio'
@@ -27,75 +28,6 @@ const DEFAULT_EXPENSES: ExpenseItem[] = [
 ]
 
 // ── 유틸/헬퍼 ──────────────────────────────────────────────
-function numFmt(v: number | string) {
-  const n = typeof v === 'string' ? Number(v.replace(/,/g, '')) : v
-  return isNaN(n) ? '' : n.toLocaleString()
-}
-function parseNum(s: string) { return Number(s.replace(/,/g, '')) || 0 }
-
-function Section({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-3">{children}</div>
-}
-
-function Expander({ title, badge, children, defaultOpen = false }: {
-  title: string; badge?: string; children: React.ReactNode; defaultOpen?: boolean
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-      <button onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 text-left hover:bg-gray-750 transition-colors">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <span className="text-sm font-semibold text-gray-200 truncate">{title}</span>
-          {badge && <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">{badge}</span>}
-        </div>
-        <ChevronDown className={`w-4 h-4 text-gray-500 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && <div className="px-5 pb-5 pt-1 border-t border-gray-700 space-y-5">{children}</div>}
-    </div>
-  )
-}
-
-function AmountInput({ value, onChange, placeholder = '금액' }: {
-  value: number; onChange: (v: number) => void; placeholder?: string
-}) {
-  const [raw, setRaw] = useState(value > 0 ? numFmt(value) : '')
-  useEffect(() => { setRaw(value > 0 ? numFmt(value) : '') }, [value])
-  return (
-    <input type="text" inputMode="numeric"
-      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500 text-right"
-      placeholder={placeholder} value={raw}
-      onChange={(e) => setRaw(e.target.value)}
-      onBlur={() => { const n = parseNum(raw); onChange(n); setRaw(n > 0 ? numFmt(n) : '') }} />
-  )
-}
-
-function TextInput({ value, onChange, placeholder = '' }: {
-  value: string; onChange: (v: string) => void; placeholder?: string
-}) {
-  return (
-    <input type="text"
-      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
-      placeholder={placeholder} value={value}
-      onChange={(e) => onChange(e.target.value)} />
-  )
-}
-
-function YearInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <input type="number" inputMode="decimal"
-      className="w-24 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
-      value={value || ''} onChange={(e) => onChange(Number(e.target.value))} />
-  )
-}
-
-function TimesInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <input type="number" inputMode="decimal" min={0}
-      className="w-12 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500 text-center"
-      value={value || ''} onChange={(e) => onChange(Number(e.target.value))} />
-  )
-}
 
 // ── 월 생활비 섹션 ─────────────────────────────────────────
 function ExpensesSection({ items, onChange }: { items: ExpenseItem[]; onChange: (items: ExpenseItem[]) => void }) {
