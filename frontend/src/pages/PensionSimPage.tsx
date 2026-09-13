@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Save, ArrowLeft } from 'lucide-react'
-import { Expander, AmountInput, NumInput, Row, InfoNote } from '@/components/sim'
+import { Expander, AmountInput, NumInput, YearInput, Row, InfoNote } from '@/components/sim'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
@@ -255,7 +255,7 @@ export default function PensionSimPage() {
             {/* ═══ 입력 (사용자가 정하는 것) ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-gray-200">✏️ 입력</span>
-        <span className="text-xs text-gray-600">목돈 자금 처리 · 일반주식계좌 · 과세 기준</span>
+        <span className="text-xs text-gray-600">목돈 자금 처리 · 일반주식계좌 · 과세·수령 기준</span>
       </div>
 
 {/* + 목돈 분배 (은퇴계획 목돈수입 → 어디로) */}
@@ -345,12 +345,16 @@ export default function PensionSimPage() {
         </p>
       </Expander>
 
-      {/* 과세 기준 (종합소득공제) — 은퇴준비에서 이관, 세금·건보 결과에 직접 반영 (UI 간소화 ③) */}
-      <Expander title="⚙️ 과세 기준 (종합소득공제)" badge={`1인별 ${formatManwon(perPersonDed.husband)}`}>
+      {/* 과세·수령 기준 — 은퇴준비에서 이관(과세) + 숨은 기본값 공개(수령개시) (UI 간소화 ③) */}
+      <Expander title="⚙️ 과세·수령 기준" badge={`1인별 공제 ${formatManwon(perPersonDed.husband)}`}>
         <InfoNote summary="기본값 그대로 사용 — 필요 시 여기서 편집">
+          수령개시연도 = IRP 잔액이 성장한 뒤 인출을 시작하는 연도 (현금흐름 계좌 잔액 표 기준).
           연금소득공제 1,200만원은 법정 고정액으로 자동 적용.
           1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2 — 아래 결과의 세금에 그대로 반영.
         </InfoNote>
+        <Row label="수령개시연도" hint="이때부터 IRP·주식계좌 인출 시작 · 수령 기간 30년 고정">
+          <YearInput value={plan.startYear} onChange={(v) => update('startYear', v)} />
+        </Row>
         <Row label="기타 종합소득(연)" hint="남편 근로/사업 소득 등">
           <AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} />
         </Row>
