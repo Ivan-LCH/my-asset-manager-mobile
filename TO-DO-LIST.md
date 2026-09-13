@@ -23,4 +23,11 @@
 
 - [O] **SMOKE-1. 전 페이지 회귀 스모크** — 세제개편 3커밋 + PersonKpi 제거 사이드이펙트 점검. 9개 라우트(대시보드·자산 3종·prep·연금시뮬·법인시뮬·현금흐름·설정) 페이지에러/콘솔에러/빌드 오버레이 0, 식별 마커 전부 확인
 - [O] **FIX-1. PensionPage 은퇴연령 계산 버그** — `resolveRetirementYear`(연도 반환)에서 나이를 직접 빼는 오류: 2051−40=**"은퇴 연령 2011세"** 표시 + retirementYear 3997 → "은퇴 시 월 수령" 빈값(-). `currentAge + (retirementYear − 올해)`로 수정 → 65세 / ₩7,447,387 복원
+### 🟣 UI 간소화 (2026-09-13)
+> 전체 아키텍처 검토 → "더 쉬운 UI" 4단계 리팩터링. 단계별 tsc+테스트+스모크 검증 후 커밋.
+
+- [O] **UI-1. 시뮬 페이지 UI 프리미티브 공용 모듈 추출** (30f5ebf) — Expander/Section/Row/AmountInput/NumInput/TextInput/YearInput/TimesInput/InfoNote/InfoTooltip → components/sim. 시뮬 3개 페이지 중복 UI 코드 통합
+- [O] **UI-2. 설명박스 접이식 폴딩 + 폰트 12px 통일** (9b008f3) — 2줄 이상 정적 설명 InfoNote는 기본 접힘(요약 1줄+펼치기), 미세 폰트 11px→12px. PensionSim 3건·CorpSim 7건 단축
+- [O] **UI-3. RetirementPage 정리·분리 + 자산 칩 실물·기타 병합** (66aab87) — 1320줄→456줄: 미사용 입력 섹션 5개 제거(입력은 은퇴 준비 탭 담당), 순수 로직 lib/retirementPlan·retirementCashflow 분리, 표 3종 components/retirement 컴포넌트화, 건보 구버전 사본→lib 공식 60등급 표 병합(비연동 모드 수치 정정). 자산 칩 7→6(실물·기타 병합, 구값 PHYSICAL→ETC 정규화)
+- [O] **UI-4. pensionSim 편집 진입점 정리** (1f05f92) — 과세구분 칩 선택=즉시 저장("시뮬 저장" 버튼 제거), 은퇴 준비 과세기준 섹션→연금시뮬로 이관(이중 저장 버튼 구조 해소), 미사용 perPersonDed 배지 활용, 헤더 문구 정정
 <!-- 완료 항목은 TO-DO-ARCHIVE.md 로 이동 -->
