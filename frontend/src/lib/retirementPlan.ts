@@ -1,6 +1,6 @@
 // 은퇴 계획 공통 기본값·포맷 유틸 (UI 간소화 ④).
 // RetirementPage(현금흐름 뷰)·RetirementPrepPage(입력 뷰)가 공유 — 페이지 로컬 2중 정의 해소.
-import type { RetirementPlan, ExpenseItem, HealthInsuranceInputs } from '@/types'
+import type { RetirementPlan, ExpenseItem, HealthInsuranceInputs, LumpsumItem } from '@/types'
 
 export const uid = () => Math.random().toString(36).slice(2, 9)
 
@@ -37,8 +37,33 @@ export const EMPTY_PLAN: RetirementPlan = {
   healthInsurance: DEFAULT_HI,
   linkCorpSim:     false,
   linkPensionSim:  false,
-  holdingTaxAnnual:    4_100_000,   // 보유세(재산세+종부세) 기본 추정치
-  holdingTaxStartYear: 2030,        // 보유세 부과 개시 연도 기본값
+  holdingTaxAnnual:    0,   // 보유세 수동값 (자동 계산이 기본 — holdingTaxAuto)
+  holdingTaxStartYear: undefined,
+  holdingTaxAuto:      true,   // 부동산 자산에서 재산세+종부세 자동 산출
+}
+
+/** 저장된 은퇴계획 정규화 — 누락 필드 기본값 보강 + 구버전 데이터 변환.
+ *  RetirementPage 로드 로직의 공용화(연도별 대시보드 등 분석 화면 공유). */
+export function normalizeSavedPlan(saved: Partial<RetirementPlan>): RetirementPlan {
+  return {
+    expenses:       saved.expenses       ?? DEFAULT_EXPENSES,
+    travel:         saved.travel         ?? [],
+    medicalMonthly: saved.medicalMonthly ?? 200_000,
+    lumpsum:        (saved.lumpsum ?? []).map((l) => ({
+      ...l,
+      // 구버전 정규화: useEndYear 제거, taxKind 'rental' → 'other'
+      taxKind: ((l as { taxKind?: string }).taxKind === 'rental' ? 'other' : (l.taxKind ?? 'other')) as LumpsumItem['taxKind'],
+    })),
+    emergency:      saved.emergency      ?? [],
+    retirementYear:  saved.retirementYear  ?? new Date().getFullYear() + 10,
+    healthInsurance: saved.healthInsurance  ? { ...DEFAULT_HI, ...saved.healthInsurance } : DEFAULT_HI,
+    linkCorpSim:     saved.linkCorpSim ?? false,
+    linkPensionSim:  saved.linkPensionSim ?? false,
+    // 레거시 병합: 보유세 수동값이 저장돼 있으면 수동으로 로드(값 조용히 변경 금지), 없으면 자동
+    holdingTaxAuto:      saved.holdingTaxAuto ?? (saved.holdingTaxAnnual == null),
+    holdingTaxAnnual:    saved.holdingTaxAnnual ?? 0,
+    holdingTaxStartYear: saved.holdingTaxStartYear ?? undefined,
+  }
 }
 
 /** 안전 숫자 변환 (undefined/문자열/NaN → 0). 가져온 plan 항목의 누락 필드 대비 */

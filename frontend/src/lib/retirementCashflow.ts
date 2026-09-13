@@ -54,6 +54,8 @@ export function buildCashFlow(
   lumpsumOverride?: LumpsumItem[],
   /** 목돈 퇴직소득세 맵 (receiveYear → 세금). cash 유입 중 severance 분. */
   lumpsumTaxByYear?: Map<number, number>,
+  /** 보유세 연도별 맵(자동 계산) — 제공 시 plan의 수동 플랫 값(개시 연도~) 대신 연도별 값 사용. */
+  holdingTaxByYear?: Map<number, number>,
 ): CashFlowRow[] {
   const currentYear = new Date().getFullYear()
   const endYear = currentYear + (100 - currentAge)
@@ -104,10 +106,12 @@ export function buildCashFlow(
 
     // 세금(연) — 종합·연금소득세는 연단위 납부 → 음수로 저장(지출 의미) → 누적에서 그대로 합산.
     // 연동 시 연도별 1인별 산정, 아니면 근사(배당 15.4% + 급여 3%)×12 + 목돈 퇴직소득세
-    // + 보유세(재산세+종부세): 개시 연도부터 매년 합산 (예: 2030 입주 후 부과)
-    const holdingTaxAnnual = year >= (plan.holdingTaxStartYear ?? Infinity)
-      ? (plan.holdingTaxAnnual ?? 0)
-      : 0
+    // + 보유세(재산세+종부세): 자동 맵 제공 시 연도별 값, 아니면 수동 플랫(개시 연도~)
+    const holdingTaxAnnual = holdingTaxByYear
+      ? (holdingTaxByYear.get(year) ?? 0)
+      : year >= (plan.holdingTaxStartYear ?? Infinity)
+        ? (plan.holdingTaxAnnual ?? 0)
+        : 0
     const taxAnnualRaw = (linked
       ? (linked.taxByYear.get(year) ?? 0)
       : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03) * 12)
