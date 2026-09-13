@@ -179,7 +179,7 @@ export default function StockPage() {
         <details className="bg-gray-800 border border-gray-700 rounded-xl">
           <summary className="px-4 py-3 cursor-pointer text-sm font-semibold text-gray-200 flex items-center justify-between">
             <span>🏛️ 계좌별 명의 관리</span>
-            <span className="text-[11px] text-gray-500">계좌 안 모든 종목이 같은 명의 사용</span>
+            <span className="text-xs text-gray-500">계좌 안 모든 종목이 같은 명의 사용</span>
           </summary>
           <div className="px-4 pb-4 pt-1 space-y-3 border-t border-gray-700">
             {accountEntries.map(([acct, list]) => {
@@ -189,13 +189,13 @@ export default function StockPage() {
                 <div key={acct} className="flex items-center justify-between gap-3 py-2 border-b border-gray-700/50 last:border-0">
                   <div className="min-w-0">
                     <p className="text-sm text-gray-100 font-medium truncate">{acct}</p>
-                    <p className="text-[11px] text-gray-500">{list.length}개 종목 · 총 {formatManwon(accountTotal(list))}</p>
+                    <p className="text-xs text-gray-500">{list.length}개 종목 · 총 {formatManwon(accountTotal(list))}</p>
                   </div>
                   <div className="flex gap-1 shrink-0">
                     {(['mine', 'half', 'wife', 'custom'] as const).map((p) => (
                       <button key={p}
                         onClick={() => setAccountOwnership(acct, p === 'mine' ? { husband: 100, wife: 0 } : p === 'half' ? { husband: 50, wife: 50 } : p === 'wife' ? { husband: 0, wife: 100 } : o)}
-                        className={cn('px-2 py-1 text-[10px] rounded transition-colors',
+                        className={cn('px-2 py-1 text-xs rounded transition-colors',
                           preset === p ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}>
                         {p === 'mine' ? '내 100%' : p === 'half' ? '50:50' : p === 'wife' ? '와이프 100%' : '직접'}
                       </button>
@@ -553,24 +553,24 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
             </p>
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
               {isAcct && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-medium">계좌 통합</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-medium">계좌 통합</span>
               )}
               {d?.ticker && (
-                <span className="text-[11px] text-gray-500 font-mono">{d.ticker}</span>
+                <span className="text-xs text-gray-500 font-mono">{d.ticker}</span>
               )}
               {d?.currency && d.currency !== 'KRW' && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-medium">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-medium">
                   {d.currency}
                 </span>
               )}
               {isSold && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">매각</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-medium">매각</span>
               )}
               {asset.acquisitionDate && (
-                <span className="text-[10px] text-gray-500">{asset.acquisitionDate.slice(0, 7)} 취득</span>
+                <span className="text-xs text-gray-500">{asset.acquisitionDate.slice(0, 7)} 취득</span>
               )}
               {weight != null && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">
                   {weight.toFixed(1)}%
                 </span>
               )}
@@ -579,7 +579,7 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
           <div className="text-right shrink-0">
             <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(valKrw)}</p>
             {isFx && rate > 1 && (
-              <p className="text-[11px] text-blue-400 font-mono mt-0.5">{formatPrice(valFx, currency)}</p>
+              <p className="text-xs text-blue-400 font-mono mt-0.5">{formatPrice(valFx, currency)}</p>
             )}
           </div>
         </div>
@@ -588,7 +588,7 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
         <div className="flex items-end justify-between gap-3 mt-2.5 pt-2.5 border-t border-gray-700/60">
           <div className="min-w-0 space-y-0.5">
             {!isSold && !isAcct && (
-              <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+              <div className="flex items-center gap-1.5 flex-wrap text-xs">
                 <span className="text-gray-500">현재가</span>
                 <span className="text-gray-200 font-mono">{formatAvgPrice(currentPrice, currency)}</span>
                 {hasDaily && (
@@ -600,7 +600,7 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
                 )}
               </div>
             )}
-            <div className="flex items-center gap-1.5 text-[11px]">
+            <div className="flex items-center gap-1.5 text-xs">
               {isAcct ? (
                 <span className="text-gray-500">원금 {formatManwon(avgPrice)}</span>
               ) : (
@@ -629,15 +629,15 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
             </div>
             {isFx && rate > 1 ? (
               <>
-                <p className={`text-[11px] font-mono ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                <p className={`text-xs font-mono ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                   {pnlFx >= 0 ? '+' : ''}{formatPrice(pnlFx, currency)}
                 </p>
-                <p className={`text-[11px] ${pnlKrw > 0 ? 'text-emerald-400/70' : pnlKrw < 0 ? 'text-red-400/70' : 'text-gray-500'}`}>
+                <p className={`text-xs ${pnlKrw > 0 ? 'text-emerald-400/70' : pnlKrw < 0 ? 'text-red-400/70' : 'text-gray-500'}`}>
                   {pnlKrw >= 0 ? '+' : ''}{formatManwon(pnlKrw)}
                 </p>
               </>
             ) : (
-              <p className={`text-[11px] ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+              <p className={`text-xs ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
                 {pnlKrw >= 0 ? '+' : ''}{formatManwon(pnlKrw)}
               </p>
             )}

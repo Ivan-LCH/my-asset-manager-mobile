@@ -197,7 +197,7 @@ export default function AssetChart({
                 disabled={disabled}
                 title={disabled ? '단기·중기 기간(1m/3m/1y)에서만 사용 가능합니다' : undefined}
                 className={cn(
-                  'px-2 py-0.5 text-[11px] font-medium rounded-md transition-colors',
+                  'px-2 py-0.5 text-xs font-medium rounded-md transition-colors',
                   active
                     ? 'bg-blue-600 text-white'
                     : disabled
@@ -217,7 +217,7 @@ export default function AssetChart({
                 key={label}
                 onClick={() => setZeroBased(val)}
                 className={cn(
-                  'px-2 py-0.5 text-[11px] font-medium rounded-md transition-colors',
+                  'px-2 py-0.5 text-xs font-medium rounded-md transition-colors',
                   zeroBased === val
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-400 hover:text-gray-200',
@@ -236,7 +236,7 @@ export default function AssetChart({
           {labels.map((label) => (
             <div key={label} className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colorForLabel(label) }} />
-              <span className="text-[10px] text-gray-400">{label}</span>
+              <span className="text-xs text-gray-400">{label}</span>
             </div>
           ))}
         </div>

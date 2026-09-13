@@ -258,7 +258,7 @@ function TravelSection({
               <span>회/년</span>
             </div>
             {item.costPerTrip > 0 && (
-              <p className="text-[11px] text-blue-400">
+              <p className="text-xs text-blue-400">
                 → ~{item.phase1Until}년: {formatManwon(item.phase1Times * item.costPerTrip / 12)}/월
                 &nbsp;·&nbsp;
                 이후: {formatManwon(item.phase2Times * item.costPerTrip / 12)}/월
@@ -305,11 +305,11 @@ function LumpsumSection({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-gray-500 mb-1">수령 연도</p>
+                <p className="text-xs text-gray-500 mb-1">수령 연도</p>
                 <YearInput value={item.receiveYear} onChange={(v) => update(item.id, 'receiveYear', v)} />
               </div>
               <div>
-                <p className="text-[10px] text-gray-500 mb-1">금액</p>
+                <p className="text-xs text-gray-500 mb-1">금액</p>
                 <AmountInput value={item.amount} onChange={(v) => update(item.id, 'amount', v)} />
               </div>
             </div>
@@ -317,12 +317,12 @@ function LumpsumSection({
             <div className="flex gap-1">
               {([['other', '일반(비과세)'], ['severance', '퇴직소득세 적용']] as const).map(([v, label]) => (
                 <button key={v} type="button" onClick={() => update(item.id, 'taxKind', v)}
-                  className={`flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors ${(item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                  className={`flex-1 px-1.5 py-0.5 text-xs rounded transition-colors ${(item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
                   {label}
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-gray-600">{item.receiveYear}년에 {formatManwon(item.amount)} 일회 수령</p>
+            <p className="text-xs text-gray-600">{item.receiveYear}년에 {formatManwon(item.amount)} 일회 수령</p>
           </div>
         ))}
       </div>
@@ -394,7 +394,7 @@ function HealthInsuranceSection({
 
   return (
     <Section>
-      <p className="text-[11px] text-gray-500 -mt-1">
+      <p className="text-xs text-gray-500 -mt-1">
         2025년 기준 · 점수당 {hi.scorePerPoint}원 · 결과는 예측값이며 실제와 차이가 있을 수 있습니다
       </p>
 
@@ -570,7 +570,7 @@ function HealthInsuranceSection({
           </div>
         </div>
         {result.isMinimum && (
-          <p className="text-[11px] text-yellow-500 mt-2">
+          <p className="text-xs text-yellow-500 mt-2">
             ※ 산출된 보험료가 최저보험료(19,780원)보다 낮아 최저보험료가 적용됩니다.
           </p>
         )}
@@ -1031,16 +1031,16 @@ export default function RetirementPage() {
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-200">📊 월 현금흐름 ({retirementYear}년 기준)</h3>
-          <span className="text-[11px] text-gray-500">현황 뷰 — 수입·세금·건보는 시뮬에서 자동 반영</span>
+          <span className="text-xs text-gray-500">현황 뷰 — 수입·세금·건보는 시뮬에서 자동 반영</span>
         </div>
         <div className="grid grid-cols-3 gap-3">
           {/* 월 수입 */}
           <div className="bg-emerald-950/20 rounded-lg p-3">
-            <p className="text-[11px] text-gray-500 mb-1">월 수입</p>
+            <p className="text-xs text-gray-500 mb-1">월 수입</p>
             <p className="text-base sm:text-xl font-bold text-emerald-400">
               {retirementRow ? formatManwon(retirementRow.totalIncome) : '-'}
             </p>
-            <p className="text-[10px] text-gray-600 mt-1 leading-tight">
+            <p className="text-xs text-gray-600 mt-1 leading-tight">
               {retirementRow ? [
                 retirementRow.nationalPensionMonthly > 0 ? `국민 ${fmtM(retirementRow.nationalPensionMonthly)}` : null,
                 retirementRow.pensionMonthly > 0 ? `연금 ${fmtM(retirementRow.pensionMonthly)}` : null,
@@ -1054,11 +1054,11 @@ export default function RetirementPage() {
           </div>
           {/* 월 지출 */}
           <div className="bg-red-950/20 rounded-lg p-3">
-            <p className="text-[11px] text-gray-500 mb-1">월 지출</p>
+            <p className="text-xs text-gray-500 mb-1">월 지출</p>
             <p className="text-base sm:text-xl font-bold text-red-400">
               {retirementRow ? formatManwon(retirementRow.totalExpense) : '-'}
             </p>
-            <p className="text-[10px] text-gray-600 mt-1 leading-tight">
+            <p className="text-xs text-gray-600 mt-1 leading-tight">
               {retirementRow ? [
                 `생활비 ${fmtM(retirementRow.expenseMonthly)}`,
                 retirementRow.travelMonthly + retirementRow.medicalMonthly > 0 ? `여행·의료 ${fmtM(retirementRow.travelMonthly + retirementRow.medicalMonthly)}` : null,
@@ -1068,13 +1068,13 @@ export default function RetirementPage() {
           </div>
           {/* 월 여유/부족 */}
           <div className="bg-gray-900/40 rounded-lg p-3">
-            <p className="text-[11px] text-gray-500 mb-1">월 여유/부족</p>
+            <p className="text-xs text-gray-500 mb-1">월 여유/부족</p>
             <p className={`text-base sm:text-xl font-bold ${pnlColor(retirementRow?.balance ?? 0)}`}>
               {retirementRow
                 ? `${retirementRow.balance >= 0 ? '+' : ''}${formatManwon(retirementRow.balance)}`
                 : '-'}
             </p>
-            <p className="text-[10px] text-gray-600 mt-1">월 누적 × 12 − 세금(연) = 연 누적</p>
+            <p className="text-xs text-gray-600 mt-1">월 누적 × 12 − 세금(연) = 연 누적</p>
           </div>
         </div>
       </div>
@@ -1083,7 +1083,7 @@ export default function RetirementPage() {
 
       {/* 건보·세금은 시뮬에서 산출 (이 페이지 입력 아님) */}
       <div className="bg-blue-500/5 border border-blue-700/30 rounded-xl p-3">
-        <p className="text-[11px] text-blue-200/80 leading-relaxed">
+        <p className="text-xs text-blue-200/80 leading-relaxed">
           💡 세금·건보는 위 <b>연동 설정</b>(법인/연금)에서 자동 산출됩니다.
           {linkMode === 'none' && ' (현재 연동 안함 — 시뮬 페이지에서 설정하거나 연동하면 정확한 값이 반영됩니다.)'}
         </p>
@@ -1117,7 +1117,7 @@ export default function RetirementPage() {
           />
           <span className="text-xs text-gray-500">년~</span>
         </div>
-        <p className="text-[10px] text-gray-500 mt-1.5">
+        <p className="text-xs text-gray-500 mt-1.5">
           기본 410만원 / 2030년~ (매탄주공 입주 이후). 비우면 미반영.
         </p>
       </div>
@@ -1126,7 +1126,7 @@ export default function RetirementPage() {
       {perPerson && (
         <div className="bg-gray-800 border border-blue-700/40 rounded-xl p-4">
           <h3 className="text-sm font-semibold text-gray-300 mb-2">🪙 연금시뮬 연동 — 1인별 세금·건보 (수령개시 이후 연간 기준)</h3>
-          <div className="grid grid-cols-3 gap-3 text-[11px]">
+          <div className="grid grid-cols-3 gap-3 text-xs">
             <div className="bg-gray-900/50 rounded-lg p-3">
               <p className="text-gray-500 mb-1">🧑 남편</p>
               <p className="text-gray-300">세금 <span className="text-red-400 font-semibold">{formatManwon(perPerson.husband.totalAnnualTax)}</span></p>
@@ -1146,7 +1146,7 @@ export default function RetirementPage() {
               <p className="text-gray-300">순취득 <span className="text-emerald-400 font-semibold">{formatManwon(perPerson.totals.netAnnual)}</span></p>
             </div>
           </div>
-          <p className="text-[11px] text-gray-600 mt-2">
+          <p className="text-xs text-gray-600 mt-2">
             금융소득 2천만 한도·연금소득세·건보(부동산 명의 재산분 포함) 각자 적용. 연금·배당은 이 기준으로 현금흐름에 반영됨.
           </p>
         </div>
@@ -1156,7 +1156,7 @@ export default function RetirementPage() {
       {(stockDiv.husband > 0 || stockDiv.wife > 0) && (
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
           <h3 className="text-sm font-semibold text-gray-300 mb-2">📈 STOCK 자산 배당 (1인별, 월)</h3>
-          <div className="grid grid-cols-3 gap-3 text-[11px]">
+          <div className="grid grid-cols-3 gap-3 text-xs">
             <div className="bg-gray-900/50 rounded-lg p-3">
               <p className="text-gray-500 mb-1">🧑 남편</p>
               <p className="text-emerald-400 font-semibold">{formatManwon(stockDiv.husband)}/월</p>
@@ -1173,7 +1173,7 @@ export default function RetirementPage() {
               <p className="text-gray-500">연 {formatManwon((stockDiv.husband + stockDiv.wife) * 12)}</p>
             </div>
           </div>
-          <p className="text-[11px] text-gray-600 mt-2">
+          <p className="text-xs text-gray-600 mt-2">
             실제 STOCK 자산의 배당 이력/예측을 각 자산의 명의 지분으로 분할. 현금흐름 표의 배당 라인은 가구 합계(연 15.4% 근사) 유지.
           </p>
         </div>
@@ -1181,9 +1181,9 @@ export default function RetirementPage() {
 
       {/* 연도별 현금흐름 테이블 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-[11px] font-normal text-gray-500">(단위: 만원 · /월=월, (연)=연간)</span></h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-xs font-normal text-gray-500">(단위: 만원 · /월=월, (연)=연간)</span></h3>
         <div className="overflow-x-auto">
-          <p className="text-[11px] text-gray-500 mb-2 landscape:hidden">📌 세로 모드: 핵심 6열만 표시. 전체 내역은 가로로 돌려보세요.</p>
+          <p className="text-xs text-gray-500 mb-2 landscape:hidden">📌 세로 모드: 핵심 6열만 표시. 전체 내역은 가로로 돌려보세요.</p>
           <table className="w-full text-xs">
             <thead>
               <tr className="text-gray-500 border-b border-gray-700">
@@ -1221,7 +1221,7 @@ export default function RetirementPage() {
                   >
                     <td className={`py-2 pr-2 font-medium whitespace-nowrap ${isRetirementYear ? 'text-blue-400' : 'text-gray-300'}`}>
                       {row.year}<span className="text-gray-500">({row.age})</span>
-                      {isRetirementYear && <span className="ml-1 text-[10px] text-blue-500">은퇴</span>}
+                      {isRetirementYear && <span className="ml-1 text-xs text-blue-500">은퇴</span>}
                     </td>
                     <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-300 bg-emerald-950/30">
                       {row.nationalPensionMonthly > 0 ? fmtM(row.nationalPensionMonthly) : '—'}
@@ -1277,7 +1277,7 @@ export default function RetirementPage() {
       {/* 계좌 잔액 추이 (IRP + 일반주식계좌) */}
       {accountSim.length > 0 && (
         <div className="bg-gray-800 border border-cyan-700/40 rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-gray-300 mb-1">💎 계좌 잔액 추이 <span className="text-[11px] font-normal text-gray-500">(IRP 상승률 {irpGrowthRate.toFixed(1)}% · 배당률 {irpDivYield}% / 주식 남편 {sb ? sb.husband.growthRate.toFixed(1) : 0}%·{sb ? sb.husband.dividendYield : 0}% · 와이프 {sb ? sb.wife.growthRate.toFixed(1) : 0}%·{sb ? sb.wife.dividendYield : 0}%)</span></h3>
+          <h3 className="text-sm font-semibold text-gray-300 mb-1">💎 계좌 잔액 추이 <span className="text-xs font-normal text-gray-500">(IRP 상승률 {irpGrowthRate.toFixed(1)}% · 배당률 {irpDivYield}% / 주식 남편 {sb ? sb.husband.growthRate.toFixed(1) : 0}%·{sb ? sb.husband.dividendYield : 0}% · 와이프 {sb ? sb.wife.growthRate.toFixed(1) : 0}%·{sb ? sb.wife.dividendYield : 0}%)</span></h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -1310,7 +1310,7 @@ export default function RetirementPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-gray-600 mt-2">
+          <p className="text-xs text-gray-600 mt-2">
             IRP: 매년 주가상승 + 배당(연금 우선 충당, 남으면 재투자). 일반주식계좌: 매년 주가상승, 배당은 전액 수입(재투자 X). 총자산 = IRP + 주식 잔액 (현금·부동산 제외).
           </p>
         </div>

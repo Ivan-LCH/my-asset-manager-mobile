@@ -112,7 +112,7 @@ export default function DividendSection({ asset }: Props) {
           /* 계좌 통합: 연간 배당금 단일 입력 (dps × qty 1) */
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
-              <p className="text-[10px] text-gray-500 mb-1">연간 배당금 (KRW)</p>
+              <p className="text-xs text-gray-500 mb-1">연간 배당금 (KRW)</p>
               <input
                 type="number" inputMode="decimal" min="0"
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
@@ -123,7 +123,7 @@ export default function DividendSection({ asset }: Props) {
             </div>
             <div className="flex items-end justify-end gap-3 pb-0.5">
               <div className="text-right">
-                <p className="text-[10px] text-gray-500">월 환산</p>
+                <p className="text-xs text-gray-500">월 환산</p>
                 <p className="text-sm font-bold text-emerald-400">{formatManwon((parseFloat(dps) || 0) / 12)}</p>
               </div>
               <button
@@ -139,7 +139,7 @@ export default function DividendSection({ asset }: Props) {
         <>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">배당수익률 (%)</p>
+            <p className="text-xs text-gray-500 mb-1">배당수익률 (%)</p>
             <input
               type="number" inputMode="decimal" step="0.01" min="0"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
@@ -150,7 +150,7 @@ export default function DividendSection({ asset }: Props) {
             />
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">주당 배당금 (KRW)</p>
+            <p className="text-xs text-gray-500 mb-1">주당 배당금 (KRW)</p>
             <input
               type="number" inputMode="decimal" min="0"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
@@ -161,7 +161,7 @@ export default function DividendSection({ asset }: Props) {
             />
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">배당 주기</p>
+            <p className="text-xs text-gray-500 mb-1">배당 주기</p>
             <select
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100
                 focus:outline-none focus:border-blue-500"
@@ -185,11 +185,11 @@ export default function DividendSection({ asset }: Props) {
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <p className="text-[10px] text-gray-500">연간 예상</p>
+              <p className="text-xs text-gray-500">연간 예상</p>
               <p className="text-sm font-bold text-blue-400">{formatManwon(annualKrw)}</p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-gray-500">월 환산</p>
+              <p className="text-xs text-gray-500">월 환산</p>
               <p className="text-sm font-bold text-emerald-400">{formatManwon(annualKrw / 12)}</p>
             </div>
             <button
@@ -227,7 +227,7 @@ export default function DividendSection({ asset }: Props) {
           <div className="bg-gray-700/40 rounded-xl p-3 space-y-2">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-gray-500 mb-1">수령일</p>
+                <p className="text-xs text-gray-500 mb-1">수령일</p>
                 <input
                   type="date"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100
@@ -237,7 +237,7 @@ export default function DividendSection({ asset }: Props) {
                 />
               </div>
               <div>
-                <p className="text-[10px] text-gray-500 mb-1">수령액 (KRW)</p>
+                <p className="text-xs text-gray-500 mb-1">수령액 (KRW)</p>
                 <input
                   type="text" inputMode="numeric"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100
@@ -249,7 +249,7 @@ export default function DividendSection({ asset }: Props) {
               </div>
               {currency !== 'KRW' && (
                 <div>
-                  <p className="text-[10px] text-gray-500 mb-1">외화 금액 ({currency})</p>
+                  <p className="text-xs text-gray-500 mb-1">외화 금액 ({currency})</p>
                   <input
                     type="text" inputMode="numeric"
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100
@@ -261,7 +261,7 @@ export default function DividendSection({ asset }: Props) {
                 </div>
               )}
               <div>
-                <p className="text-[10px] text-gray-500 mb-1">메모</p>
+                <p className="text-xs text-gray-500 mb-1">메모</p>
                 <input
                   type="text"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-gray-100

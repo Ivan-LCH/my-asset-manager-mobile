@@ -29,7 +29,7 @@ export default function PeriodFilter({ value, onChange, options }: PeriodFilterP
         value={value}
         onChange={(e) => onChange(e.target.value as Period)}
         aria-label="기간"
-        className="sm:hidden bg-gray-800 border border-gray-700 rounded-md px-2 py-1 text-[11px] text-gray-200 focus:outline-none focus:border-blue-500"
+        className="sm:hidden bg-gray-800 border border-gray-700 rounded-md px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
       >
         {shown.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>

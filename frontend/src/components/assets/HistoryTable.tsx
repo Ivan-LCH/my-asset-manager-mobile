@@ -152,7 +152,7 @@ export default function HistoryTable({ asset }: Props) {
                     type="number" inputMode="decimal" value={fPrice} onChange={(e) => setFPrice(+e.target.value)}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
                   />
-                  {!editing && priceMsg && <p className="text-[10px] text-blue-400/80 mt-1">{priceMsg}</p>}
+                  {!editing && priceMsg && <p className="text-xs text-blue-400/80 mt-1">{priceMsg}</p>}
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">수량</label>

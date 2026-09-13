@@ -119,9 +119,9 @@ export default function StockSearch({ koreanOnly, onSelect, placeholder = '종�
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm text-gray-100 truncate">{r.name}</p>
-                  <p className="text-[10px] text-gray-500">{r.ticker} · {r.exchange}</p>
+                  <p className="text-xs text-gray-500">{r.ticker} · {r.exchange}</p>
                 </div>
-                <div className="text-right text-[10px] shrink-0">
+                <div className="text-right text-xs shrink-0">
                   {r.yield != null && <p className="text-emerald-400">배당 {r.yield}%</p>}
                   {r.growth != null && <p className="text-cyan-400">상승 {r.growth}%</p>}
                 </div>

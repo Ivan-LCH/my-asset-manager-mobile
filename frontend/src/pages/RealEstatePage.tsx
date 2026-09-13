@@ -123,14 +123,14 @@ function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void 
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-100 truncate group-hover:text-blue-300 transition-colors">{asset.name}</p>
-            <p className="text-[11px] text-gray-500 truncate mt-0.5 flex items-center gap-1.5">
+            <p className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1.5">
               <span className="truncate">{d?.address ?? '-'}</span>
               {asset.acquisitionDate && <span className="shrink-0">· {asset.acquisitionDate.slice(0, 7)} 취득</span>}
               <OwnershipBadge ownership={asset.ownership} />
             </p>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-[10px] text-gray-500">{isSold ? '매각가' : '시세'}</p>
+            <p className="text-xs text-gray-500">{isSold ? '매각가' : '시세'}</p>
             <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(val)}</p>
           </div>
         </div>
@@ -138,18 +138,18 @@ function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void 
         {/* 뱃지 */}
         <div className="flex items-center gap-1 mt-1.5 flex-wrap">
           {d?.isOwned
-            ? <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/20 text-blue-400">자가</span>
-            : <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-700 text-gray-400">임대</span>}
+            ? <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-400">자가</span>
+            : <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-400">임대</span>}
           {d?.hasTenant && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400">세입자</span>
+            <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400">세입자</span>
           )}
           {isSold && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400">매각</span>
+            <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400">매각</span>
           )}
         </div>
 
         {/* 하단 지표 4칸 */}
-        <div className="grid grid-cols-4 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-[11px]">
+        <div className="grid grid-cols-4 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-xs">
           <div className="min-w-0">
             <p className="text-gray-500 mb-0.5">순자산</p>
             <p className="text-blue-400 font-semibold truncate">{formatManwon(equity)}</p>

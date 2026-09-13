@@ -306,7 +306,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
       {isAccountLevel && !isSold && tab === 'info' && (
         <div className="bg-gray-700/40 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] text-gray-500 mb-0.5">현재 평가액</p>
+            <p className="text-xs text-gray-500 mb-0.5">현재 평가액</p>
             {editingVal ? (
               <div className="flex items-center gap-1">
                 <input
@@ -340,12 +340,12 @@ export default function AssetDetail({ asset, chartData }: Props) {
                 className="flex items-center gap-1.5 group/val">
                 <span className="text-sm font-semibold text-gray-100">{formatMoney(a.currentValue)}</span>
                 <Pencil className="w-3 h-3 text-gray-600 group-hover/val:text-blue-400 transition-colors" />
-                <span className="text-[10px] text-gray-500">평가액 갱신</span>
-                {lastUpdate && <span className="text-[10px] text-gray-600">· {lastUpdate}</span>}
+                <span className="text-xs text-gray-500">평가액 갱신</span>
+                {lastUpdate && <span className="text-xs text-gray-600">· {lastUpdate}</span>}
               </button>
             )}
           </div>
-          <p className="text-[10px] text-gray-600 text-right shrink-0">계좌 전체 금액을<br />직접 입력해 갱신</p>
+          <p className="text-xs text-gray-600 text-right shrink-0">계좌 전체 금액을<br />직접 입력해 갱신</p>
         </div>
       )}
 

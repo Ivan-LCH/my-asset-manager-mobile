@@ -232,7 +232,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
           </label>
           <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
           {type === 'STOCK' && stockMode === 'stock' && priceHint && (
-            <p className="text-[10px] text-blue-400/80 mt-1">{priceHint}</p>
+            <p className="text-xs text-blue-400/80 mt-1">{priceHint}</p>
           )}
         </div>
         {type === 'STOCK' && stockMode === 'account' && (
@@ -298,7 +298,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-gray-600">
+          <p className="text-xs text-gray-600">
             {stockMode === 'stock'
               ? '종목별로 티커·수량·평단가를 입력해 관리 (시세 자동 갱신·배당 상세 지원)'
               : '계좌 전체를 자산 하나로 등록 — 평가액·원금만 입력 (연금 연동·명의는 계좌 단위 유지)'}
@@ -425,7 +425,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
       {/* 공용 명의 (전 자산 공통) — 주식은 계좌 단위 명의 관리를 사용하므로 폼에서 제외 */}
       {type !== 'STOCK' && <div className="space-y-2 pt-2 border-t border-gray-700">
         <p className="text-xs text-gray-500 font-medium uppercase">명의 지분 (전 자산 공통)</p>
-        <p className="text-[11px] text-gray-600">부부 가정 시 보통 50:50. 퇴직연금·국민연금 등 본인 자산은 '내 100%'. 1인별 건보·세금 산정에 활용.</p>
+        <p className="text-xs text-gray-600">부부 가정 시 보통 50:50. 퇴직연금·국민연금 등 본인 자산은 '내 100%'. 1인별 건보·세금 산정에 활용.</p>
         <div className="flex gap-1">
           {(['mine', 'half', 'wife', 'custom'] as OwnershipPreset[]).map((p) => (
             <button key={p} type="button" onClick={() => setOwnership(ownershipFromPreset(p))}

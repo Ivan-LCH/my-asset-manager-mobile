@@ -77,16 +77,16 @@ function SimTooltip({ active, payload, label }: SimTooltipProps) {
   const total = payload.reduce((s, p) => s + (p.value ?? 0), 0)
   return (
     <div className="bg-gray-900/95 border border-gray-700 rounded-xl p-3 shadow-2xl min-w-[180px]">
-      <p className="text-[11px] text-gray-400 mb-2 font-medium">{label}년</p>
+      <p className="text-xs text-gray-400 mb-2 font-medium">{label}년</p>
       <div className="space-y-1">
         {payload.map((p) => (
           <div key={p.name} className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-gray-300">{p.name}</span>
-            <span className="text-[11px] text-gray-100">{formatMoney(p.value)}/월</span>
+            <span className="text-xs text-gray-300">{p.name}</span>
+            <span className="text-xs text-gray-100">{formatMoney(p.value)}/월</span>
           </div>
         ))}
         <div className="border-t border-gray-700 pt-1">
-          <span className="text-[11px] text-gray-400">합계</span>
+          <span className="text-xs text-gray-400">합계</span>
           <span className="text-[12px] text-blue-400 ml-2">{formatMoney(total)}/월</span>
         </div>
       </div>
@@ -266,16 +266,16 @@ export default function PensionPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">{a.name}</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5">{d?.pensionType ?? '연금'}<OwnershipBadge ownership={a.ownership} /></p>
+                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">{d?.pensionType ?? '연금'}<OwnershipBadge ownership={a.ownership} /></p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[10px] text-gray-500">월 수령</p>
+                    <p className="text-xs text-gray-500">월 수령</p>
                     <p className="text-base font-bold text-gray-100 tracking-tight">{formatMoney(monthly)}</p>
                   </div>
                 </div>
 
                 {/* 하단: 수령 기간 + 현재가치 + 연증가율 */}
-                <div className="grid grid-cols-3 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-[11px]">
+                <div className="grid grid-cols-3 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-xs">
                   <div className="min-w-0">
                     <p className="text-gray-500 mb-0.5">수령 기간</p>
                     <p className="text-gray-300 truncate">
@@ -290,7 +290,7 @@ export default function PensionPage() {
                       return linked ? (
                         <>
                           <p className="text-emerald-400 truncate">{formatManwon(linked.total)}</p>
-                          <p className="text-[10px] text-emerald-500/80 truncate">연동: {acct}</p>
+                          <p className="text-xs text-emerald-500/80 truncate">연동: {acct}</p>
                         </>
                       ) : (
                         <p className="text-gray-300 truncate">{formatManwon(a.currentValue)}</p>
@@ -305,13 +305,13 @@ export default function PensionPage() {
 
                 {/* 과세 구분 */}
                 <div className="pt-2 mt-2 border-t border-gray-700/60" onClick={(e) => e.stopPropagation()}>
-                  <p className="text-[10px] text-gray-500 mb-1">과세 구분</p>
+                  <p className="text-xs text-gray-500 mb-1">과세 구분</p>
                   <div className="flex gap-1 flex-wrap">
                     {(['irp', 'national', 'taxable', 'taxExempt'] as PensionTaxType[]).map((t) => (
                       <button
                         key={t}
                         onClick={() => updateSourceTaxType(a.id, t)}
-                        className={cn('px-1.5 py-0.5 text-[10px] rounded transition-colors',
+                        className={cn('px-1.5 py-0.5 text-xs rounded transition-colors',
                           taxType === t ? TAX_ACTIVE[t] : 'bg-gray-700 text-gray-400 hover:bg-gray-600')}
                       >
                         {TAX_LABELS[t]}

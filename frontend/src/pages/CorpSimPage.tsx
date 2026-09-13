@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Save, AlertTriangle } from 'lucide-react'
-import { Expander, AmountInput, NumInput, Row, Field, Section } from '@/components/sim'
+import { Save } from 'lucide-react'
+import { Expander, AmountInput, NumInput, Row, Field, Section, InfoNote } from '@/components/sim'
 import { useCorpSim, useSaveCorpSim } from '@/hooks/useCorpSim'
 import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
@@ -22,9 +22,9 @@ function Kpi({ label, value, sub, color = 'text-gray-100' }: {
 }) {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
-      <p className="text-[11px] sm:text-xs text-gray-500 mb-1 truncate">{label}</p>
+      <p className="text-xs text-gray-500 mb-1 truncate">{label}</p>
       <p className={`text-[13px] sm:text-lg font-bold ${color} break-words`}>{value}</p>
-      {sub && <p className="text-[11px] text-gray-600 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-gray-600 mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -121,14 +121,11 @@ export default function CorpSimPage() {
         </button>
       </div>
 
-      {/* 면책 배너 */}
-      <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3">
-        <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-yellow-200/90 leading-relaxed">
-          본 시뮬레이터의 모든 수치는 <b>입력 가정에 기반한 추정치</b>입니다. 세율·공식은 편집 가능하나,
-          실제 세금·건강보험료는 개인 상황과 연도별 규정에 따라 다릅니다. 적용 전 <b>반드시 세무사·노무사에 확인</b>하세요.
-        </p>
-      </div>
+      {/* 면책 배너 (기본 접힘 — 탭하면 전문) */}
+      <InfoNote tone="warn" summary="모든 수치는 추정치 — 세무사 확인 필수">
+        본 시뮬레이터의 모든 수치는 <b>입력 가정에 기반한 추정치</b>입니다. 세율·공식은 편집 가능하나,
+        실제 세금·건강보험료는 개인 상황과 연도별 규정에 따라 다릅니다. 적용 전 <b>반드시 세무사·노무사에 확인</b>하세요.
+      </InfoNote>
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
@@ -146,10 +143,9 @@ export default function CorpSimPage() {
       {/* 목돈 분배 → 가수금 */}
       {(retirementPlan?.lumpsum ?? []).length > 0 && (
         <Expander title="➕ 목돈 분배 → 가수금" badge={`${corpInflow > 0 ? formatManwon(corpInflow) : '0'}`}>
-          <p className="text-[11px] text-gray-500 leading-relaxed">
-            은퇴계획의 <b>목돈수입</b>에 입력한 자금을 <b>가수금(주주 대여금)</b>으로 넣을 금액을 정합니다.
+          <InfoNote summary="목돈수입 → 가수금(주주 대여금)으로 넣을 금액">
             나머지는 현금 수령(은퇴계획 목돈 수입). 목돈 자금 추가는 은퇴계획(/retirement) 목돈수입에서.
-          </p>
+          </InfoNote>
           <div className="space-y-2">
             {(retirementPlan?.lumpsum ?? []).map((l) => {
               const corp = (plan.lumpsumCorp ?? []).find((c) => c.lumpsumId === l.id)?.corpAmount ?? 0
@@ -162,16 +158,16 @@ export default function CorpSimPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 items-end">
                     <div>
-                      <p className="text-[10px] text-gray-500 mb-0.5">→ 가수금(법인)</p>
+                      <p className="text-xs text-gray-500 mb-0.5">→ 가수금(법인)</p>
                       <AmountInput value={corp} onChange={(v) => setLumpsumCorp(l.id, v)} />
                     </div>
-                    <p className="text-[11px] text-gray-500">나머지(현금) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span></p>
+                    <p className="text-xs text-gray-500">나머지(현금) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span></p>
                   </div>
                 </div>
               )
             })}
           </div>
-          <p className="text-[11px] text-gray-600">가수금 총계 = 기존 {formatManwon(plan.loanAmount)} + 목돈 분배 {formatManwon(corpInflow)} = {formatManwon(plan.loanAmount + corpInflow)}</p>
+          <p className="text-xs text-gray-600">가수금 총계 = 기존 {formatManwon(plan.loanAmount)} + 목돈 분배 {formatManwon(corpInflow)} = {formatManwon(plan.loanAmount + corpInflow)}</p>
         </Expander>
       )}
 
@@ -183,7 +179,7 @@ export default function CorpSimPage() {
           {portfolioYield > 0 ? (
             <Row label="배당수익률(공통)">
               <span className="text-sm text-blue-400 text-right w-full block">
-                {portfolioYield}% <span className="text-gray-500 text-[11px]">→ 📊 투자 포트폴리오에서 설정</span>
+                {portfolioYield}% <span className="text-gray-500 text-xs">→ 📊 투자 포트폴리오에서 설정</span>
               </span>
             </Row>
           ) : (
@@ -206,7 +202,7 @@ export default function CorpSimPage() {
           <Row label="남편(본인) 월급"><AmountInput value={plan.repSalaryHusbandMonthly} onChange={(v) => update('repSalaryHusbandMonthly', v)} /></Row>
           <Row label="직장건보(월·자동)">
             <span className="text-sm text-blue-400 text-right w-full block">
-              {formatManwon(corpHealthMonthly(effectivePlan))} <span className="text-gray-500 text-[11px]">(급여×{(plan.tax.healthInsRate * 100).toFixed(2)}%×50%)</span>
+              {formatManwon(corpHealthMonthly(effectivePlan))} <span className="text-gray-500 text-xs">(급여×{(plan.tax.healthInsRate * 100).toFixed(2)}%×50%)</span>
             </span>
           </Row>
           <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer py-1">
@@ -224,7 +220,7 @@ export default function CorpSimPage() {
               <Row label="연금소득(연·수동)"><AmountInput value={plan.pensionIncomeAnnual} onChange={(v) => update('pensionIncomeAnnual', v)} /></Row>
             )}
           </div>
-          <p className="text-[11px] text-gray-600 pt-2 border-t border-gray-700">
+          <p className="text-xs text-gray-600 pt-2 border-t border-gray-700">
             비교용 가정(개인명의 건보·승계재산·설립비)는 입력하지 않아도 됨 — 기본값으로 표시. 변경은 아래 <b>'세제 · 비교 파라미터'</b>에서.
           </p>
         </Section>
@@ -237,10 +233,10 @@ export default function CorpSimPage() {
         defaultOpen
       >
         <Section>
-          <p className="text-[11px] text-gray-500 leading-relaxed">
+          <InfoNote summary="배당이 인출을 커버하면 원금 보존 → 지속가능">
             법인의 연간 배당 수입(현금 유입)이 가족이 빼는 돈(급여+가수금반환)을 커버하면 <b>원금(ETF) 보존 → 지속가능</b>.
             못하면 ETF 원금을 매도해 부족분을 메워야 → 원금 감소 → 배당도 줄고 → 가속적 고갈.
-          </p>
+          </InfoNote>
           {(() => {
             const r0 = runway.rows[0]
             if (!r0) return null
@@ -293,7 +289,7 @@ export default function CorpSimPage() {
               <tbody>
                 {runway.rows.slice(0, 6).map((r) => (
                   <tr key={r.year} className={`border-b border-gray-700/50 ${r.principal <= 0 ? 'bg-red-500/5' : ''}`}>
-                    <td className="py-2 pr-3 text-gray-300">{r.year}{r.principal <= 0 && <span className="ml-1 text-[10px] text-red-400">고갈</span>}</td>
+                    <td className="py-2 pr-3 text-gray-300">{r.year}{r.principal <= 0 && <span className="ml-1 text-xs text-red-400">고갈</span>}</td>
                     <td className="text-right py-2 px-2 text-gray-200">{formatManwon(r.principal)}</td>
                     <td className="text-right py-2 px-2 text-gray-400">{formatManwon(r.cashIn)}</td>
                     <td className={`text-right py-2 pl-2 ${r.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.net >= 0 ? '+' : ''}{formatManwon(r.net)}</td>
@@ -308,10 +304,10 @@ export default function CorpSimPage() {
       {/* Phase별 배당 + 4대보험 상세 (현금흐름 다음 — 실제 배당이 얼마인지) */}
       <Expander title="📊 Phase별 배당 분배 + 4대보험 상세" badge={`잔여현금 ${formatManwon(corp.distributable)}`}>
         <Section>
-          <p className="text-[11px] text-gray-600">
-            법인 잔여 현금(법인 경비 후)을 가수금 회수와 배당으로 나눠 쓴다.
-            <b> Phase 1</b>(가수금 회수 중): 잔여 − 가수금 = 실제 배당. <b>Phase 2</b>(가수금 소진 후): 잔여 전액이 배당.
-          </p>
+          <InfoNote summary="Phase2(가수금 소진 후)엔 잔여 전액이 배당">
+            <p>법인 잔여 현금(법인 경비 후)을 가수금 회수와 배당으로 나눠 쓴다.</p>
+            <p>Phase1(회수 중)은 배당 = 잔여 − 가수금 회수, Phase2(소진 후)는 잔여 전액이 배당.</p>
+          </InfoNote>
           {(() => {
             const returnAnnual = plan.monthlyReturn * 12
             const phase1Dividend = Math.max(0, corp.distributable - returnAnnual)
@@ -333,7 +329,7 @@ export default function CorpSimPage() {
             )
           })()}
 
-          <p className="text-[11px] text-gray-600 pt-3">아래 주주별 배당 표는 <b>Phase 2</b>(가수금 소진 후) 기준 — 잔여 전액을 지분율로 분배.</p>
+          <p className="text-xs text-gray-600 pt-3">아래 주주별 배당 표는 <b>Phase 2</b>(가수금 소진 후) 기준 — 잔여 전액을 지분율로 분배.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs mt-2">
               <thead><tr className="text-gray-500 border-b border-gray-700">
@@ -383,7 +379,7 @@ export default function CorpSimPage() {
                 <td className="text-right py-2 pl-2 text-emerald-400">{formatManwon(corp.corpHealthAnnual)}</td>
               </tr>
               <tr className="border-b border-gray-700/50">
-                <td className="py-2 pr-3 text-gray-300">소득세(연·배당관련){personal.marginalRate > 0 && <span className="text-[10px] text-gray-600 block">한계 {(personal.marginalRate * 100).toFixed(0)}%</span>}</td>
+                <td className="py-2 pr-3 text-gray-300">소득세(연·배당관련){personal.marginalRate > 0 && <span className="text-xs text-gray-600 block">한계 {(personal.marginalRate * 100).toFixed(0)}%</span>}</td>
                 <td className="text-right py-2 px-2 text-red-400">{formatManwon(beforeTax)}</td>
                 <td className="text-right py-2 pl-2 text-emerald-400">{formatManwon(afterTax)}</td>
               </tr>
@@ -405,20 +401,18 @@ export default function CorpSimPage() {
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-gray-600 mt-2">* 지분 증여(자본금 출자분)는 별도 증여세 공제 한도 적용. 승계는 대표직 승계·가업상속공제 등 사례별로 크게 달라짐.</p>
-        <div className="mt-2 pt-2 border-t border-gray-700 text-[11px] text-gray-500 leading-relaxed">
-          <span className="text-gray-400">비교 가정(자동 표시):</span>{' '}
-          개인명의 지역건보 {formatManwon(plan.personalHealthAnnual)}/년 ·
-          승계 비교 재산액 {formatManwon(plan.giftTaxBase)} ·
-          법인 설립비 {formatManwon(plan.setupCost)}
-          <span className="text-gray-600"> (변경은 '세제 · 비교 파라미터'에서)</span>
+        <p className="text-xs text-gray-600 mt-2">* 지분 증여(자본금 출자분)는 별도 증여세 공제 한도 적용. 승계는 대표직 승계·가업상속공제 등 사례별로 크게 달라짐.</p>
+        <div className="mt-2 pt-2 border-t border-gray-700">
+          <InfoNote summary="비교 가정은 자동 — 편집은 아래 파라미터에서">
+            {`개인명의 건보 ${formatManwon(plan.personalHealthAnnual)}/년 · 승계 재산액 ${formatManwon(plan.giftTaxBase)} · 설립비 ${formatManwon(plan.setupCost)} — 변경은 '세제 · 비교 파라미터'에서.`}
+          </InfoNote>
         </div>
       </Expander>
 
       {/* 2상 비용 비교 */}
       <Expander title="📊 2상 비용 비교 (가수금 중 vs 후)" badge={`증가 ${formatManwon(twoPhase.diff)}/연`}>
         <Section>
-          <p className="text-[11px] text-gray-500 leading-relaxed">
+          <p className="text-xs text-gray-500 leading-relaxed">
             같은 생활비 인출 기준. Phase1(가수금 회수=비과세) → Phase2(가수금 소진 후, 배당=과세) 전환 시 세금 증가분.
           </p>
           <div className="overflow-x-auto">
@@ -451,7 +445,7 @@ export default function CorpSimPage() {
                 </tr>
                 {twoPhase.combinedExtra > 0 && (
                   <tr className="border-b border-gray-700/50">
-                    <td className="py-2 pr-3 text-gray-300">종합과세(초과분) <span className="text-[10px] text-gray-600">한계 {(twoPhase.marginalRate * 100).toFixed(0)}%</span></td>
+                    <td className="py-2 pr-3 text-gray-300">종합과세(초과분) <span className="text-xs text-gray-600">한계 {(twoPhase.marginalRate * 100).toFixed(0)}%</span></td>
                     <td className="text-right py-2 px-2 text-gray-500">—</td>
                     <td className="text-right py-2 pl-2 text-red-400">{formatManwon(twoPhase.combinedExtra)}</td>
                   </tr>
@@ -464,9 +458,10 @@ export default function CorpSimPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-gray-600 mt-2">
-            Phase2 배당 인출(연 {formatManwon(twoPhase.dividendDist)})에 배당세+종합과세({plan.tax.finIncomeCombinedThr > 0 ? formatManwon(plan.tax.finIncomeCombinedThr) : '2천만'} 초과 시) 추가. 급여소득세·종합 한계는 규정 복잡·연도별 → 세무사 확인.
-          </p>
+          <InfoNote summary="Phase2 배당 인출 → 배당세·종합과세 추가">
+            Phase2 배당 인출 연 {formatManwon(twoPhase.dividendDist)} 기준. 금융소득 {plan.tax.finIncomeCombinedThr > 0 ? formatManwon(plan.tax.finIncomeCombinedThr) : '2천만'} 초과 시 종합과세.
+            급여소득세·종합 한계는 규정 복잡·연도별 → 세무사 확인.
+          </InfoNote>
         </Section>
       </Expander>
 
@@ -474,7 +469,7 @@ export default function CorpSimPage() {
       <Expander title="📊 자녀 자금출처 시뮬" badge={`권고 배당총액 ${formatManwon(recommend)}`}>
         <Section>
           <Row label="시뮬 연수"><NumInput value={sonYears} onChange={setSonYears} suffix="년" /></Row>
-          <p className="text-[11px] text-blue-400/90">
+          <p className="text-xs text-blue-400/90">
             아들 건보 마진 한계({plan.sonEmployed ? '2천만' : '1천만'})에 맞춘 권고 연 배당총액 ≈ {formatManwon(recommend)}.
             현재 설정({formatManwon(grossDividend(plan))})에서 아들 세후 연 {formatManwon(corp.perShare.son.net)}.
           </p>
@@ -502,9 +497,9 @@ export default function CorpSimPage() {
       {/* 세제 · 비교 파라미터 (고급) */}
       <Expander title="⚙️ 세제 · 비교 파라미터 (고급)">
         <Section>
-          <p className="text-[11px] text-gray-500 leading-relaxed">
-            기본값이 들어있으니 그대로 써도 됨. 본인 상황에 맞추려면 여기서 편집. 모든 수치는 추정치.
-          </p>
+          <InfoNote summary="기본값 그대로 사용 — 필요 시 여기서 편집">
+            모든 수치는 추정치.
+          </InfoNote>
           <p className="text-xs text-gray-400 pt-2">비교 가정·운영비</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="개인명의 지역건보(연)"><AmountInput value={plan.personalHealthAnnual} onChange={(v) => update('personalHealthAnnual', v)} /></Field>
@@ -522,7 +517,7 @@ export default function CorpSimPage() {
             <Field label="자녀 승계 세율(추정)"><NumInput value={plan.tax.giftTaxRate * 100} onChange={(v) => updateTax('giftTaxRate', v / 100)} suffix="%" /></Field>
           </div>
           <p className="text-xs text-gray-400 pt-3">종합소득세 누진구간 (자동 적용)</p>
-          <div className="text-[11px] text-gray-500 space-y-0.5 bg-gray-900/50 rounded-lg p-3">
+          <div className="text-xs text-gray-500 space-y-0.5 bg-gray-900/50 rounded-lg p-3">
             <p>~1,400만: 6% / ~5,000만: 15% / ~8,800만: 24%</p>
             <p>~1.5억: 35% / 1.5억~: 38% (한국 종합소득세)</p>
           </div>

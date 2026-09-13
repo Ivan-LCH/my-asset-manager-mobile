@@ -13,7 +13,7 @@ export function Row({ label, children, hint }: { label: string; children: ReactN
         <span className="text-sm text-gray-400 shrink-0">{label}</span>
         <div className="w-40 sm:w-48 shrink-0">{children}</div>
       </div>
-      {hint && <p className="text-[11px] text-gray-600 mt-0.5 sm:text-right sm:mr-48">{hint}</p>}
+      {hint && <p className="text-xs text-gray-600 mt-0.5 sm:text-right sm:mr-48">{hint}</p>}
     </div>
   )
 }
@@ -23,7 +23,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
     <div>
       <label className="text-xs text-gray-400 mb-1 block">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-gray-600 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
     </div>
   )
 }

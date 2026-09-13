@@ -142,7 +142,7 @@ function AssetTile({
             <p className="text-sm font-bold text-gray-100 truncate group-hover:text-blue-300 transition-colors">
               {asset.name}
             </p>
-            <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5">
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
               <span>{asset.acquisitionDate ?? '-'} 취득</span>
               {isSold && <span className="text-red-400">· 매각</span>}
               <OwnershipBadge ownership={asset.ownership} />
@@ -151,7 +151,7 @@ function AssetTile({
           <div className="text-right shrink-0">
             <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(val)}</p>
             {isQtyBased && (
-              <p className="text-[11px] text-gray-500 mt-0.5">{(asset.quantity ?? 0).toLocaleString()} 보유</p>
+              <p className="text-xs text-gray-500 mt-0.5">{(asset.quantity ?? 0).toLocaleString()} 보유</p>
             )}
           </div>
         </div>
@@ -159,8 +159,8 @@ function AssetTile({
         {/* 하단: 원금 + 손익 */}
         <div className="flex items-end justify-between gap-3 mt-2.5 pt-2.5 border-t border-gray-700/60">
           <div>
-            <p className="text-[11px] text-gray-500 mb-0.5">원금</p>
-            <p className="text-[11px] text-gray-400">{formatManwon(cost)}</p>
+            <p className="text-xs text-gray-500 mb-0.5">원금</p>
+            <p className="text-xs text-gray-400">{formatManwon(cost)}</p>
           </div>
           <div className="text-right">
             <div className="flex items-center justify-end gap-1 mb-0.5">
@@ -175,7 +175,7 @@ function AssetTile({
                 {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
               </span>
             </div>
-            <p className={`text-[11px] ${pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+            <p className={`text-xs ${pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'}`}>
               {pnl >= 0 ? '+' : ''}{formatManwon(pnl)}
             </p>
           </div>

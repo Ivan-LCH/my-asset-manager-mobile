@@ -3,7 +3,7 @@
 // 결과는 연금시뮬 / 법인시뮬 / 현금흐름(은퇴계획)에서 확인.
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, RotateCcw, Save } from 'lucide-react'
-import { Expander, AmountInput, TextInput, YearInput, TimesInput, Section } from '@/components/sim'
+import { Expander, AmountInput, TextInput, YearInput, TimesInput, Section, InfoNote } from '@/components/sim'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { usePortfolio, useSavePortfolio, DEFAULT_PORTFOLIO } from '@/hooks/usePortfolio'
@@ -81,7 +81,7 @@ function TravelSection({ items, onChange }: { items: TravelItem[]; onChange: (it
               <span>회/년</span>
             </div>
             {item.costPerTrip > 0 && (
-              <p className="text-[11px] text-blue-400">
+              <p className="text-xs text-blue-400">
                 → ~{item.phase1Until}년: {formatManwon(item.phase1Times * item.costPerTrip / 12)}/월
                 &nbsp;·&nbsp;
                 이후: {formatManwon(item.phase2Times * item.costPerTrip / 12)}/월
@@ -111,23 +111,23 @@ function LumpsumSection({ items, onChange }: { items: LumpsumItem[]; onChange: (
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-gray-500 mb-1">수령 연도</p>
+                <p className="text-xs text-gray-500 mb-1">수령 연도</p>
                 <YearInput value={item.receiveYear} onChange={(v) => update(item.id, 'receiveYear', v)} />
               </div>
               <div>
-                <p className="text-[10px] text-gray-500 mb-1">금액</p>
+                <p className="text-xs text-gray-500 mb-1">금액</p>
                 <AmountInput value={item.amount} onChange={(v) => update(item.id, 'amount', v)} />
               </div>
             </div>
             <div className="flex gap-1">
               {([['other', '일반(비과세)'], ['severance', '퇴직소득세 적용']] as const).map(([v, label]) => (
                 <button key={v} type="button" onClick={() => update(item.id, 'taxKind', v)}
-                  className={`flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors ${(item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                  className={`flex-1 px-1.5 py-0.5 text-xs rounded transition-colors ${(item.taxKind ?? 'other') === v ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
                   {label}
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-gray-600">{item.receiveYear}년에 {formatManwon(item.amount)} 일회 수령</p>
+            <p className="text-xs text-gray-600">{item.receiveYear}년에 {formatManwon(item.amount)} 일회 수령</p>
           </div>
         ))}
       </div>
@@ -167,12 +167,12 @@ function PortfolioSection({ value, onChange }: {
   return (
     <Section>
       <p className="text-xs font-semibold text-gray-400">📊 IRP 투자 포트폴리오 (배당률·상승률)</p>
-      <p className="text-[11px] text-gray-500 leading-relaxed">
-        IRP 계좌(법인시뮬 공유). 종목 입력 없이 <b>계좌 전체 배당률·상승률</b>만 입력 → 퇴직시점 잔액 성장·배당 산정. 상단 저장 버튼으로 저장.
-      </p>
+      <InfoNote summary="배당률·상승률만 입력 → 퇴직시점 자동 산정">
+        종목 입력 없이 <b>계좌 전체 배당률·상승률</b>만 입력합니다. 퇴직시점 잔액 성장·배당 산정 · 법인시뮬과 공유. 상단 저장 버튼으로 저장.
+      </InfoNote>
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-[11px] text-gray-500 mb-1">연평균 배당률</p>
+          <p className="text-xs text-gray-500 mb-1">연평균 배당률</p>
           <div className="flex items-center gap-1">
             <input type="number" inputMode="decimal"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
@@ -181,7 +181,7 @@ function PortfolioSection({ value, onChange }: {
           </div>
         </div>
         <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-[11px] text-gray-500 mb-1">연평균 주가상승률</p>
+          <p className="text-xs text-gray-500 mb-1">연평균 주가상승률</p>
           <div className="flex items-center gap-1">
             <input type="number" inputMode="decimal"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-cyan-300 text-right focus:outline-none focus:border-cyan-500"
@@ -220,14 +220,14 @@ function PensionSettingsSection() {
           <Save className="w-3.5 h-3.5" />{saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
         </button>
       </div>
-      <p className="text-[11px] text-gray-600">수령개시연도·기간·월수령액은 연금 자산(/pension)에서 개별 설정. 아래는 과세 계산 공통 기준.</p>
+      <p className="text-xs text-gray-600">수령개시연도·기간·월수령액은 연금 자산(/pension)에서 개별 설정. 아래는 과세 계산 공통 기준.</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <p className="text-[10px] text-gray-500 mb-1">기타 종합소득(연)</p>
+          <p className="text-xs text-gray-500 mb-1">기타 종합소득(연)</p>
           <AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} placeholder="남편 근로/사업" />
         </div>
       </div>
-      <p className="text-[11px] text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용.</p>
+      <p className="text-xs text-gray-600">연금소득공제 1,200만원은 법정 고정액으로 자동 적용.</p>
       <div className="border-t border-gray-700 pt-2">
         <p className="text-xs font-semibold text-gray-400 mb-1.5">종합소득공제 (1인별 자동)</p>
         <div className="flex flex-wrap gap-4">
@@ -246,7 +246,7 @@ function PensionSettingsSection() {
             <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-5 h-5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
           </label>
         </div>
-        <p className="text-[11px] text-gray-600 mt-1">1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2</p>
+        <p className="text-xs text-gray-600 mt-1">1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2</p>
       </div>
     </Section>
   )

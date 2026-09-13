@@ -2,8 +2,8 @@
 // 일반주식계좌 = 남편/와이프 각 계좌(잔액·배당률·상승률 입력). 종목 단위 입력은 사용 안 함.
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Save, AlertTriangle, ArrowLeft } from 'lucide-react'
-import { Expander, AmountInput, NumInput, Row } from '@/components/sim'
+import { Save, ArrowLeft } from 'lucide-react'
+import { Expander, AmountInput, NumInput, Row, InfoNote } from '@/components/sim'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
 import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
@@ -35,7 +35,7 @@ function OwnershipPreset({ value, onChange, disabled, locked }: {
         {(['mine', 'half', 'wife', 'custom'] as OwnershipPreset[]).map((p) => (
           <button key={p} disabled={disabled}
             onClick={() => onChange(ownershipFromPreset(p))}
-            className={cn('flex-1 px-1.5 py-0.5 text-[10px] rounded transition-colors',
+            className={cn('flex-1 px-1.5 py-0.5 text-xs rounded transition-colors',
               preset === p ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600',
               disabled && 'opacity-40 cursor-not-allowed')}>
             {labels[p]}
@@ -44,12 +44,12 @@ function OwnershipPreset({ value, onChange, disabled, locked }: {
       </div>
       {preset === 'custom' && !disabled && (
         <div className="flex gap-2">
-          <label className="flex items-center gap-1 text-[10px] text-gray-500">
+          <label className="flex items-center gap-1 text-xs text-gray-500">
             남편<NumInput value={value.husband} onChange={(v) => onChange({ husband: Math.min(100, Math.max(0, v)), wife: 100 - Math.min(100, Math.max(0, v)) })} suffix="%" />
           </label>
         </div>
       )}
-      {locked && <p className="text-[10px] text-gray-600">{locked}</p>}
+      {locked && <p className="text-xs text-gray-600">{locked}</p>}
     </div>
   )
 }
@@ -70,20 +70,20 @@ function AllocationCard({ lumpsum, allocation, onChange }: {
         <span className="text-sm text-gray-200 font-medium truncate">{lumpsum.name || '목돈'}</span>
         <span className="text-sm text-gray-100 font-semibold shrink-0">{formatManwon(lumpsum.amount)}</span>
       </div>
-      <p className="text-[10px] text-gray-600">{lumpsum.receiveYear}년 일회 수령{lumpsum.taxKind === 'severance' ? ' · 퇴직소득세 적용(현금분)' : ''}</p>
+      <p className="text-xs text-gray-600">{lumpsum.receiveYear}년 일회 수령{lumpsum.taxKind === 'severance' ? ' · 퇴직소득세 적용(현금분)' : ''}</p>
       <div className={isSeverance ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
         {isSeverance && (
           <div>
-            <p className="text-[10px] text-gray-500 mb-0.5">→ 퇴직IRP (연금으로 굴림)</p>
+            <p className="text-xs text-gray-500 mb-0.5">→ 퇴직IRP (연금으로 굴림)</p>
             <AmountInput value={allocation.irpAmount} onChange={(v) => onChange({ irpAmount: v })} />
           </div>
         )}
         <div>
-          <p className="text-[10px] text-gray-500 mb-0.5">→ 일반주식계좌 (배당)</p>
+          <p className="text-xs text-gray-500 mb-0.5">→ 일반주식계좌 (배당)</p>
           <AmountInput value={allocation.stockAmount} onChange={(v) => onChange({ stockAmount: v })} />
         </div>
       </div>
-      <p className="text-[11px] text-gray-500">
+      <p className="text-xs text-gray-500">
         나머지(현금보유) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span>
         {cash > 0 && <span className="text-gray-600"> → 은퇴계획 목돈 수입</span>}
       </p>
@@ -246,31 +246,28 @@ export default function PensionSimPage() {
         </button>
       </div>
 
-      {/* 면책 */}
-      <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3">
-        <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-yellow-200/90 leading-relaxed">
-          남편/와이프 <b>1인별</b> 세금·건보 추정. 금융소득 2천만 한도·연금소득세 각자 적용.
-          기존 연금원천(IRP·연금저축)은 남편 명의 가정. 실제는 규정·연도별 변동 → <b>세무사·노무사 확인 필수</b>.
-        </p>
-      </div>
+      {/* 면책 (기본 접힘 — 탭하면 전문) */}
+      <InfoNote tone="warn" summary="세금·건보 추정치 — 적용 전 세무사 확인 필수">
+        남편/와이프 <b>1인별</b> 세금·건보 추정. 금융소득 2천만 한도·연금소득세 각자 적용.
+        기존 연금원천(IRP·연금저축)은 남편 명의 가정. 실제는 규정·연도별 변동 → <b>세무사·노무사 확인 필수</b>.
+      </InfoNote>
 
             {/* ═══ 입력 (사용자가 정하는 것) ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-gray-200">✏️ 입력</span>
-        <span className="text-[11px] text-gray-600">목돈 자금 처리 · 일반주식계좌 · 수령·공제 설정</span>
+        <span className="text-xs text-gray-600">목돈 자금 처리 · 일반주식계좌 · 수령·공제 설정</span>
       </div>
 
 {/* + 목돈 분배 (은퇴계획 목돈수입 → 어디로) */}
       <Expander title="➕ 목돈 분배 (은퇴계획 목돈수입 기준)" badge={`${lumpsums.length}개`} defaultOpen>
-        <div className="bg-blue-500/5 border border-blue-700/30 rounded-lg p-3">
-          <p className="text-[11px] text-blue-200/90 leading-relaxed">
+        <InfoNote summary="목돈을 주식계좌·퇴직IRP·현금으로 분배">
+          <p>
             은퇴계획의 <b>목돈수입</b>에 입력한 자금을 <b>어디로 넣을지</b> 정합니다.
             <b>일반주식계좌</b>는 항상 넣을 수 있고, <b>퇴직IRP</b>는 <b>퇴직금(위로금)일 때만</b> 선택 가능합니다.
             나누고 남은 금액은 자동으로 <b>현금보유</b>(은퇴계획 목돈 수입)가 됩니다.
           </p>
-          <p className="text-[10px] text-blue-200/70 mt-1">목돈 자금 추가·수정은 은퇴계획(/retirement) 목돈수입에서.</p>
-        </div>
+          <p>목돈 자금 추가·수정은 은퇴계획(/retirement) 목돈수입에서.</p>
+        </InfoNote>
         {lumpsums.length === 0 && (
           <p className="text-center text-xs text-gray-600 py-4">
             목돈수입이 없습니다. 은퇴계획(/retirement)의 목돈수입에서 먼저 추가하세요.
@@ -285,23 +282,21 @@ export default function PensionSimPage() {
             )
           })}
         </div>
-        <p className="text-[11px] text-gray-600">
+        <p className="text-xs text-gray-600">
           분배된 투자 원금 — 퇴직IRP {formatManwon(irpInflow)} · 일반주식계좌 {formatManwon(stockInflow)}
         </p>
       </Expander>
 
 {/* 일반주식계좌 (남편/와이프 각 계좌) */}
       <Expander title="📈 일반주식계좌 (남편/와이프)">
-        <div className="bg-blue-500/5 border border-blue-700/30 rounded-lg p-3">
-          <p className="text-[11px] text-blue-200/90 leading-relaxed">
+        <InfoNote summary="배당률·상승률만 입력 → 연배당·성장 자동 산정">
+          <p>
             잔액 = <b>목돈 분배(stock) 합계 × 명의지분</b> + <b>추가 금액</b>. 종목 입력 없이
             <b> 계좌 단위 배당률·상승률</b>만 입력 → 연배당·연도별 성장 자동 산정.
             <b> 성장배당 비율</b> = 2026 세제개편 선택분리과세 적용 배당 비중 (0% = 기존 종합과세).
           </p>
-          <p className="text-[10px] text-blue-200/70 mt-1">
-            목돈 분배금 변경: 위 '목돈 분배' 섹션. 현재 stock 분배 합계 {formatManwon(stockBalance)}.
-          </p>
-        </div>
+          <p>목돈 분배금 변경: 위 '목돈 분배' 섹션. 현재 stock 분배 합계 {formatManwon(stockBalance)}.</p>
+        </InfoNote>
         {/* 명의 — 연결금액(목돈 분배) 분할 비율 */}
         <Row label="연결금액 분할 (남편/와이프)">
           <OwnershipPreset value={plan.stockOwnership} onChange={(o) => update('stockOwnership', o)} />
@@ -314,7 +309,7 @@ export default function PensionSimPage() {
               <div key={who} className="bg-gray-900/50 rounded-xl border border-gray-700 p-3 space-y-2">
                 <p className={cn('text-xs font-bold', color)}>{title}</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px]">
+                  <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500">연결금액 (분배 지분)</span>
                     <span className="text-gray-300">{formatManwon(b.linked)}</span>
                   </div>
@@ -331,12 +326,12 @@ export default function PensionSimPage() {
                     <NumInput value={cfg.growthDividendRatio ?? 0} onChange={(v) => updateStockAccount(who, { growthDividendRatio: v })} suffix="%" />
                   </Row>
                 </div>
-                <div className="border-t border-gray-700/60 pt-1.5 space-y-0.5 text-[11px]">
+                <div className="border-t border-gray-700/60 pt-1.5 space-y-0.5 text-xs">
                   <div className="flex justify-between"><span className="text-gray-500">잔액</span><span className="text-gray-100 font-semibold">{formatManwon(b.total)}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">연배당</span><span className="text-emerald-400 font-semibold">{formatManwon(Math.round(b.dividendBase))}</span></div>
-                  <p className="text-[10px] text-gray-600">{formatManwon(Math.round(b.dividendBase / 12))}/월 · 상승률로 매년 증가</p>
+                  <p className="text-xs text-gray-600">{formatManwon(Math.round(b.dividendBase / 12))}/월 · 상승률로 매년 증가</p>
                   {(cfg.growthDividendRatio ?? 0) > 0 && (
-                    <p className="text-[10px] text-amber-400/80">
+                    <p className="text-xs text-amber-400/80">
                       성장배당 {cfg.growthDividendRatio}% 선택분리과세 (15.4/22/27.5/33% 누진)
                     </p>
                   )}
@@ -345,7 +340,7 @@ export default function PensionSimPage() {
             )
           })}
         </div>
-        <p className="text-[11px] text-gray-600">
+        <p className="text-xs text-gray-600">
           합계 잔액 {formatManwon(sb.husband.total + sb.wife.total)} · 합계 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}
         </p>
       </Expander>
@@ -354,7 +349,7 @@ export default function PensionSimPage() {
       {/* ═══ 개요 (한눈에 보기) ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-emerald-400">개요</span>
-        <span className="text-[11px] text-gray-600">투자 원금 · 기준년도 수입·지출 (가족 합산)</span>
+        <span className="text-xs text-gray-600">투자 원금 · 기준년도 수입·지출 (가족 합산)</span>
       </div>
 
 {/* 투자 원금 요약 (유입이 만든 원금) */}
@@ -364,24 +359,24 @@ export default function PensionSimPage() {
         const PrincipalCard = ({ title, husband, wife, note }: { title: string; husband: number; wife: number; note?: string }) => (
           <div className="bg-gray-900/50 rounded-lg p-2.5">
             <p className="text-gray-500 mb-1">{title}</p>
-            <div className="grid grid-cols-3 gap-1 text-[11px]">
-              <div><p className="text-[10px] text-blue-400">남편</p><p className="text-gray-100 font-semibold">{formatManwon(husband)}</p></div>
-              <div><p className="text-[10px] text-pink-400">와이프</p><p className="text-gray-100 font-semibold">{formatManwon(wife)}</p></div>
-              <div><p className="text-[10px] text-gray-400">합산(가족)</p><p className="text-emerald-400 font-semibold">{formatManwon(husband + wife)}</p></div>
+            <div className="grid grid-cols-3 gap-1 text-xs">
+              <div><p className="text-xs text-blue-400">남편</p><p className="text-gray-100 font-semibold">{formatManwon(husband)}</p></div>
+              <div><p className="text-xs text-pink-400">와이프</p><p className="text-gray-100 font-semibold">{formatManwon(wife)}</p></div>
+              <div><p className="text-xs text-gray-400">합산(가족)</p><p className="text-emerald-400 font-semibold">{formatManwon(husband + wife)}</p></div>
             </div>
-            {note && <p className="text-[10px] text-gray-600 mt-1">{note}</p>}
+            {note && <p className="text-xs text-gray-600 mt-1">{note}</p>}
           </div>
         )
         return (
           <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
             <p className="text-xs font-semibold text-gray-300 mb-2">💼 투자 원금 요약 (남편/와이프)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <PrincipalCard title="IRP 원금" husband={irpHusband} wife={irpWife}
                 note={`기존 연금 + IRP 유입 ${formatManwon(irpInflow)} · 연금은 남편 명의 가정`} />
               <PrincipalCard title="일반주식계좌 원금" husband={h.husband.stockBalance} wife={h.wife.stockBalance}
                 note={`잔액 × 계좌 배당률 = 연배당 ${formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}`} />
             </div>
-            <p className="text-[10px] text-gray-600 mt-1.5">
+            <p className="text-xs text-gray-600 mt-1.5">
               💡 분배하지 않은 나머지는 현금 수령(은퇴계획 목돈)으로, 투자 원금에서 제외됨.
             </p>
           </div>
@@ -393,23 +388,23 @@ export default function PensionSimPage() {
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-semibold text-gray-300">📅 기준년도 수입·지출 (가족 합산)</p>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-500">기준년도</span>
+            <span className="text-xs text-gray-500">기준년도</span>
             <input type="number" inputMode="decimal"
               className="w-20 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
               value={plan.refYear} onChange={(e) => update('refYear', Number(e.target.value))} />
-            <span className="text-[11px] text-gray-500">년</span>
+            <span className="text-xs text-gray-500">년</span>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
           <div className="bg-gray-900/50 rounded-lg p-2.5">
             <p className="text-gray-500 mb-0.5">연금수령액(연)</p>
             <p className="text-gray-100 font-semibold">{formatManwon(h.totals.grossAnnual - (h.totals.financialIncome))}</p>
-            <p className="text-[10px] text-gray-600">{formatManwon(Math.round((h.totals.grossAnnual - h.totals.financialIncome) / 12))}/월</p>
+            <p className="text-xs text-gray-600">{formatManwon(Math.round((h.totals.grossAnnual - h.totals.financialIncome) / 12))}/월</p>
           </div>
           <div className="bg-gray-900/50 rounded-lg p-2.5">
             <p className="text-gray-500 mb-0.5">배당금(연)</p>
             <p className="text-emerald-400 font-semibold">{formatManwon(h.totals.financialIncome)}</p>
-            <p className="text-[10px] text-gray-600">{formatManwon(Math.round(h.totals.financialIncome / 12))}/월</p>
+            <p className="text-xs text-gray-600">{formatManwon(Math.round(h.totals.financialIncome / 12))}/월</p>
           </div>
           <div className="bg-gray-900/50 rounded-lg p-2.5">
             <p className="text-gray-500 mb-0.5">지출 — 세금(연)+걸보(월)</p>
@@ -420,7 +415,7 @@ export default function PensionSimPage() {
             <p className="text-emerald-400 font-semibold">{formatManwon(Math.round(h.totals.netAnnual / 12) - h.totals.healthMonthly)}/월</p>
           </div>
         </div>
-        <p className="text-[10px] text-gray-600 mt-1.5">
+        <p className="text-xs text-gray-600 mt-1.5">
           {plan.refYear}년 기준. 국민연금 개시(65세) 전후에 따라 연금수령액이 달라집니다. 세금 = 연금소득세 + 금융소득세, 걸보 = 지역걸보(월).
         </p>
       </div>
@@ -428,13 +423,13 @@ export default function PensionSimPage() {
       {/* ═══ 수입 상세 ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-emerald-400">수입 상세</span>
-        <span className="text-[11px] text-gray-600">연금수입 + 배당수입</span>
+        <span className="text-xs text-gray-600">연금수입 + 배당수입</span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* 연금수입 */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
           <p className="text-xs font-semibold text-gray-300 mb-2">🛡️ 연금수입 (월 / 연)</p>
-          <div className="space-y-1.5 text-[11px]">
+          <div className="space-y-1.5 text-xs">
             <div className="flex justify-between"><span className="text-gray-500">과세 연금 (IRP·연금저축)</span><span className="text-right"><span className="text-gray-100 font-semibold">{formatManwon(Math.round(h.husband.annualPensionTaxable / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.annualPensionTaxable)})</span></span></div>
             <div className="flex justify-between"><span className="text-gray-500">비과세 연금 (98년)</span><span className="text-right"><span className="text-gray-100 font-semibold">{formatManwon(Math.round(h.husband.annualPensionExempt / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.annualPensionExempt)})</span></span></div>
             {(() => {
@@ -444,18 +439,18 @@ export default function PensionSimPage() {
               )
             })()}
             <div className="flex justify-between border-t border-gray-700 pt-1.5"><span className="text-gray-400 font-semibold">연금수입 합계</span><span className="text-right"><span className="text-emerald-400 font-bold">{formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt) / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.annualPensionTaxable + h.husband.annualPensionExempt)})</span></span></div>
-            <p className="text-[10px] text-gray-600">과세연금 = 자산 등록 월수령액 또는 퇴직시점 잔액÷{plan.withdrawalYears}년 · 국민연금 = 65세부터 종신</p>
+            <p className="text-xs text-gray-600">과세연금 = 자산 등록 월수령액 또는 퇴직시점 잔액÷{plan.withdrawalYears}년 · 국민연금 = 65세부터 종신</p>
           </div>
         </div>
         {/* 배당수입 */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
           <p className="text-xs font-semibold text-gray-300 mb-2">📈 배당수입 (월 / 연)</p>
-          <div className="space-y-1.5 text-[11px]">
+          <div className="space-y-1.5 text-xs">
             <div className="flex justify-between"><span className="text-gray-500">일반주식계좌 배당</span><span className="text-right"><span className="text-emerald-400 font-semibold">{formatManwon(Math.round(h.totals.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.totals.financialIncome)})</span></span></div>
-            <div className="flex justify-between"><span className="text-[10px] text-gray-600">— 남편</span><span className="text-right"><span className="text-gray-300">{formatManwon(Math.round(h.husband.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.financialIncome)})</span></span></div>
-            <div className="flex justify-between"><span className="text-[10px] text-gray-600">— 와이프</span><span className="text-right"><span className="text-gray-300">{formatManwon(Math.round(h.wife.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.wife.financialIncome)})</span></span></div>
-            <p className="text-[10px] text-gray-600">잔액 남편 {formatManwon(sb.husband.total)}·와이프 {formatManwon(sb.wife.total)} → 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}</p>
-            <p className="text-[10px] text-gray-600 mt-1 pt-1 border-t border-gray-700/50">※ 연금저축의 배당수입은 <b>배당재투자</b>로 들어가 별도 수입으로 잡지 않습니다.</p>
+            <div className="flex justify-between"><span className="text-xs text-gray-600">— 남편</span><span className="text-right"><span className="text-gray-300">{formatManwon(Math.round(h.husband.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.financialIncome)})</span></span></div>
+            <div className="flex justify-between"><span className="text-xs text-gray-600">— 와이프</span><span className="text-right"><span className="text-gray-300">{formatManwon(Math.round(h.wife.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.wife.financialIncome)})</span></span></div>
+            <p className="text-xs text-gray-600">잔액 남편 {formatManwon(sb.husband.total)}·와이프 {formatManwon(sb.wife.total)} → 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}</p>
+            <p className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700/50">※ 연금저축의 배당수입은 <b>배당재투자</b>로 들어가 별도 수입으로 잡지 않습니다.</p>
           </div>
         </div>
       </div>
@@ -463,11 +458,11 @@ export default function PensionSimPage() {
       {/* ═══ 지출 상세 ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-red-400">지출 상세</span>
-        <span className="text-[11px] text-gray-600">세금 + 건보료 (1인별)</span>
+        <span className="text-xs text-gray-600">세금 + 건보료 (1인별)</span>
       </div>
 
       <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-        <table className="w-full text-[11px]">
+        <table className="w-full text-xs">
           <thead>
             <tr className="text-gray-500 border-b border-gray-700">
               <th className="text-left py-2 px-3 font-medium whitespace-nowrap"></th>
@@ -481,12 +476,12 @@ export default function PensionSimPage() {
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(Math.round(h.husband.totalAnnualTax / 12))}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.totalAnnualTax)})</span>
-                <p className="text-[10px] text-gray-600">연금 {formatManwon(Math.round(h.husband.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.husband.financialTax / 12))}{h.husband.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.husband.separatedDividendTax / 12))}</span>}</p>
+                <p className="text-xs text-gray-600">연금 {formatManwon(Math.round(h.husband.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.husband.financialTax / 12))}{h.husband.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.husband.separatedDividendTax / 12))}</span>}</p>
               </td>
               <td className="py-2 px-3 text-right">
                 <span className="text-gray-100 font-semibold">{formatManwon(husbandHI.grandTotal)}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(husbandHI.grandTotal * 12)})</span>
-                <p className="text-[10px] text-gray-600">소득분 {formatManwon(husbandHI.incomeMonthly)} · 재산분 {formatManwon(husbandHI.propertyMonthly)}</p>
+                <p className="text-xs text-gray-600">소득분 {formatManwon(husbandHI.incomeMonthly)} · 재산분 {formatManwon(husbandHI.propertyMonthly)}</p>
               </td>
             </tr>
             <tr className="border-b border-gray-700/50">
@@ -494,12 +489,12 @@ export default function PensionSimPage() {
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(Math.round(h.wife.totalAnnualTax / 12))}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(h.wife.totalAnnualTax)})</span>
-                <p className="text-[10px] text-gray-600">연금 {formatManwon(Math.round(h.wife.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.wife.financialTax / 12))}{h.wife.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.wife.separatedDividendTax / 12))}</span>}</p>
+                <p className="text-xs text-gray-600">연금 {formatManwon(Math.round(h.wife.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.wife.financialTax / 12))}{h.wife.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.wife.separatedDividendTax / 12))}</span>}</p>
               </td>
               <td className="py-2 px-3 text-right">
                 <span className="text-gray-100 font-semibold">{formatManwon(wifeHI.grandTotal)}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(wifeHI.grandTotal * 12)})</span>
-                <p className="text-[10px] text-gray-600">소득분 {formatManwon(wifeHI.incomeMonthly)} · 재산분 {formatManwon(wifeHI.propertyMonthly)}</p>
+                <p className="text-xs text-gray-600">소득분 {formatManwon(wifeHI.incomeMonthly)} · 재산분 {formatManwon(wifeHI.propertyMonthly)}</p>
               </td>
             </tr>
             <tr className="bg-gray-900/40">
@@ -515,7 +510,7 @@ export default function PensionSimPage() {
             </tr>
           </tbody>
         </table>
-        <p className="text-[10px] text-gray-600 px-3 py-2 border-t border-gray-700">
+        <p className="text-xs text-gray-600 px-3 py-2 border-t border-gray-700">
           세금 = 연금소득세 + 금융소득세. 건보 = 소득분 + 재산분(부동산 명의 지분 반영) + 장기요양. {plan.refYear}년 기준.
         </p>
       </div>

@@ -59,7 +59,7 @@ export default function AppLayout() {
                 to={to}
                 end={to === '/'}
                 className={cn(
-                  'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors',
+                  'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-xs font-medium transition-colors',
                   active ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300',
                 )}
               >

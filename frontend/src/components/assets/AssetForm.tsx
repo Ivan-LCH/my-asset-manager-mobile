@@ -168,7 +168,7 @@ export default function AssetForm({ asset, onClose }: Props) {
           </div>
           {/* 재건축 (입주 시점 가치 전환) */}
           <div className="border-t border-gray-700/50 pt-3 mt-2">
-            <p className="text-[11px] text-gray-500 mb-2">🏗️ 재건축 (입주 시점 가치 전환)</p>
+            <p className="text-xs text-gray-500 mb-2">🏗️ 재건축 (입주 시점 가치 전환)</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>입주 후 예상 가치</label>
@@ -179,7 +179,7 @@ export default function AssetForm({ asset, onClose }: Props) {
                 <input type="number" inputMode="decimal" className={inputCls} value={futureYear || ''} onChange={(e) => setFutureYear(+e.target.value)} placeholder="예: 2028" />
               </div>
             </div>
-            <p className="text-[11px] text-gray-600 mt-1">해당 연도부터 잔액 추이·걸보 재산분에 예상 가치 반영.</p>
+            <p className="text-xs text-gray-600 mt-1">해당 연도부터 잔액 추이·걸보 재산분에 예상 가치 반영.</p>
           </div>
         </div>
       )}
@@ -284,7 +284,7 @@ export default function AssetForm({ asset, onClose }: Props) {
                 </select>
               )
             })()}
-            <p className="text-[11px] text-gray-600 mt-1">
+            <p className="text-xs text-gray-600 mt-1">
               선택 시 이 연금의 현재가치가 그 계좌 전체의 현재가치로 자동 연동됩니다 (주가 하락분 반영 → 연금 수령액에 반영).
             </p>
           </div>
