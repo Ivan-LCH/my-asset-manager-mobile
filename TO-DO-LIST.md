@@ -30,4 +30,5 @@
 - [O] **UI-2. 설명박스 접이식 폴딩 + 폰트 12px 통일** (9b008f3) — 2줄 이상 정적 설명 InfoNote는 기본 접힘(요약 1줄+펼치기), 미세 폰트 11px→12px. PensionSim 3건·CorpSim 7건 단축
 - [O] **UI-3. RetirementPage 정리·분리 + 자산 칩 실물·기타 병합** (66aab87) — 1320줄→456줄: 미사용 입력 섹션 5개 제거(입력은 은퇴 준비 탭 담당), 순수 로직 lib/retirementPlan·retirementCashflow 분리, 표 3종 components/retirement 컴포넌트화, 건보 구버전 사본→lib 공식 60등급 표 병합(비연동 모드 수치 정정). 자산 칩 7→6(실물·기타 병합, 구값 PHYSICAL→ETC 정규화)
 - [O] **UI-4. pensionSim 편집 진입점 정리** (1f05f92) — 과세구분 칩 선택=즉시 저장("시뮬 저장" 버튼 제거), 은퇴 준비 과세기준 섹션→연금시뮬로 이관(이중 저장 버튼 구조 해소), 미사용 perPersonDed 배지 활용, 헤더 문구 정정
+- [O] **UI-5. 수령개시연도 입력 공개** (e53d768) — UI에서 편집 불가했던 startYear(기본 올해+3년)가 계좌 잔액 표 범위·IRP 성장 기간을 결정하는 숨은 값이었음. '과세·수령 기준' 섹션에서 YearInput으로 편집 가능
 <!-- 완료 항목은 TO-DO-ARCHIVE.md 로 이동 -->
