@@ -255,7 +255,7 @@ export default function PensionSimPage() {
             {/* ═══ 입력 (사용자가 정하는 것) ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-gray-200">✏️ 입력</span>
-        <span className="text-xs text-gray-600">목돈 자금 처리 · 일반주식계좌 · 수령·공제 설정</span>
+        <span className="text-xs text-gray-600">목돈 자금 처리 · 일반주식계좌 · 과세 기준</span>
       </div>
 
 {/* + 목돈 분배 (은퇴계획 목돈수입 → 어디로) */}
@@ -343,6 +343,33 @@ export default function PensionSimPage() {
         <p className="text-xs text-gray-600">
           합계 잔액 {formatManwon(sb.husband.total + sb.wife.total)} · 합계 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}
         </p>
+      </Expander>
+
+      {/* 과세 기준 (종합소득공제) — 은퇴준비에서 이관, 세금·건보 결과에 직접 반영 (UI 간소화 ③) */}
+      <Expander title="⚙️ 과세 기준 (종합소득공제)" badge={`1인별 ${formatManwon(perPersonDed.husband)}`}>
+        <InfoNote summary="기본값 그대로 사용 — 필요 시 여기서 편집">
+          연금소득공제 1,200만원은 법정 고정액으로 자동 적용.
+          1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2 — 아래 결과의 세금에 그대로 반영.
+        </InfoNote>
+        <Row label="기타 종합소득(연)" hint="남편 근로/사업 소득 등">
+          <AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} />
+        </Row>
+        <div className="flex flex-wrap gap-4 pt-1">
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+            <input type="checkbox" checked={plan.spouseDependent} onChange={(e) => update('spouseDependent', e.target.checked)} className="accent-blue-500" />
+            배우자 부양
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+            <input type="checkbox" checked={plan.useStandardDeduction} onChange={(e) => update('useStandardDeduction', e.target.checked)} className="accent-blue-500" />
+            표준공제 100만 사용
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+            부양가족 수
+            <button type="button" onClick={() => update('dependents', Math.max(0, plan.dependents - 1))} className="w-5 h-5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">−</button>
+            <span className="w-5 text-center text-gray-100">{plan.dependents}</span>
+            <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-5 h-5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
+          </label>
+        </div>
       </Expander>
 
       {/* ═══ 결과 (자동 계산) ═══ */}

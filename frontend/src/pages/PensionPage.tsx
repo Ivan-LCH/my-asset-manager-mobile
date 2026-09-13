@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Save } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
@@ -30,6 +30,21 @@ const TAX_ACTIVE: Record<PensionTaxType, string> = {
 }
 
 interface SimRow { year: number; total: number; [source: string]: number }
+
+/** 과세구분 칩 선택 → plan.sources 반영 (순수 계산) */
+const applyTaxType = (
+  p: PensionSimPlan, assetId: string, taxType: PensionTaxType, pensionAssets: Asset[],
+): PensionSimPlan => {
+  const exists = p.sources.some((s) => s.id === assetId)
+  if (exists) {
+    return { ...p, sources: p.sources.map((s) => s.id === assetId ? { ...s, taxType, taxTypeManual: true } : s) }
+  }
+  const asset = pensionAssets.find((a) => a.id === assetId)
+  if (!asset) return p
+  return { ...p, sources: [...p.sources, {
+    id: assetId, name: asset.name, principal: asset.currentValue, taxType, taxTypeManual: true, yieldRate: 4, owner: 'husband',
+  }] }
+}
 
 function buildSimulation(assets: Asset[], currentAge: number, retirementAge: number): {
   rows: SimRow[]
@@ -115,7 +130,6 @@ export default function PensionPage() {
   const [modalId, setModalId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [simPlan, setSimPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
-  const [simDirty, setSimDirty] = useState(false)
 
   // PensionSim 로드 + PENSION 자산 자동 병합
   // savedSim(undefined=로딩중)가 해결되고 자산도 로드된 후 1회 실행.
@@ -138,22 +152,12 @@ export default function PensionPage() {
     setSimPlan({ ...EMPTY_PENSION_PLAN, ...base, sources: [...auto, ...manual] })
   }, [savedSim, pensionAssets])
 
+  // 칩 선택 = 즉시 저장 (별도 저장 버튼 없음 — UI 간소화 ③)
   const updateSourceTaxType = (assetId: string, taxType: PensionTaxType) => {
-    setSimPlan((p) => {
-      const exists = p.sources.some((s) => s.id === assetId)
-      if (exists) {
-        return { ...p, sources: p.sources.map((s) => s.id === assetId ? { ...s, taxType, taxTypeManual: true } : s) }
-      }
-      const asset = pensionAssets.find((a) => a.id === assetId)
-      if (!asset) return p
-      return { ...p, sources: [...p.sources, {
-        id: assetId, name: asset.name, principal: asset.currentValue, taxType, taxTypeManual: true, yieldRate: 4, owner: 'husband',
-      }] }
-    })
-    setSimDirty(true)
+    const next = applyTaxType(simPlan, assetId, taxType, pensionAssets)
+    setSimPlan(next)
+    saveSimMut.mutate(next)
   }
-
-  const handleSaveSim = () => saveSimMut.mutate(simPlan, { onSuccess: () => setSimDirty(false) })
 
   const modalAsset = allAssets.find((a) => a.id === modalId) ?? null
   const currentAge = resolveAge(settings)
@@ -185,13 +189,6 @@ export default function PensionPage() {
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors"
           >
             🪙 시뮬레이션
-          </button>
-          <button
-            onClick={handleSaveSim} disabled={!simDirty || saveSimMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-40"
-          >
-            <Save className="w-4 h-4" />
-            {saveSimMut.isPending ? '시뮬 저장...' : simDirty ? '시뮬 저장' : '시뮬 저장됨'}
           </button>
           <button
             onClick={() => setShowCreate((v) => !v)}
@@ -242,7 +239,7 @@ export default function PensionPage() {
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-gray-400">
           연금 자산 ({active.length})
-          <span className="ml-1.5 text-gray-600">· 각 자산의 과세 구분을 선택하세요</span>
+          <span className="ml-1.5 text-gray-600">· 과세 구분 선택 시 즉시 저장</span>
         </h3>
         {active.length === 0 && (
           <div className="text-center py-12 text-gray-500 bg-gray-800/50 rounded-xl border border-gray-700">
