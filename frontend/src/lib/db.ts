@@ -1,5 +1,4 @@
 import Dexie, { type Table } from 'dexie'
-import { nationalPensionStartYear } from '@/lib/people'
 import type {
   Asset, AssetDetail, AssetType, ChartDataPoint, ChartParams, Currency, HistoryItem,
   DividendRecord, DividendSummary, RetirementPlan, CorpSimPlan, PensionSimPlan,
@@ -1243,49 +1242,18 @@ async function backfillAllHistoryGaps(): Promise<boolean> {
 }
 
 /** 마이그레이션: 구 currentAge/retirementAge(나이) → 생년월(YYYY.MM)+은퇴예정연도(연도).
- *  birthHusband이 없으면 사용자 제공값 1972.03으로, birthWife는 동일하게(미혼이면 사용자가 지움). */
+ *  구 나이 설정이 저장된 경우만 실행(기존 나이에서 역산 — 연령 보존).
+ *  신규 사용자는 생년월을 비워둠(설정에서 입력). birthWife는 설정하지 않음(미혼 기본 — 설정에서 입력). */
 export async function migrateSettingsToBirth(): Promise<void> {
   const s = await getSettings()
   if (s.birthHusband) return  // 이미 설정됨
+  if (s.currentAge == null && s.retirementAge == null && s.retirementYear == null) return  // 신규 사용자 — 변환할 구 데이터 없음
   const currentAge = s.currentAge ?? 40
   const retirementAge = s.retirementAge ?? 65
   const now = new Date().getFullYear()
   await saveSettings({
-    birthHusband: '1972.03',
-    birthWife: '1972.03',   // 남편과 동일하게 기본 (미혼이면 사용자가 지움)
+    birthHusband: `${now - currentAge}.01`,
     retirementYear: s.retirementYear ?? (now + Math.max(0, retirementAge - currentAge)),
-  })
-}
-
-/** 마이그레이션: 와이프 국민연금 자산 생성 (birthWife 있고, 와이프 국민연금 자산 없으면).
- *  birthWife 비어있으면 미혼(생성 안 함). 기존 '국민연금(와이프)' 자산은 '최진숙-국민연금'으로 rename. */
-const WIFE_PENSION_NAME = '최진숙-국민연금'
-export async function migrateWifeNationalPension(): Promise<void> {
-  const s = await getSettings()
-  const startYear = nationalPensionStartYear(s.birthWife)
-  if (!startYear) return  // 미혼(와이프 생년월 없음)
-  const all = await getAllAssets()
-  const existing = all.find((a) => a.type === 'PENSION'
-    && (a.detail as { pensionType?: string } | undefined)?.pensionType?.includes('국민')
-    && (a.ownership?.wife ?? 0) >= 100)
-  if (existing) {
-    if (existing.name !== WIFE_PENSION_NAME) await updateAsset(existing.id, { name: WIFE_PENSION_NAME })
-    return
-  }
-  await createAsset({
-    type: 'PENSION',
-    name: WIFE_PENSION_NAME,
-    acquisitionDate: `${startYear - 20}-01-01`,
-    acquisitionPrice: 0,
-    currentValue: 0,
-    ownership: { husband: 0, wife: 100 },
-    detail: {
-      pensionType: '국민연금',
-      expectedStartYear: startYear,
-      expectedEndYear: startYear + 50,
-      expectedMonthlyPayout: 1_107_450,
-      annualGrowthRate: 2,
-    },
   })
 }
 

@@ -422,11 +422,11 @@ describe('pensionSim 계산', () => {
   })
 
   it('sourcesFromAssets: pensionType NATIONAL(영어) → national 분류 (taxable 아님)', () => {
-    // 이창호-국민연금 pensionType="NATIONAL" 이 'taxable'로 잘못 분류되던 버그
+    // 국민연금(남편) pensionType="NATIONAL" 이 'taxable'로 잘못 분류되던 버그
     const assets = [
-      { id: 'h', name: '이창호-국민연금', currentValue: 0,
+      { id: 'h', name: '국민연금(남편)', currentValue: 0,
         detail: { pensionType: 'NATIONAL', expectedStartYear: 2037, expectedEndYear: 2099, expectedMonthlyPayout: 1_906_250, annualGrowthRate: 3 } },
-      { id: 'w', name: '최진숙-국민연금', currentValue: 0,
+      { id: 'w', name: '국민연금(와이프)', currentValue: 0,
         detail: { pensionType: '국민연금', expectedStartYear: 2038, expectedEndYear: 2088, expectedMonthlyPayout: 1_107_450, annualGrowthRate: 2 } },
       { id: 'p', name: '개인연금', currentValue: 100_000_000, detail: { pensionType: 'PERSONAL' } },
       { id: 'r', name: '퇴직연금', currentValue: 300_000_000, detail: { pensionType: '퇴직연금' } },

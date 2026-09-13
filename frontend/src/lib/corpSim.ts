@@ -27,16 +27,16 @@ export function mergeCorpTax(saved?: Partial<CorpTaxParams>): CorpTaxParams {
   return t
 }
 
-/** 입력 기본값 (보고서 기준 샘플) */
+/** 입력 기본값 */
 export const EMPTY_CORP_PLAN: CorpSimPlan = {
   capitalContribution:     1_000_000,
   loanAmount:              600_000_000,
   lumpsumCorp:             [],
   dividendYield:           8,
   targetDividendTotal:     0,
-  shareHusband:            40,
-  shareWife:               40,
-  shareSon:                20,
+  shareHusband:            50,
+  shareWife:               50,
+  shareSon:                0,
   repSalaryMonthly:        1_000_000,
   repSalaryHusbandMonthly: 1_000_000,
   sonEmployed:             false,

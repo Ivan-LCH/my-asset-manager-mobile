@@ -358,7 +358,7 @@ export default function RetirementPage() {
         <div className="flex items-center gap-2 mb-2">
           <h3 className="text-sm font-semibold text-gray-200">🏠 보유세 (재산세 + 종부세)</h3>
           <InfoTooltip text={
-            "매탄주공 입주(29년 말) 이후 부과되는\n재산세 + 종합부동산세의 연간 추정치입니다.\n\n" +
+            "보유 주택에 부과되는 재산세 +\n종합부동산세의 연간 추정치입니다.\n\n" +
             "개시 연도부터 매년 세금(연)에 합산되어\n누적 자산에서 차감됩니다."
           } />
         </div>
@@ -382,7 +382,7 @@ export default function RetirementPage() {
           <span className="text-xs text-gray-500">년~</span>
         </div>
         <p className="text-xs text-gray-500 mt-1.5">
-          기본 410만원 / 2030년~ (매탄주공 입주 이후). 비우면 미반영.
+          기본 410만원 / 2030년~. 비우면 미반영.
         </p>
       </div>
 

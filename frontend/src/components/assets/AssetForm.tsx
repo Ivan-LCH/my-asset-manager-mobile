@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useUpdateAsset, useAssetsByType } from '@/hooks/useAssets'
 import type { Asset, AssetType, Currency, Ownership, OwnershipPreset } from '@/types'
 import { ownershipFromPreset, presetFromOwnership } from '@/types'
+import RealEstateFutureValueFields from '@/components/assets/RealEstateFutureValueFields'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -167,20 +168,12 @@ export default function AssetForm({ asset, onClose }: Props) {
             </label>
           </div>
           {/* 재건축 (입주 시점 가치 전환) */}
-          <div className="border-t border-gray-700/50 pt-3 mt-2">
-            <p className="text-xs text-gray-500 mb-2">🏗️ 재건축 (입주 시점 가치 전환)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>입주 후 예상 가치</label>
-                <input type="text" inputMode="numeric" className={inputCls} value={futureValue > 0 ? futureValue.toLocaleString() : ''} onChange={(e) => setFutureValue(Number(e.target.value.replace(/,/g, '')) || 0)} placeholder="0 (미입력 시 현재 가치 유지)" />
-              </div>
-              <div>
-                <label className={labelCls}>입주 예정 연도</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={futureYear || ''} onChange={(e) => setFutureYear(+e.target.value)} placeholder="예: 2028" />
-              </div>
-            </div>
-            <p className="text-xs text-gray-600 mt-1">해당 연도부터 잔액 추이·걸보 재산분에 예상 가치 반영.</p>
-          </div>
+          <RealEstateFutureValueFields
+            futureValue={futureValue}
+            futureYear={futureYear}
+            onFutureValue={setFutureValue}
+            onFutureYear={setFutureYear}
+          />
         </div>
       )}
 

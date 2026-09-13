@@ -3,19 +3,19 @@ import { parseBirthYear, resolveAge, resolveRetirementYear, nationalPensionStart
 
 describe('people (생년월 헬퍼)', () => {
   it('parseBirthYear: YYYY.MM 파싱', () => {
-    expect(parseBirthYear('1972.03')).toBe(1972)
+    expect(parseBirthYear('1980.05')).toBe(1980)
     expect(parseBirthYear('')).toBeNull()
     expect(parseBirthYear(undefined)).toBeNull()
   })
 
   it('nationalPensionStartYear: 출생연도 + 65', () => {
-    expect(nationalPensionStartYear('1972.03')).toBe(2037)
+    expect(nationalPensionStartYear('1980.05')).toBe(2045)
     expect(nationalPensionStartYear('')).toBeNull()
   })
 
   it('resolveAge: 생년월 우선, 없으면 currentAge 폴 백', () => {
     const y = new Date().getFullYear()
-    expect(resolveAge({ birthHusband: '1972.03' })).toBe(y - 1972)
+    expect(resolveAge({ birthHusband: '1980.05' })).toBe(y - 1980)
     expect(resolveAge({ currentAge: 50 })).toBe(50)  // 생년월 없으면 폴 백
   })
 

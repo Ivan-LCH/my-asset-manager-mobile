@@ -3,6 +3,7 @@ import { useCreateAsset, useAssetsByType } from '@/hooks/useAssets'
 import type { Asset, AssetType, Currency, StockDetail, Ownership, OwnershipPreset } from '@/types'
 import { ownershipFromPreset, presetFromOwnership } from '@/types'
 import { TYPE_LABELS, ASSET_TYPES, cn } from '@/lib/utils'
+import RealEstateFutureValueFields from '@/components/assets/RealEstateFutureValueFields'
 import StockSearch from '@/components/common/StockSearch'
 import { fetchStockPrice } from '@/lib/stockPrice'
 
@@ -35,6 +36,8 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   const [tenantDeposit, setTenantDeposit] = useState(0)
   const [isOwned,       setIsOwned]       = useState(false)
   const [hasTenant,     setHasTenant]     = useState(false)
+  const [futureValue,   setFutureValue]   = useState(0)
+  const [futureYear,    setFutureYear]    = useState(0)
   const [ownership,     setOwnership]     = useState<Ownership>({ husband: 50, wife: 50 })
 
   // 주식
@@ -100,7 +103,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   }
 
   const buildDetail = () => {
-    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant }
+    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined }
     if (type === 'STOCK') {
       // 계좌 통합 모드 — 계좌 하나가 자산 하나. 티커/수량 없음, 연간 배당금을 dps로 저장(수량=1)
       if (stockMode === 'account') return {
@@ -279,6 +282,13 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
                   세입자 있음
                 </label>
               </div>
+              {/* 재건축 (입주 시점 가치 전환) */}
+              <RealEstateFutureValueFields
+                futureValue={futureValue}
+                futureYear={futureYear}
+                onFutureValue={setFutureValue}
+                onFutureYear={setFutureYear}
+              />
             </>
           )}
         </div>

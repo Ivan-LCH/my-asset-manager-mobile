@@ -39,7 +39,7 @@ describe('corpSim 계산', () => {
   })
 
   it('지분 4:4:2 분배: 배당가능의 40/40/20', () => {
-    const r = computeCorp(plan())
+    const r = computeCorp(plan({ shareHusband: 40, shareWife: 40, shareSon: 20 }))
     const sum = r.perShare.husband.gross + r.perShare.wife.gross + r.perShare.son.gross
     expect(sum).toBeCloseTo(r.distributable)
     expect(r.perShare.son.gross).toBeCloseTo(r.distributable * 0.2)

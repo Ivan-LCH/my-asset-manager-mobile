@@ -38,7 +38,7 @@ export const EMPTY_PLAN: RetirementPlan = {
   linkCorpSim:     false,
   linkPensionSim:  false,
   holdingTaxAnnual:    4_100_000,   // 보유세(재산세+종부세) 기본 추정치
-  holdingTaxStartYear: 2030,        // 매탄주공 입주(29년 말) 다음 핸드오버부터 부과
+  holdingTaxStartYear: 2030,        // 보유세 부과 개시 연도 기본값
 }
 
 /** 안전 숫자 변환 (undefined/문자열/NaN → 0). 가져온 plan 항목의 누락 필드 대비 */

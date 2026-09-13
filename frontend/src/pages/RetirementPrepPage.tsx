@@ -133,7 +133,7 @@ function EmergencySection({ items, onChange }: { items: EmergencyItem[]; onChang
         {items.map((item) => (
           <div key={item.id} className="flex flex-wrap items-center gap-2">
             <div className="w-full sm:flex-1 min-w-0">
-              <TextInput value={item.name} onChange={(v) => update(item.id, 'name', v)} placeholder="항목명 (예: 아들 결혼)" />
+              <TextInput value={item.name} onChange={(v) => update(item.id, 'name', v)} placeholder="항목명 (예: 자녀 결혼자금)" />
             </div>
             <YearInput value={item.year} onChange={(v) => update(item.id, 'year', v)} />
             <div className="w-28 sm:w-36 shrink-0"><AmountInput value={item.amount} onChange={(v) => update(item.id, 'amount', v)} /></div>

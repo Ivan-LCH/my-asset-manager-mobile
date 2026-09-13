@@ -12,7 +12,7 @@ export default function Settings() {
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [birthHusband,   setBirthHusband]   = useState('1972.03')
+  const [birthHusband,   setBirthHusband]   = useState('')
   const [birthWife,      setBirthWife]      = useState('')
   const [retirementYear, setRetirementYear] = useState(new Date().getFullYear() + 10)
   const [saved,          setSaved]          = useState(false)
@@ -29,7 +29,7 @@ export default function Settings() {
 
   useEffect(() => {
     if (settings) {
-      setBirthHusband(settings.birthHusband ?? '1972.03')
+      setBirthHusband(settings.birthHusband ?? '')
       setBirthWife(settings.birthWife ?? '')
       setRetirementYear(settings.retirementYear ?? new Date().getFullYear() + 10)
     }
@@ -198,15 +198,17 @@ export default function Settings() {
 
         <div className="space-y-4">
           <div>
-            <label className="text-xs text-gray-400 block mb-1">남편 생년월 (예: 1972.03)</label>
+            <label className="text-xs text-gray-400 block mb-1">남편 생년월 (예: 1980.05)</label>
             <input
-              type="text" inputMode="decimal" placeholder="1972.03"
+              type="text" inputMode="decimal" placeholder="예: 1980.05"
               className={inputCls}
               value={birthHusband}
               onChange={(e) => setBirthHusband(e.target.value)}
             />
             <p className="text-xs text-gray-500 mt-1">
-              현재 {resolveAge(preview)}세 · 65세(국민연금 개시) {nationalPensionStartYear(birthHusband) ?? '-'}년
+              {birthHusband
+                ? `현재 ${resolveAge(preview)}세 · 65세(국민연금 개시) ${nationalPensionStartYear(birthHusband) ?? '-'}년`
+                : '입력하면 나이·시뮬레이션에 반영됩니다.'}
             </p>
           </div>
           <div>
