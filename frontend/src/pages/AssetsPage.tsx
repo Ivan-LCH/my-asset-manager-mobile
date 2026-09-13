@@ -7,16 +7,18 @@ import AssetPage from './AssetPage'
 import { SegmentedTabs } from '@/components/common/SegmentedTabs'
 import type { AssetType } from '@/types'
 
-// 유형별 아이콘/색 (칩)
+// 유형별 아이콘/색 (칩) — 실물·기타는 하나로 병합 (UI 간소화 ④)
 const CHIPS: { value: AssetType | 'ALL'; label: string; emoji: string }[] = [
-  { value: 'ALL',         label: '전체',   emoji: '📋' },
-  { value: 'STOCK',       label: '주식',   emoji: '📈' },
-  { value: 'REAL_ESTATE', label: '부동산', emoji: '🏠' },
-  { value: 'PENSION',     label: '연금',   emoji: '🛡️' },
-  { value: 'SAVINGS',     label: '예적금', emoji: '💰' },
-  { value: 'PHYSICAL',    label: '실물',   emoji: '💎' },
-  { value: 'ETC',         label: '기타',   emoji: '🎵' },
+  { value: 'ALL',         label: '전체',     emoji: '📋' },
+  { value: 'STOCK',       label: '주식',     emoji: '📈' },
+  { value: 'REAL_ESTATE', label: '부동산',   emoji: '🏠' },
+  { value: 'PENSION',     label: '연금',     emoji: '🛡️' },
+  { value: 'SAVINGS',     label: '예적금',   emoji: '💰' },
+  { value: 'ETC',         label: '실물·기타', emoji: '💎' },
 ]
+
+/** 병합 전 구값 'PHYSICAL' → 'ETC' 칩으로 정규화 */
+const normalizeTab = (v: string | null) => (v === 'PHYSICAL' ? 'ETC' : v) as AssetType | 'ALL' | null
 
 /**
  * 자산 통합 페이지 — 유형 칩으로 기존 유형별 페이지를 그대로 표시.
@@ -24,9 +26,9 @@ const CHIPS: { value: AssetType | 'ALL'; label: string; emoji: string }[] = [
  */
 export default function AssetsPage() {
   const [params] = useSearchParams()
-  const initial = params.get('type') as AssetType | null
+  const initial = normalizeTab(params.get('type'))
   const [type, setType] = useState<AssetType | 'ALL'>(
-    initial ?? (localStorage.getItem('assets_tab') as AssetType | 'ALL') ?? 'STOCK',
+    initial ?? normalizeTab(localStorage.getItem('assets_tab')) ?? 'STOCK',
   )
 
   useEffect(() => {
@@ -42,9 +44,8 @@ export default function AssetsPage() {
       {type === 'STOCK'       && <StockPage />}
       {type === 'REAL_ESTATE' && <RealEstatePage />}
       {type === 'PENSION'     && <PensionPage />}
-      {type === 'SAVINGS'     && <AssetPage type="SAVINGS" />}
-      {type === 'PHYSICAL'    && <AssetPage type="PHYSICAL" />}
-      {type === 'ETC'         && <AssetPage type="ETC" />}
+      {type === 'SAVINGS'     && <AssetPage types={['SAVINGS']} />}
+      {type === 'ETC'         && <AssetPage types={['PHYSICAL', 'ETC']} />}
       {type === 'ALL'         && <AllSummary />}
     </div>
   )

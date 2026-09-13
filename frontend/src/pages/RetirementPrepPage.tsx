@@ -13,19 +13,7 @@ import type {
   PensionSimPlan, PortfolioSettings,
 } from '@/types'
 import { EMPTY_PENSION_PLAN } from '@/lib/pensionSim'
-
-const uid = () => Math.random().toString(36).slice(2, 9)
-
-const DEFAULT_EXPENSES: ExpenseItem[] = [
-  { id: uid(), name: '식비',       amount: 600_000 },
-  { id: uid(), name: '주거관리비', amount: 200_000 },
-  { id: uid(), name: '교통비',     amount: 150_000 },
-  { id: uid(), name: '통신비',     amount: 80_000  },
-  { id: uid(), name: '문화/여가',  amount: 200_000 },
-  { id: uid(), name: '의복/미용',  amount: 100_000 },
-  { id: uid(), name: '경조사비',   amount: 100_000 },
-  { id: uid(), name: '기타잡비',   amount: 150_000 },
-]
+import { uid, DEFAULT_EXPENSES, DEFAULT_HI } from '@/lib/retirementPlan'
 
 // ── 유틸/헬퍼 ──────────────────────────────────────────────
 
@@ -275,7 +263,7 @@ export default function RetirementPrepPage() {
         })),
         emergency: saved.emergency ?? [],
         retirementYear: saved.retirementYear ?? new Date().getFullYear() + 10,
-        healthInsurance: saved.healthInsurance ?? { interestDividendIncome: 0, pensionIncome: 0, otherIncome: 0, propertyTaxBase: 0, rentalDeposit: 0, carValue: 0, scorePerPoint: 208.4, autoLinkPension: true, autoLinkDividend: true },
+        healthInsurance: saved.healthInsurance ?? DEFAULT_HI,
         linkCorpSim: saved.linkCorpSim ?? false,
         linkPensionSim: saved.linkPensionSim ?? false,
       })

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { useAssets, useAssetsByType } from '@/hooks/useAssets'
+import { useAssets } from '@/hooks/useAssets'
 import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
@@ -9,11 +9,14 @@ import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { formatMoney, formatManwon, formatPnl, TYPE_LABELS } from '@/lib/utils'
 import type { AssetType, Asset } from '@/types'
 
-interface Props { type: AssetType }
+interface Props { types: AssetType[] }
 
-export default function AssetPage({ type }: Props) {
-  const assets = useAssetsByType(type)
-  const { isLoading } = useAssets()
+/** 수량 기반 유형(주식·실물)은 원금 = 단가 × 수량 */
+const isQtyBased = (a: Asset) => a.type === 'STOCK' || a.type === 'PHYSICAL'
+
+export default function AssetPage({ types }: Props) {
+  const { data: all = [], isLoading } = useAssets()
+  const assets = all.filter((a) => types.includes(a.type))
   const [modalId,    setModalId]    = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
@@ -21,23 +24,25 @@ export default function AssetPage({ type }: Props) {
 
   const active = assets.filter((a) => !a.disposalDate)
   const sold   = assets.filter((a) => !!a.disposalDate)
-  const isQtyBased = type === 'STOCK' || type === 'PHYSICAL'
 
   const totalVal  = active.reduce((s, a) => s + a.currentValue, 0)
   const totalCost = active.reduce((s, a) =>
-    isQtyBased
-      ? s + (a.acquisitionPrice ?? 0) * (a.quantity ?? 0)
-      : s + (a.acquisitionPrice ?? 0)
+    s + (a.acquisitionPrice ?? 0) * (isQtyBased(a) ? (a.quantity ?? 0) : 1)
   , 0)
   const pnl = totalVal - totalCost
   const roi = totalCost > 0 ? (pnl / totalCost) * 100 : 0
+
+  // 병합 유형(실물·기타) 타이틀 — 이모지 제거 후 조인
+  const title = types.length === 1
+    ? TYPE_LABELS[types[0]]
+    : types.map((t) => TYPE_LABELS[t].replace(/^\p{Extended_Pictographic}+\s/u, '')).join(' · ')
 
   if (isLoading) return <div className="flex items-center justify-center h-64 text-gray-400">로딩 중...</div>
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-100">{TYPE_LABELS[type]}</h2>
+        <h2 className="text-xl font-bold text-gray-100">{title}</h2>
         <button
           onClick={() => setShowCreate((v) => !v)}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
@@ -48,7 +53,7 @@ export default function AssetPage({ type }: Props) {
 
       {showCreate && (
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-          <AssetCreateForm defaultType={type} onClose={() => setShowCreate(false)} />
+          <AssetCreateForm defaultType={types[0]} onClose={() => setShowCreate(false)} />
         </div>
       )}
 
@@ -63,13 +68,15 @@ export default function AssetPage({ type }: Props) {
         />
       </div>
 
-      {/* 성장 추이 */}
-      {active.length > 0 && (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-gray-300 mb-4">📈 성장 추이</h3>
-          <AssetChart type={type} groupBy="name" defaultPeriod="3y" height={200} />
+      {/* 성장 추이 — 병합 유형(실물·기타)은 유형별로 표시 */}
+      {active.length > 0 && types.map((t) => (
+        <div key={t} className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-gray-300 mb-4">
+            📈 성장 추이{types.length > 1 ? ` — ${TYPE_LABELS[t]}` : ''}
+          </h3>
+          <AssetChart type={t} groupBy="name" defaultPeriod="3y" height={200} />
         </div>
-      )}
+      ))}
 
       {/* 보유 타일 */}
       {active.length > 0 && (
@@ -80,7 +87,7 @@ export default function AssetPage({ type }: Props) {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {active.map((a) => (
-              <AssetTile key={a.id} asset={a} isQtyBased={isQtyBased} onClick={() => setModalId(a.id)} />
+              <AssetTile key={a.id} asset={a} onClick={() => setModalId(a.id)} />
             ))}
           </div>
         </section>
@@ -92,7 +99,7 @@ export default function AssetPage({ type }: Props) {
           <h3 className="text-sm font-semibold text-gray-400">매각 완료 ({sold.length})</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-55">
             {sold.map((a) => (
-              <AssetTile key={a.id} asset={a} isQtyBased={isQtyBased} onClick={() => setModalId(a.id)} />
+              <AssetTile key={a.id} asset={a} onClick={() => setModalId(a.id)} />
             ))}
           </div>
         </section>
@@ -110,17 +117,14 @@ export default function AssetPage({ type }: Props) {
 }
 
 function AssetTile({
-  asset, isQtyBased, onClick,
+  asset, onClick,
 }: {
   asset: Asset
-  isQtyBased: boolean
   onClick: () => void
 }) {
   const isSold = !!asset.disposalDate
   const val    = isSold ? (asset.disposalPrice ?? 0) : asset.currentValue
-  const cost   = isQtyBased
-    ? (asset.acquisitionPrice ?? 0) * (asset.quantity ?? 0)
-    : (asset.acquisitionPrice ?? 0)
+  const cost   = (asset.acquisitionPrice ?? 0) * (isQtyBased(asset) ? (asset.quantity ?? 0) : 1)
   const pnl = val - cost
   const roi = cost > 0 ? (pnl / cost) * 100 : 0
 
@@ -150,7 +154,7 @@ function AssetTile({
           </div>
           <div className="text-right shrink-0">
             <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(val)}</p>
-            {isQtyBased && (
+            {isQtyBased(asset) && (
               <p className="text-xs text-gray-500 mt-0.5">{(asset.quantity ?? 0).toLocaleString()} 보유</p>
             )}
           </div>
