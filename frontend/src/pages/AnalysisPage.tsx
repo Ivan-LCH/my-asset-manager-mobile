@@ -4,11 +4,13 @@ import RetirementPrepPage from './RetirementPrepPage'
 import PensionSimPage from './PensionSimPage'
 import CorpSimPage from './CorpSimPage'
 import RetirementPage from './RetirementPage'
+import YearDashboardPage from './YearDashboardPage'
 import { SegmentedTabs } from '@/components/common/SegmentedTabs'
 
-type Tab = 'prep' | 'pension-sim' | 'corp-sim' | 'cashflow'
+type Tab = 'year' | 'prep' | 'pension-sim' | 'corp-sim' | 'cashflow'
 
 const TABS: { value: Tab; label: string; emoji: string }[] = [
+  { value: 'year',       label: '연도별',     emoji: '📅' },
   { value: 'prep',       label: '은퇴준비',   emoji: '🎯' },
   { value: 'pension-sim',label: '연금시뮬',   emoji: '🛡️' },
   { value: 'corp-sim',   label: '법인시뮬',   emoji: '🏢' },
@@ -23,7 +25,7 @@ export default function AnalysisPage() {
   const [params] = useSearchParams()
   const pTab = params.get('tab') as Tab | null
   const [tab, setTab] = useState<Tab>(
-    pTab ?? (localStorage.getItem('analysis_tab') as Tab) ?? 'prep',
+    pTab ?? (localStorage.getItem('analysis_tab') as Tab) ?? 'year',
   )
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export default function AnalysisPage() {
       {/* 세그먼트 탭 — 스크롤해도 상단 고정 */}
       <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} />
 
+      {tab === 'year'        && <YearDashboardPage />}
       {tab === 'prep'        && <RetirementPrepPage />}
       {tab === 'pension-sim' && <PensionSimPage />}
       {tab === 'corp-sim'    && <CorpSimPage />}

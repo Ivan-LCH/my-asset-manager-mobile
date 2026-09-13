@@ -152,12 +152,21 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   // 건보·세금 연도별 재산정 — 매년 연금·배당 성장·재산(재건축 전환) 반영
   const healthByYear = new Map<number, number>()
   const taxByYear = new Map<number, number>()
+  // 1인별 연도별 맵 — 연도별 대시보드 상세 표시용
+  const husbandTaxByYear = new Map<number, number>()
+  const wifeTaxByYear = new Map<number, number>()
+  const husbandHealthByYear = new Map<number, number>()
+  const wifeHealthByYear = new Map<number, number>()
   if (pensionLinked && pensionSimPlan) {
     for (const r of sched) {
       const propsY = realEstatePropertyBases(realEstateAssets, r.year)
       const th = perPersonYearTaxHealth(r, pensionSimPlan, propsY.husband, propsY.wife)
       healthByYear.set(r.year, th.husbandHealth + th.wifeHealth)
       taxByYear.set(r.year, th.husbandTax + th.wifeTax)
+      husbandTaxByYear.set(r.year, th.husbandTax)
+      wifeTaxByYear.set(r.year, th.wifeTax)
+      husbandHealthByYear.set(r.year, th.husbandHealth)
+      wifeHealthByYear.set(r.year, th.wifeHealth)
     }
   }
   const linkedOverride = perPerson ? {
@@ -258,6 +267,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
     corpPlan, pensionSimPlan, pensionLinked,
     // 연금·연도별 맵
     pensionMap, nationalByYear, privateByYear, dividendByYear, healthByYear, taxByYear,
+    husbandTaxByYear, wifeTaxByYear, husbandHealthByYear, wifeHealthByYear,
     // 1인별
     perPerson, stockDiv,
     // 목돈
