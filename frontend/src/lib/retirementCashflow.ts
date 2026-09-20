@@ -4,6 +4,12 @@ import { SIM_START_YEAR } from '@/lib/pensionCalc'
 import { num } from '@/lib/retirementPlan'
 import type { RetirementPlan, LumpsumItem } from '@/types'
 
+export function expenseFactor(plan:RetirementPlan,year:number){
+  const rate=Number.isFinite(plan.expenseInflationRate)?Math.min(100,Math.max(-99,plan.expenseInflationRate!)):0;
+  const base=Number.isInteger(plan.expenseBaseYear)?plan.expenseBaseYear!:new Date().getFullYear();
+  return Math.pow(1+rate/100,Math.max(0,year-base));
+}
+
 export interface CashFlowRow {
   year:                    number
   age:                     number
@@ -13,6 +19,9 @@ export interface CashFlowRow {
   corpSalaryMonthly:       number
   corpReturnMonthly:       number
   taxAnnual:               number  // 세금(연) — 종합·연금소득세는 연단위, 음수로 저장(지출 의미)
+  incomeTaxAnnual:         number  // 아래 세금 구성은 양수; 상세 화면도 이 결과를 사용
+  holdingTaxAnnual:        number
+  lumpsumTaxAnnual:        number
   expenseMonthly:          number
   travelMonthly:           number
   medicalMonthly:          number
@@ -30,8 +39,9 @@ export interface CorpCashFlow {
   salaryMonthly:      number
   phaseBoundaryYear:  number
   returnP1Monthly:    number
-  divP1Monthly:       number
-  divP2Monthly:       number
+  divP1Monthly:       number  // 개인 배당 원천징수 전 총액 (법인세 차감 후)
+  divP2Monthly:       number  // 개인 배당 원천징수 전 총액 (법인세 차감 후)
+  dividendTaxRate?:   number  // 저장된 법인 시뮬의 원천징수 가정, 미제공 시 기존 0.154
 }
 
 export function buildCashFlow(
@@ -56,32 +66,36 @@ export function buildCashFlow(
   lumpsumTaxByYear?: Map<number, number>,
   /** 보유세 연도별 맵(자동 계산) — 제공 시 plan의 수동 플랫 값(개시 연도~) 대신 연도별 값 사용. */
   holdingTaxByYear?: Map<number, number>,
+  registeredNationalByYear?: Map<number, number>,
+  registeredHealthByYear?: Map<number, number>,
 ): CashFlowRow[] {
   const currentYear = new Date().getFullYear()
   const endYear = currentYear + (100 - currentAge)
   const rows: CashFlowRow[] = []
 
-  const expenseMonthly = plan.expenses.reduce((s, e) => s + num(e.amount), 0)
+  const baseExpenseMonthly = plan.expenses.reduce((s, e) => s + num(e.amount), 0)
   const lumpsum = lumpsumOverride ?? plan.lumpsum
 
   let cumulative = 0
 
   for (let year = SIM_START_YEAR; year <= endYear; year++) {
     const age = currentAge + (year - currentYear)
+    const factor=expenseFactor(plan,year),expenseMonthly=baseExpenseMonthly*factor;
+    const medicalMonthly=num(plan.medicalMonthly)*factor;
 
     // 여행비: phase1Until 이하면 phase1Times, 이후면 phase2Times
     const travelMonthly = plan.travel.reduce((s, t) => {
       const times = year <= num(t.phase1Until) ? num(t.phase1Times) : num(t.phase2Times)
-      return s + (times * num(t.costPerTrip)) / 12
+      return s + (times * num(t.costPerTrip)*factor) / 12
     }, 0)
 
     // 연금 분리: 국민연금 + 개인연금(IRP·퇴직·연금저축)
     const nationalPensionMonthly = linked
       ? (linked.nationalByYear.get(year) ?? 0)
-      : 0
+      : (registeredNationalByYear?.get(year) ?? 0)
     const pensionMonthly = linked
       ? (linked.privateByYear.get(year) ?? 0)
-      : (pensionMap.get(year) ?? 0)
+      : Math.max(0,(pensionMap.get(year) ?? 0)-nationalPensionMonthly)
 
     const emergencyAnnual = plan.emergency.reduce((s, e) => (num(e.year) === year ? s + num(e.amount) : s), 0)
       + (year === SIM_START_YEAR ? corpLoanOutflow : 0)
@@ -102,25 +116,24 @@ export function buildCashFlow(
       : (corpCF ? corpDiv : (stockDivMonthly + corpDiv))
 
     // 건보: 연동 시 연도별(재산·소득 매년 반영), 아니면 고정
-    const hiMonthly = linked ? (linked.healthByYear.get(year) ?? 0) : healthInsuranceMonthly
+    const hiMonthly = linked ? (linked.healthByYear.get(year) ?? 0) : (registeredHealthByYear?.get(year) ?? healthInsuranceMonthly)
 
     // 세금(연) — 종합·연금소득세는 연단위 납부 → 음수로 저장(지출 의미) → 누적에서 그대로 합산.
     // 연동 시 연도별 1인별 산정, 아니면 근사(배당 15.4% + 급여 3%)×12 + 목돈 퇴직소득세
     // + 보유세(재산세+종부세): 자동 맵 제공 시 연도별 값, 아니면 수동 플랫(개시 연도~)
     const holdingTaxAnnual = holdingTaxByYear
       ? (holdingTaxByYear.get(year) ?? 0)
-      : year >= (plan.holdingTaxStartYear ?? Infinity)
+      : year >= (plan.holdingTaxStartYear ?? plan.retirementYear)
         ? (plan.holdingTaxAnnual ?? 0)
         : 0
-    const taxAnnualRaw = (linked
+    const incomeTaxAnnual = linked
       ? (linked.taxByYear.get(year) ?? 0)
-      : (dividendMonthly * 0.154 + corpSalaryMonthly * 0.03) * 12)
-      + lumpsumTaxAnnual
-      + holdingTaxAnnual
+      : (dividendMonthly * (corpCF?.dividendTaxRate ?? 0.154) + corpSalaryMonthly * 0.03) * 12
+    const taxAnnualRaw = incomeTaxAnnual + lumpsumTaxAnnual + holdingTaxAnnual
     const taxAnnual = -Math.abs(taxAnnualRaw)   // 세금 = 음수
 
     // 세금은 월 지출에서 제외 (연간 조정항목)
-    const totalExpense = expenseMonthly + travelMonthly + num(plan.medicalMonthly) + hiMonthly
+    const totalExpense = expenseMonthly + travelMonthly + medicalMonthly + hiMonthly
     const totalIncome  = nationalPensionMonthly + pensionMonthly + dividendMonthly + corpSalaryMonthly + corpReturnMonthly
     const balance      = totalIncome - totalExpense
 
@@ -131,8 +144,9 @@ export function buildCashFlow(
       year, age,
       nationalPensionMonthly, pensionMonthly, dividendMonthly, corpSalaryMonthly, corpReturnMonthly,
       taxAnnual,
+      incomeTaxAnnual, holdingTaxAnnual, lumpsumTaxAnnual,
       expenseMonthly, travelMonthly,
-      medicalMonthly: num(plan.medicalMonthly),
+      medicalMonthly,
       healthInsuranceMonthly: hiMonthly,
       totalExpense, lumpsumReceived, totalIncome, balance,
       emergencyAnnual, cumulative,

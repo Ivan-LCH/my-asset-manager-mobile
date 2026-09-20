@@ -61,7 +61,7 @@ export function simulateAccounts(opts: AccountSimOptions): AccountSimRow[] {
     const irpDividend = irpBalance * irpY
     // 배당으로 우선 충당
     const pensionFromDiv = Math.min(irpDividend, annualPension)
-    const pensionFromPrincipal = Math.max(0, annualPension - irpDividend)
+    const pensionFromPrincipal = Math.min(Math.max(0, irpBalance + irpGrowth), Math.max(0, annualPension - irpDividend))
     const reinvest = irpDividend - pensionFromDiv   // 양수=재투자, 음수 안 됨 (부족분은 principal에서)
     // 잔액 = 전년 × (1+성장) + 재투자 - 원금인출
     irpBalance = irpBalance + irpGrowth + reinvest - pensionFromPrincipal

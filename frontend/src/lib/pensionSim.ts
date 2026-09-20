@@ -3,8 +3,12 @@
 // 기존 연금원천(sources)은 그대로 가정(연금=남편 명의), + 유입 항목의 목적지·명의에
 // 따라 1인별 세금·건보를 산출 → 가구 총계.
 // 모든 수치는 사용자 가정에 기반한 추정치.
-import type { PensionSimPlan, PensionSource, PensionAllocation, Ownership } from '@/types'
+import type { PensionSimPlan, PensionSource, PensionAllocation, Ownership, Settings } from '@/types'
+import { comprehensiveTax, separatedDividendTax } from './taxMath'
+export { comprehensiveTax, separatedDividendTax } from './taxMath'
+import { annualIncomeTax } from './incomeTax'
 import { calcHealthInsurance } from '@/lib/healthInsurance'
+import { annualHealth } from './annualHealth'
 
 /** 연금소득세 누진구간 (연금소득 전용, 종합소득세와 별개) */
 export function pensionIncomeTax(taxable: number): number {
@@ -35,7 +39,7 @@ export function severanceTax(amount: number): number {
  *  (실제는 가입기간별 비과세 비율 계산 필요 — 시뮬레이션 단순화) */
 export const NATIONAL_PENSION_NONTAX_RATE = 0
 
-/** 연금소득세(사적+공적 합산) — 세법대로:
+/** 연금소득세(사적+공적 합산) — 기존 간이 모형, 법정 신고세액 아님:
  *  연금소득 과세표준 = (사적 과세연금 − 연금소득공제 1,200만, 0 하한) + 국민연금 과세분.
  *  연금소득공제는 사적연금(IRP·연금저축)에만 적용 — 국민연금(공적연금)은 공제 없이 합산.
  *  합산 과세표준에 단일 누진(3~6%) 적용. */
@@ -49,63 +53,44 @@ export function pensionTaxCombined(
   return pensionIncomeTax(privateBase + nationalTaxable)
 }
 
-/** 종합소득세 누진세율 (2024년 기준, 단순화) */
-export function comprehensiveTax(taxableIncome: number): number {
-  const t = Math.max(0, taxableIncome)
-  if (t <= 0) return 0
-  if (t <= 14_000_000) return t * 0.06
-  if (t <= 50_000_000) return t * 0.15 - 1_260_000
-  if (t <= 88_000_000) return t * 0.24 - 5_760_000
-  if (t <= 150_000_000) return t * 0.35 - 15_400_000
-  if (t <= 300_000_000) return t * 0.38 - 19_900_000
-  if (t <= 500_000_000) return t * 0.40 - 25_900_000
-  if (t <= 1_000_000_000) return t * 0.42 - 31_900_000
-  return t * 0.45 - 61_900_000
-}
-
 /** 분리과세율 (이자·배당 15.4%) */
 export const SEPARATED_TAX_RATE = 0.154
-
-/** 배당가산율 — 종합과세되는 배당(2천만 초과분)에 법인세액상당액 가산.
- *  배당은 법인세 후 금액이므로 가산율 = t/(1−t). 2026 세제개편 최저세율 t=10% 기준
- *  10/90 ≈ 11.11%. (구 최저세율 9% 시 9/91 ≈ 9.89%여서 종전엔 10% 근사치 사용)
- *  대주주·비상장 원칙, 상장 소액주주는 미적용이지만
- *  시뮬레이션 단순화로 종합과세 배당 전체에 균일 적용. */
-export const DIVIDEND_GROSS_UP_RATE = 10 / 90
-/** 배당세액공제율 — 배당가산액의 13% (이중과세 경감 세액공제) */
-export const DIVIDEND_TAX_CREDIT_RATE = 0.13
 
 /** 2026 세제개편 배당 선택분리과세(성장배당) 누진 — 지방소득세 10% 포함.
  *  현금배당액 기준: 2천만 이하 15.4% / ~3억 22% / ~50억 27.5% / 초과 33%
  *  (기본 14/20/25/30% + 지방세). 2026년분 배당부터 2028년까지 한시 —
  *  시뮬 수령개시(2029~)는 연장 가정. 첫 구간 15.4%가 기본 원천징수율과 동일. */
-export function separatedDividendTax(dividend: number): number {
-  const d = Math.max(0, dividend)
-  if (d <= 20_000_000) return Math.round(d * 0.154)
-  if (d <= 300_000_000) return Math.round(3_080_000 + (d - 20_000_000) * 0.22)
-  if (d <= 5_000_000_000) return Math.round(64_680_000 + (d - 300_000_000) * 0.275)
-  return Math.round(1_357_180_000 + (d - 5_000_000_000) * 0.33)
-}
-
 /** 금융소득종합과세 기준 — 연 2천만원 초과분은 종합소득세 합산 (1인별 적용) */
 export const FINANCIAL_INCOME_LIMIT = 20_000_000
 
 /** 금융소득 과세 분해 (1인분). opts.separatedDividend = 성장배당 선택분리과세 적용분 */
 export interface TaxBreakdown {
   financialIncome:        number
+  otherIncome:            number
+  deduction:              number
+  ordinaryFinancial:      number
+  exceedsThreshold:       boolean
+  /** 금융소득 전체의 예상 원천징수(지방세 포함). 실제 기납부 내역은 아님. */
+  withholdingTax:         number
+  /** 금융·입력 기타소득 총세액 - 금융 원천징수 예상액. */
+  additionalTax:          number
+  /** 비교과세의 두 후보, 국세만. 배당가산·세액공제는 자료 부족으로 제외. */
+  generalNationalTax:     number
+  comparisonNationalTax:  number
   separatedTax:           number
   /** 성장배당(선택분리과세) 적용 배당 — 종합합산·가산 제외, 별도 누진 분리과세 */
   separatedDividend:      number
   separatedDividendTax:   number
   consolidatedFinancial:  number
-  /** 배당가산액 — 종합과세 배당의 법인세액상당 (과세표준에 가산) */
+  /** 호환 필드: 적격 배당 자료 미확인으로 가산하지 않음. */
   dividendGrossUp:        number
   comprehensiveTaxable:   number
   comprehensiveTax:       number
-  /** 종합합산된 금융소득에 이미 원천징수된 15.4% — 기납부세액 공제 */
+  /** 일반 금융소득 전체 원천징수 예상액(호환 필드). */
   withheldCredit:         number
-  /** 배당세액공제 — 배당가산액 × 13% */
+  /** 호환 필드: 적격 배당 자료 미확인으로 공제하지 않음. */
   dividendCredit:         number
+  /** 기존 호출 계약상 입력 기타소득 세금도 포함. 연금세는 별도 간이 추정. */
   totalFinancialTax:      number
 }
 export function comprehensiveTaxBreakdown(
@@ -114,34 +99,48 @@ export function comprehensiveTaxBreakdown(
   deduction: number,
   opts?: { separatedDividend?: number },
 ): TaxBreakdown {
-  // 성장배당(선택분리과세): 금융소득에서 분리해 자체 누진으로만 과세.
-  // 첫 구간 15.4%가 기본 원천징수율과 동일해 2천만 이하 배당은 결과 동일.
-  const gDiv = Math.max(0, Math.min(opts?.separatedDividend ?? 0, financialIncome))
+  // 일반 국내 이자·배당, 국세 원천징수 14% 가정. 소득세법 제62조 비교과세.
+  // 비영업대금·국외세액·적격 배당 가산/공제·연금 합산은 별도 자료가 필요하다.
+  const nonnegative = (n: number) => Number.isFinite(n) ? Math.max(0, n) : 0
+  financialIncome = nonnegative(financialIncome)
+  otherIncome = nonnegative(otherIncome)
+  deduction = nonnegative(deduction)
+  const gDiv = Math.min(nonnegative(opts?.separatedDividend ?? 0), financialIncome)
   const gTax = separatedDividendTax(gDiv)
   const ordinary = financialIncome - gDiv
   const separated = Math.min(ordinary, FINANCIAL_INCOME_LIMIT)
   const separatedTax = Math.round(separated * SEPARATED_TAX_RATE)
   const consolidatedFinancial = Math.max(0, ordinary - FINANCIAL_INCOME_LIMIT)
-  // 배당가산: 종합과세되는 배당에 법인세액상당액 가산 → 과세표준 확대
-  const grossUp = Math.round(consolidatedFinancial * DIVIDEND_GROSS_UP_RATE)
-  const comprehensiveBase = consolidatedFinancial + grossUp + Math.max(0, otherIncome)
-  const comprehensiveTaxable = Math.max(0, comprehensiveBase - deduction)
-  const compTaxRaw = comprehensiveTax(comprehensiveTaxable)
-  // 초과분도 수령 시 15.4% 원천징수되며, 종합소득세 신고 시 기납부세액으로 공제된다.
-  // 공제 없이 누진세 전액을 매기면 이중과세로 세금이 과대 계상됨.
-  const withheldCredit = Math.round(consolidatedFinancial * SEPARATED_TAX_RATE)
-  // 배당세액공제: 가산액의 13% — 법인단계 이중과세 경감
-  const dividendCredit = Math.round(grossUp * DIVIDEND_TAX_CREDIT_RATE)
-  const compTax = Math.max(0, compTaxRaw - withheldCredit - dividendCredit)
+  const exceedsThreshold = ordinary > FINANCIAL_INCOME_LIMIT
+  const comprehensiveTaxable = Math.max(0, consolidatedFinancial + otherIncome - deduction)
+  const generalNationalTax = separated * 0.14 + comprehensiveTax(comprehensiveTaxable)
+  const comparisonNationalTax = ordinary * 0.14 + comprehensiveTax(Math.max(0, otherIncome - deduction))
+  const nationalTax = exceedsThreshold ? Math.max(generalNationalTax, comparisonNationalTax) : comparisonNationalTax
+  const ordinaryTax = Math.round(nationalTax * 1.1)
+  const withheldCredit = Math.round(ordinary * SEPARATED_TAX_RATE)
+  const withholdingTax = withheldCredit + Math.round(gDiv * SEPARATED_TAX_RATE)
+  const totalFinancialTax = ordinaryTax + gTax
   return {
-    financialIncome, separatedTax,
+    financialIncome, otherIncome, deduction, ordinaryFinancial: ordinary, exceedsThreshold,
+    withholdingTax, additionalTax: totalFinancialTax - withholdingTax,
+    generalNationalTax, comparisonNationalTax, separatedTax,
     separatedDividend: gDiv, separatedDividendTax: gTax,
-    consolidatedFinancial, dividendGrossUp: grossUp,
+    consolidatedFinancial, dividendGrossUp: 0,
     comprehensiveTaxable,
-    comprehensiveTax: compTax,
-    withheldCredit, dividendCredit,
-    totalFinancialTax: separatedTax + compTax + gTax,
+    comprehensiveTax: ordinaryTax - withheldCredit,
+    withheldCredit, dividendCredit: 0,
+    totalFinancialTax,
   }
+}
+
+/** 구 금융소득 단독 계산 호환용. 통합 화면·현금흐름은 annualIncomeTax를 사용한다. */
+export function annualFinancialTax(row: Pick<PensionScheduleRow, 'financialHusbandAnnual' | 'financialWifeAnnual'>, plan: PensionSimPlan) {
+  const ded = computePerPersonComprehensiveDeduction(plan)
+  const person = (owner: 'husband' | 'wife', income: number) => comprehensiveTaxBreakdown(
+    income, owner === 'husband' ? plan.otherIncome : 0, ded[owner],
+    { separatedDividend: income * (plan.stockAccount[owner].growthDividendRatio ?? 0) / 100 },
+  )
+  return { husband: person('husband', row.financialHusbandAnnual), wife: person('wife', row.financialWifeAnnual) }
 }
 
 /** 지역건강보험료 추정(월) — 소득분(연금 50%·금융/기타 100%) × 7.09% + 장기요양 12.95%. 1인분. */
@@ -296,6 +295,8 @@ export interface VehicleOptions {
  *  - 국민연금 = expectedStartYear~End, 월수령액 × 12 × (1+증가율)^경과년 (65세 step-up 반영).
  *  국민연금 sources는 원금인출 합계에서 제외(이중계산 방지). */
 export interface PensionScheduleRow {
+  entries?: { id: string; paid: number; owner?: 'husband' | 'wife'; name?: string; taxType?: PensionSource['taxType']; expectedStartYear?: number; funding?: import('@/types').PensionWithdrawalFunding }[]
+  pensionByOwner?: {husband:{national:number;taxable:number;exempt:number};wife:{national:number;taxable:number;exempt:number}}
   year:            number
   drawdownAnnual:  number   // IRP/연금저축 인출 (과세+비과세, 성장률 적용)
   nationalAnnual:  number   // 국민연금 (과세)
@@ -347,7 +348,9 @@ export function pensionSchedule(
   }
 
   // ── 등록 월수령액 모델 (비과세·과세 연금저축): expectedMonthlyPayout × 12 × 연성장 ──
-  const registeredSources = plan.sources.filter((s) => s.expectedMonthlyPayout && s.expectedMonthlyPayout > 0)
+  // 국민연금은 nationals에서 한 번만 지급한다. 월수령액이 등록돼 있어도
+  // 사적 연금 인출 경로에 포함하거나 투자 원금으로 취급하지 않는다.
+  const registeredSources = plan.sources.filter((s) => s.taxType !== 'national' && s.expectedMonthlyPayout && s.expectedMonthlyPayout > 0)
   const allowanceAnnualAt = (Y: number): { taxable: number; exempt: number } => {
     let taxable = 0, exempt = 0
     for (const s of registeredSources) {
@@ -425,44 +428,15 @@ export function perPersonYearTaxHealth(
   husbandProp: PersonProperty,
   wifeProp: PersonProperty,
   scorePerPoint = 208.4,
+  settings?: Partial<Settings>,
 ): { husbandTax: number; wifeTax: number; husbandHealth: number; wifeHealth: number } {
-  const ded = computePerPersonComprehensiveDeduction(plan)
+  const tax = annualIncomeTax(row, plan, settings)
+  const husbandTax = tax.husband.totalTax
+  const wifeTax = tax.wife.totalTax
 
-  const pensionTaxableH = row.taxableAnnual
-  const pensionExemptH = row.exemptAnnual
-  // 연금소득세 — 국민연금(공적)은 연금소득공제 대상 아님: 사적분에만 공제 후 합산 누진
-  const pensionTaxH = pensionTaxCombined(row.taxableAnnual - row.nationalAnnual, row.nationalAnnual, plan.pensionDeduction)
-
-  const finH = row.financialHusbandAnnual
-  const finW = row.financialWifeAnnual
-  const ftH = comprehensiveTaxBreakdown(finH, plan.otherIncome, ded.husband, {
-    separatedDividend: finH * (plan.stockAccount.husband.growthDividendRatio ?? 0) / 100,
-  })
-  const ftW = comprehensiveTaxBreakdown(finW, 0, ded.wife, {
-    separatedDividend: finW * (plan.stockAccount.wife.growthDividendRatio ?? 0) / 100,
-  })
-
-  const husbandTax = pensionTaxH + ftH.totalFinancialTax
-  const wifeTax = ftW.totalFinancialTax
-
-  const husbandHealth = calcHealthInsurance({
-    pensionAnnual: pensionTaxableH + pensionExemptH,
-    dividendAnnual: finH,
-    otherAnnual: plan.otherIncome,
-    propertyTaxBase: husbandProp.propertyTaxBase,
-    rentalDeposit: husbandProp.rentalDeposit,
-    carValue: husbandProp.carValue ?? 0,
-    scorePerPoint,
-  }).grandTotal
-  const wifeHealth = calcHealthInsurance({
-    pensionAnnual: 0,
-    dividendAnnual: finW,
-    otherAnnual: 0,
-    propertyTaxBase: wifeProp.propertyTaxBase,
-    rentalDeposit: wifeProp.rentalDeposit,
-    carValue: wifeProp.carValue ?? 0,
-    scorePerPoint,
-  }).grandTotal
+  // Individual figures are separate-household comparisons, not additive bills for a joint household.
+  const health=annualHealth(row,plan,{husband:husbandProp,wife:wifeProp})
+  const husbandHealth=health.husbandSeparate.grandTotal,wifeHealth=health.wifeSeparate.grandTotal
 
   return { husbandTax, wifeTax, husbandHealth, wifeHealth }
 }
@@ -661,6 +635,7 @@ export function sourcesFromAssets(
       name: a.name,
       principal,
       taxType,
+      taxTypeManual: existingSrc?.taxTypeManual,
       yieldRate: existingSrc?.yieldRate ?? 4,
       owner: existingSrc?.owner ?? 'husband',
       // 수령 모델 필드 (자산 detail에서 자동 채움) — 비과세·과세 연금저축의 등록 월수령액

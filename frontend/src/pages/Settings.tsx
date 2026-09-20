@@ -1,8 +1,12 @@
+import MigrationReview from '@/planner/MigrationReview'
+import {pensionRegistrationSummary,registerPensionPlan} from '@/lib/registerPensionPlan'
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { Download, Upload, Cloud, CloudOff, FolderOpen, RefreshCw } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
-import { exportBackup, importBackup, clearAllData, seedSampleData, backfillStockPrices, type BackupData } from '@/lib/db'
+import { exportBackup, importBackup, previewBackup, restorePreviousImport, clearAllData, previewStockPriceCorrection, applyStockPriceCorrection, undoStockPriceCorrection, getLastBackupImport, type BackupData } from '@/lib/db'
+import {backupFileName,backupSummary} from '@/lib/backupInfo'
 import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
 import { googleSignIn, logout, isLoggedIn, saveToDrive, listBackupFiles, loadFromDrive, pickFolder } from '@/lib/googleDrive'
 
@@ -10,6 +14,7 @@ export default function Settings() {
   const { data: settings, isLoading } = useSettings()
   const saveMut = useSaveSettings()
   const qc = useQueryClient()
+  const {data:lastImport}=useQuery({queryKey:['backup-import-info'],queryFn:getLastBackupImport})
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [birthHusband,   setBirthHusband]   = useState('')
@@ -53,15 +58,21 @@ export default function Settings() {
     if (priceBackfill.running) return
     setPriceBackfill({ running: true, done: false, ok: false, msg: '준비 중...' })
     try {
-      const r = await backfillStockPrices(3, (done, total, name) =>
-        setPriceBackfill((s) => ({ ...s, msg: `${done}/${total} (${name})` })),
-      )
+      const preview = await previewStockPriceCorrection(3, (done,total) => setPriceBackfill({running:true,done:false,ok:false,msg:`${done} / ${total}종목 확인 중`}))
+      const additions=preview.additions??[]
+      const summary=`추가 ${additions.length}건 · 보정 ${preview.changes.length}건 · 동일 ${preview.unchanged??0}건 · 수량 근거 없음 ${preview.missingQuantity??0}건 · 외화/계좌합계 제외 ${preview.excluded??0}종목`
+      if (!preview.changes.length && !additions.length) {
+        setPriceBackfill({running:false,done:true,ok:preview.failed.length===0,msg:preview.failed.length ? `시세 조회 실패 ${preview.failed.length}종목 · ${summary}. 다시 시도해 주세요.` : `조회 완료 — ${summary}. ${preview.checked ? '새로 추가하거나 보정할 시세가 없습니다.' : '과거 수량 기록이 없어 채울 수 있는 날짜가 없습니다.'}`}); return;
+      }
+      if (!window.confirm(`최근 3개월의 빈 거래일을 채우고 기존 시세를 보정합니다. 현재 평가액·수량은 변경하지 않습니다.\n범위: ${preview.from} ~ ${preview.to} 전날\n${summary}\n조회 실패: ${preview.failed.join(', ') || '없음'}\n\n추가 날짜의 수량은 직전 기록 유지 가정이며 이력에 추정으로 표시됩니다. 취득 전·수량 근거 없는 날·휴장일은 만들지 않습니다.\n${additions.slice(0,6).map(h=>`${h.date}: 추가 · 수량 ${h.quantity} (${h.quantitySourceDate} 기준)`).join('\n')}\n${preview.changes.slice(0,6).map(c=>`${c.before.date}: 단가 ${c.before.price} → ${c.after.price}`).join('\n')}\n\n반영할까요? 이번 추가와 보정은 함께 되돌릴 수 있습니다.`)) {setPriceBackfill({running:false,done:true,ok:true,msg:'미리보기 취소 — 변경 없음'});return}
+      await applyStockPriceCorrection(preview)
+      const r = {assets:preview.assets,failed:preview.failed,updated:preview.changes.length+additions.length}
       await qc.invalidateQueries()
       const failNote = r.failed.length > 0 ? ` · 실패: ${r.failed.join(', ')}` : ''
       setPriceBackfill({
         running: false, done: true, ok: r.updated > 0,
         msg: r.updated > 0
-          ? `완료 — ${r.assets}개 종목에서 ${r.updated.toLocaleString()}일치 시세 반영${failNote}`
+          ? `완료 — ${summary}${failNote}`
           : `반영된 시세가 없습니다 (조회 실패 또는 이력 없음)${failNote}`,
       })
     } catch (e) {
@@ -80,10 +91,10 @@ export default function Settings() {
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `asset-manager-backup-${data.exportedAt.slice(0, 10)}.json`
+      a.download = backupFileName(data.exportedAt)
       a.click()
       URL.revokeObjectURL(url)
-      setBackupMsg({ ok: true, text: '내보내기 완료' })
+      setBackupMsg({ ok: true, text: '내보내기 완료: '+a.download+'\n'+backupSummary(data) })
     } catch {
       setBackupMsg({ ok: false, text: '내보내기 실패' })
     }
@@ -96,10 +107,19 @@ export default function Settings() {
     if (!file) return
     try {
       const text = await file.text()
-      const data = JSON.parse(text) as BackupData
-      await importBackup(data)
+      const data = JSON.parse(text.replace(/^\uFEFF/,'')) as BackupData
+      if((data as unknown as {kind?:string}).kind==='pension-plan-registration'){
+        if(!window.confirm('연금 계획만 적용\n'+pensionRegistrationSummary(data)+'\n\n적용할까요?'))return
+        const message=await registerPensionPlan(data)
+        await qc.invalidateQueries()
+        setBackupMsg({ok:true,text:message+' 분석 → 개인투자시뮬에서 등록한 연금 계획을 확인하세요.'})
+        return
+      }
+      const preview = await previewBackup(data)
+      if (!window.confirm('파일: '+file.name+'\n검증된 백업으로 현재 데이터 전체를 교체합니다. 원본 이력을 자동 보간하지 않습니다.\n'+preview.summary+'\n\n진행할까요? 직전 사본은 이 브라우저에 보관합니다.')) return
+      await importBackup(preview.data, preview.expected,file.name)
       await qc.invalidateQueries()   // 모든 쿼리 갱신
-      setBackupMsg({ ok: true, text: '가져오기 완료 (화면 새로고침 권장)' })
+      setBackupMsg({ ok: true, text: '가져오기 완료: '+file.name+'\n'+backupSummary(preview.data) })
     } catch (err) {
       setBackupMsg({ ok: false, text: err instanceof Error ? err.message : '가져오기 실패' })
     }
@@ -108,17 +128,11 @@ export default function Settings() {
 
   // ── 샘플 데이터 / 전체 삭제 ──
   const handleLoadSample = async () => {
-    try {
-      await seedSampleData()   // 내부에서 clearAllData 후 시드
-      await qc.invalidateQueries()
-      setBackupMsg({ ok: true, text: '샘플 데이터를 불러왔습니다' })
-    } catch {
-      setBackupMsg({ ok: false, text: '샘플 불러오기 실패' })
-    }
-    setTimeout(() => setBackupMsg(null), 3000)
+    window.open('/?demo=1', '_blank', 'noopener')
   }
 
   const handleClearAll = async () => {
+    if (!window.confirm('실제 자산·계획·분석·복구 사본을 모두 삭제합니다. 별도 백업이 없으면 복구할 수 없습니다. 계속할까요?')) return
     try {
       await clearAllData()
       await qc.invalidateQueries()
@@ -165,8 +179,10 @@ export default function Settings() {
     try {
       setDriveLoading(true)
       const json = await loadFromDrive(fileId)
-      const data = JSON.parse(json) as BackupData
-      await importBackup(data)
+      const data = JSON.parse(json.replace(/^\uFEFF/,'')) as BackupData
+      const preview = await previewBackup(data)
+      if (!window.confirm('Drive 백업으로 전체 교체:\n'+preview.summary+'\n진행할까요?')) { setDriveLoading(false); return }
+      await importBackup(preview.data, preview.expected,'Drive: '+(driveFiles.find(f=>f.id===fileId)?.name??'백업 파일'))
       await qc.invalidateQueries()
       setBackupMsg({ ok: true, text: 'Drive에서 복원 완료 (새로고침 권장)' })
     } catch (e) {
@@ -192,9 +208,9 @@ export default function Settings() {
   return (
     <div className="p-6 max-w-lg mx-auto space-y-6">
       <h2 className="text-xl font-bold text-gray-100">⚙️ 설정</h2>
-
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-5">
-        <h3 className="text-sm font-semibold text-gray-300">연금 시뮬레이션 기준</h3>
+      <p className="text-sm text-gray-300">새 계획의 구성원·은퇴일·물가 가정은 <Link className="underline text-blue-300" to="/plan">계획 화면</Link>에서 관리합니다. 여기는 백업·외부 연결·기존 도구 설정입니다.</p>
+      <details className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-5">
+        <summary className="text-sm font-semibold text-gray-300 cursor-pointer">기존 참고 계산기 인물 설정 (새 계획과 별도)</summary>
 
         <div className="space-y-4">
           <div>
@@ -207,7 +223,7 @@ export default function Settings() {
             />
             <p className="text-xs text-gray-500 mt-1">
               {birthHusband
-                ? `현재 ${resolveAge(preview)}세 · 65세(국민연금 개시) ${nationalPensionStartYear(birthHusband) ?? '-'}년`
+                ? `현재 ${resolveAge(preview)}세 · 65세 가정 참고연도 ${nationalPensionStartYear(birthHusband) ?? '-'}년 (실제 개시일은 계획에서 확인)`
                 : '입력하면 나이·시뮬레이션에 반영됩니다.'}
             </p>
           </div>
@@ -221,7 +237,7 @@ export default function Settings() {
             />
             <p className="text-xs text-gray-500 mt-1">
               {hasSpouse(preview)
-                ? `와이프 65세(국민연금) ${nationalPensionStartYear(birthWife)}년`
+                ? `배우자 65세 가정 참고연도 ${nationalPensionStartYear(birthWife)}년 (실제 수급요건 판정 아님)`
                 : '미혼(단독)으로 가정 — 와이프 연금·명의 없음'}
             </p>
           </div>
@@ -246,7 +262,7 @@ export default function Settings() {
           </button>
           {saved && <span className="text-xs text-emerald-400">저장되었습니다.</span>}
         </div>
-      </div>
+      </details>
 
       {/* 시세 자동 가져오기 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-2">
@@ -333,6 +349,7 @@ export default function Settings() {
         )}
       </div>
 
+      <MigrationReview />
       {/* 데이터 백업 / 복원 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-4">
         <div>
@@ -365,17 +382,20 @@ export default function Settings() {
           />
         </div>
         {backupMsg && (
-          <p className={`text-xs ${backupMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{backupMsg.text}</p>
+          <p className={`text-xs whitespace-pre-wrap break-words ${backupMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{backupMsg.text}</p>
         )}
-        <p className="text-xs text-gray-600">가져오기·샘플 불러오기는 기존 데이터를 모두 덮어씁니다.</p>
+        <p className="text-xs text-gray-400">가져오기는 검증·확인 후 전체 교체합니다. 샘플은 별도 저장소에서 열립니다. 소스 ZIP에는 이 브라우저의 개인 자산이 포함되지 않습니다.</p>
+        <p className="text-xs text-gray-400">저장된 IRP 재원·합산·목돈 연결, 개인별/연도별 세금 추가정보, 소급 시세와 수량 추정 근거도 백업에 포함됩니다. 편집 중인 값은 해당 화면에서 먼저 저장하세요. 내보낸 파일을 만드는 것만으로 다른 브라우저에 적용되지는 않습니다.</p>
+        {lastImport&&<details className="rounded border border-gray-700 p-3 text-xs" data-last-backup-import><summary className="cursor-pointer text-blue-300">이 브라우저에 마지막으로 가져온 백업</summary><p className="mt-2 break-words">파일: {lastImport.sourceName}</p><p>가져온 시각: {new Date(lastImport.importedAt).toLocaleString()}</p><p className="mt-2 whitespace-pre-wrap break-words">{lastImport.summary}</p><p className="mt-2 text-gray-400">가져올 당시의 기록입니다. 이후 저장한 변경은 다음 내보내기에 포함됩니다. 복구용 사본·가져오기 기록 자체는 다른 브라우저로 옮기지 않습니다.</p></details>}
+        <button className="text-sm text-blue-300 underline p-3" onClick={() => { if (window.confirm('마지막 복원 직전 사본으로 되돌릴까요? 현재 데이터도 직전 사본으로 교체 보관됩니다.')) void restorePreviousImport().then(() => qc.invalidateQueries()).then(() => setBackupMsg({ok:true,text:'직전 사본 복구 완료'})).catch(e => setBackupMsg({ok:false,text:String(e)})) }}>마지막 복원 직전으로 되돌리기</button>
+        <button className="text-sm text-blue-300 underline p-3" onClick={() => {if(window.confirm('마지막 과거 시세 보정만 되돌릴까요?'))void undoStockPriceCorrection().then(()=>qc.invalidateQueries()).then(()=>setBackupMsg({ok:true,text:'시세 보정 되돌리기 완료'})).catch(e=>setBackupMsg({ok:false,text:String(e)}))}}>마지막 과거 시세 보정 되돌리기</button>
 
         {/* 최근 3개월 실제 시세 소급 반영 */}
-        <div className="border-t border-gray-700 pt-3 space-y-2">
+        <details className="border-t border-gray-700 pt-3 space-y-2" data-price-correction><summary className="cursor-pointer text-sm text-gray-300 py-3">과거 기록 보정 · 필요한 경우에만</summary>
           <div>
             <h4 className="text-sm font-semibold text-gray-300">🕒 과거 시세 소급 업데이트</h4>
             <p className="text-xs text-gray-500 mt-1">
-              보유 주식 전체의 최근 3개월치를 실제 종가(Yahoo)로 덮어씁니다. 빈 날짜를 직전 시세로 채운 구간을
-              실제 시세 흐름으로 교체할 때 사용하세요.
+              최근 3개월의 빈 거래일을 채우고 기존 가격도 보정합니다. 추가 날짜의 수량은 직전 기록 유지 가정으로 표시합니다. 휴장일·취득 전·수량 근거 없는 날은 만들지 않습니다. 외화·계좌합계·오늘은 제외하며 현재 평가액은 그대로 유지합니다.
             </p>
           </div>
           <button
@@ -392,14 +412,14 @@ export default function Settings() {
               {priceBackfill.msg}
             </p>
           )}
-        </div>
+        </details>
         <p className="text-xs text-gray-700">앱 빌드: {__BUILD_TIME__} — 이 시각이 오래됐으면 새로고침(앱 완전 종료 후 재실행)으로 업데이트하세요.</p>
         <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-700">
           <button
             onClick={handleLoadSample}
             className="px-4 py-2 text-sm rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white transition-colors"
           >
-            샘플 데이터 불러오기
+            샘플 전용 화면 열기
           </button>
           <button
             onClick={handleClearAll}

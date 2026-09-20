@@ -41,6 +41,8 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   const [ownership,     setOwnership]     = useState<Ownership>({ husband: 50, wife: 50 })
 
   // 주식
+  const [housingTaxStartDate,setHousingTaxStartDate]=useState('')
+  const [constructionHoldingTaxAnnual,setConstructionHoldingTaxAnnual]=useState<number|undefined>(undefined)
   const [stockMode,     setStockMode]     = useState<'stock' | 'account'>('stock')
   const [accountName,   setAccountName]   = useState(defaultAccountName ?? '')
   // 사용자가 계좌명을 직접 고쳤으면 자동 채우기로 덮어쓰지 않음
@@ -103,7 +105,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   }
 
   const buildDetail = () => {
-    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined }
+    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined, housingTaxStartDate: housingTaxStartDate || undefined, constructionHoldingTaxAnnual }
     if (type === 'STOCK') {
       // 계좌 통합 모드 — 계좌 하나가 자산 하나. 티커/수량 없음, 연간 배당금을 dps로 저장(수량=1)
       if (stockMode === 'account') return {
@@ -288,6 +290,8 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
                 futureYear={futureYear}
                 onFutureValue={setFutureValue}
                 onFutureYear={setFutureYear}
+                housingTaxStartDate={housingTaxStartDate} onHousingTaxStartDate={setHousingTaxStartDate}
+                constructionHoldingTaxAnnual={constructionHoldingTaxAnnual} onConstructionHoldingTaxAnnual={setConstructionHoldingTaxAnnual}
               />
             </>
           )}

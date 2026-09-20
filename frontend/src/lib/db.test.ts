@@ -2,7 +2,7 @@
 // 실행: npm i fake-indexeddb --no-save && npx vitest run src/lib/db.test.ts
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createAsset, addHistory, getAssetById, importBackup, db } from '@/lib/db'
+import { createAsset, addHistory, getAssetById, importBackup, exportBackup, db } from '@/lib/db'
 
 const RE_DETAIL = { address: '', loanAmount: 0, tenantDeposit: 0, isOwned: true, hasTenant: false }
 
@@ -76,7 +76,7 @@ describe('자산 생성/이력 — 데이터 무결성 (M-1 버그 회귀 방지
     expect(latest.value).toBe(80_000 * 100)
   })
 
-  it('빈 날짜 백필: 31일 이하 갭은 빈 날짜가 직전값으로 채워진다', async () => {
+  it('빈 날짜는 관측값으로 저장하지 않는다 (연속 보기는 표시만 보간)', async () => {
     const id = await createAsset({
       type: 'REAL_ESTATE', name: '아파트',
       acquisitionDate: '2024-07-25', acquisitionPrice: 500_000_000,
@@ -85,10 +85,10 @@ describe('자산 생성/이력 — 데이터 무결성 (M-1 버그 회귀 방지
     // 7/25 → 8/10 갭 (16일) → 중간 15일치 백필 후 신규 행 = 17행
     await addHistory(id, { date: '2024-08-10', value: 520_000_000 })
     const a = await getAssetById(id)
-    expect(a!.history.length).toBe(17)   // 7/25 + 7/26~8/9 백필 + 8/10
+    expect(a!.history.length).toBe(2)
     // 백필된 날짜는 직전값(취득가) 유지
     const mid = a!.history.find((h) => h.date === '2024-08-01')
-    expect(mid?.value).toBe(500_000_000)
+    expect(mid).toBeUndefined()
     // 마지막 행은 새 값
     expect(a!.history[a!.history.length - 1].value).toBe(520_000_000)
     expect(a!.currentValue).toBe(520_000_000)
@@ -106,7 +106,7 @@ describe('자산 생성/이력 — 데이터 무결성 (M-1 버그 회귀 방지
     expect(a!.currentValue).toBe(600_000_000)
   })
 
-  it('백업 복원(importBackup): 과거 갭(31일 초과 포함)이 소급 백필된다', async () => {
+  it('백업 복원: 모든 테이블을 복구하고 실제 기록 사이에 가짜 관측값을 추가하지 않는다', async () => {
     const id = await createAsset({
       type: 'REAL_ESTATE', name: '아파트',
       acquisitionDate: '2026-06-18', acquisitionPrice: 500_000_000,
@@ -116,24 +116,15 @@ describe('자산 생성/이력 — 데이터 무결성 (M-1 버그 회귀 방지
     await addHistory(id, { date: '2026-07-26', value: 520_000_000 })   // 38일 갭
 
     // 현재 DB 스냅샷을 백업으로 만들어 복원 → 복원 시 소급 백필 실행됨
-    const backup = {
-      app: 'asset_manager_m', version: 1, exportedAt: new Date().toISOString(),
-      tables: {
-        assets: await db.assets.toArray(),
-        assetHistory: await db.assetHistory.toArray(),
-        dividendHistory: await db.dividendHistory.toArray(),
-        settings: await db.settings.toArray(),
-      },
-    } as Parameters<typeof importBackup>[0]
+    const backup = await exportBackup()
     await importBackup(backup)
 
     const restored = await getAssetById(id)
     const dates = restored!.history.map((h) => h.date).sort()
-    expect(dates).toContain('2026-06-19')   // 갭 시작
-    expect(dates).toContain('2026-07-10')   // 갭 중간
-    expect(dates).toContain('2026-07-25')   // 갭 끝
+    expect(dates).toEqual(['2026-06-18','2026-07-26'])
     expect(dates).not.toContain('2026-07-27') // 마지막 기록 이후로는 안 채움
     const mid = restored!.history.find((h) => h.date === '2026-07-10')
-    expect(mid?.value).toBe(500_000_000)    // 직전값 유지
+    expect(mid).toBeUndefined()
+    expect(restored!.detail).toEqual(asset!.detail)
   })
 })

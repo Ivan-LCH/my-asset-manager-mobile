@@ -37,37 +37,29 @@ describe('pensionSim 계산', () => {
     expect(pensionTaxCombined(0, 50_000_000, DED)).toBe(pensionIncomeTax(50_000_000))
   })
 
-  it('comprehensiveTaxBreakdown: 초과분 원천징수 15.4%는 기납부세액으로 공제 (이중과세 방지)', () => {
-    // 금융소득 3,000만: 2,000만 분리과세 308만 + 초과 1,000만 종합합산
+  it('comprehensiveTaxBreakdown: 전체 원천징수와 추가 납부를 합해 누락·중복 없이 반영', () => {
     const t = comprehensiveTaxBreakdown(30_000_000, 0, 1_500_000)
     expect(t.separatedTax).toBe(Math.round(20_000_000 * 0.154))
-    expect(t.withheldCredit).toBe(Math.round(10_000_000 * 0.154))
-    // 종합세(과표 850만 = 60만) − 기납부 154만 → 0 하한
+    expect(t.withheldCredit).toBe(4_620_000)
     expect(t.comprehensiveTax).toBe(0)
-    // 금융소득 6,000만: 초과 4,000만, 과표 3,850만 → 종합세 450만 − 기납부 616만 → 0 하한
+    expect(t.totalFinancialTax).toBe(4_620_000)
     const t2 = comprehensiveTaxBreakdown(60_000_000, 0, 1_500_000)
-    expect(t2.withheldCredit).toBe(Math.round(40_000_000 * 0.154))
+    expect(t2.withheldCredit).toBe(9_240_000)
     expect(t2.comprehensiveTax).toBe(0)
-    // 금융소득 1억: 초과 8,000만 + 가산 889만(10/90) − 공제 150만 → 과표 8,739만
-    // 종합세 − 기납부 1,232만 − 배당공제 116만 (0 하한)
     const t3 = comprehensiveTaxBreakdown(100_000_000, 0, 1_500_000)
-    expect(t3.comprehensiveTaxable).toBe(87_388_889)
-    expect(t3.totalFinancialTax).toBe(t3.separatedTax + t3.comprehensiveTax)
+    expect(t3.comprehensiveTaxable).toBe(78_500_000)
+    expect(t3.totalFinancialTax).toBe(17_468_000)
+    expect(t3.additionalTax).toBe(2_068_000)
+    expect(t3.totalFinancialTax).toBe(t3.withholdingTax + t3.additionalTax)
   })
 
-  it('comprehensiveTaxBreakdown: 배당가산(10/90≈11.1%)·배당세액공제(가산액×13%) 반영', () => {
-    // 금융소득 6,000만: 초과 4,000만 → 가산 444만(10/90) → 과표 4,000+444-150 = 4,294만
+  it('comprehensiveTaxBreakdown: 적격 배당 정보 없이 가산·공제를 만들어내지 않는다', () => {
     const t = comprehensiveTaxBreakdown(60_000_000, 0, 1_500_000)
-    expect(t.dividendGrossUp).toBe(4_444_444)
-    expect(t.dividendCredit).toBe(Math.round(4_444_444 * 0.13))
-    expect(t.comprehensiveTaxable).toBe(42_944_444)
-    // 종합세 = 누진세(4,294만) − 기납부(4,000만×15.4%) − 배당공제(58만), 0 하한
-    expect(t.comprehensiveTax).toBe(Math.max(
-      0,
-      comprehensiveTax(42_944_444)
-      - Math.round(40_000_000 * 0.154)
-      - Math.round(4_444_444 * 0.13),
-    ))
+    expect(t.dividendGrossUp).toBe(0)
+    expect(t.dividendCredit).toBe(0)
+    expect(t.comprehensiveTaxable).toBe(38_500_000)
+    expect(t.comparisonNationalTax).toBe(8_400_000)
+    expect(t.totalFinancialTax).toBe(9_240_000)
   })
 
   it('separatedDividendTax: 2026 선택분리과세(성장배당) 누진 — 지방세 포함', () => {
@@ -97,7 +89,7 @@ describe('pensionSim 계산', () => {
     expect(half.separatedTax).toBe(Math.round(20_000_000 * 0.154))
     expect(half.consolidatedFinancial).toBe(10_000_000)
     expect(half.totalFinancialTax).toBe(
-      Math.round(20_000_000 * 0.154) + half.comprehensiveTax + separatedDividendTax(30_000_000))
+      Math.round(30_000_000 * 0.154) + half.comprehensiveTax + separatedDividendTax(30_000_000))
     // 초과 지정은 금융소득으로 클램프
     expect(comprehensiveTaxBreakdown(10_000_000, 0, 1_500_000, { separatedDividend: 50_000_000 }).separatedDividend)
       .toBe(10_000_000)
@@ -261,7 +253,7 @@ describe('pensionSim 계산', () => {
     }] as any
     const prop = realEstatePropertyBases(assets)
     expect(prop.husband.propertyTaxBase).toBe(0)
-    expect(prop.wife.propertyTaxBase).toBe(600_000_000)   // 10억 × 공정시장가액 60% × 와이프 100%
+    expect(prop.wife.propertyTaxBase).toBe(450_000_000)   // 10억 × 공시가격 추정 75% × 과표비율 60% × 와이프 100%
     // 와이프 건보(재산분 포함) > 0
     const wifeHI = calcHealthInsurance({ pensionAnnual: 0, dividendAnnual: 0, otherAnnual: 0, propertyTaxBase: prop.wife.propertyTaxBase, rentalDeposit: 0, carValue: 0, scorePerPoint: 208.4 })
     expect(wifeHI.grandTotal).toBeGreaterThan(0)

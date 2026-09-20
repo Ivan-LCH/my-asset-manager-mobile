@@ -1,4 +1,5 @@
 // Google Drive 백업/복원 — GIS OAuth 토큰 + Drive API v3.
+import {backupFileName} from './backupInfo'
 // 사용자별 Google 계정으로 인증 → 본인 Drive에만 접근 (drive.file scope).
 
 const CLIENT_ID = '806295714332-jc5h95el81jdqopvga1l1d1bsmdvj2er.apps.googleusercontent.com'
@@ -113,7 +114,7 @@ export async function listBackupFiles(): Promise<{ id: string; name: string; mod
 /** Drive에 백업 저장 (같은 이름이 있으면 업데이트, 없으면 생성). folderId 지정 시 해당 폴더에. */
 export async function saveToDrive(jsonData: string, folderId?: string): Promise<{ id: string; name: string }> {
   if (!accessToken) throw new Error('로그인 필요')
-  const fileName = `${APP_FILE_PREFIX}-${new Date().toISOString().slice(0, 10)}.json`
+  const fileName = backupFileName(JSON.parse(jsonData).exportedAt??new Date().toISOString())
 
   // 같은 이름 파일 검색
   let existingId: string | undefined

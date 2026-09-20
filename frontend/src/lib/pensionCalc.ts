@@ -1,7 +1,7 @@
 // 연금 수령액 연도별 계산 — RetirementPage / CorpSim 공유 (pensionCalc.ts 로 추출).
 import type { Asset, PensionDetail, StockDetail, SavingsDetail } from '@/types'
 
-export const SIM_START_YEAR = 2029
+export const SIM_START_YEAR = new Date().getFullYear()
 
 export function calcPensionByYear(assets: Asset[], currentAge: number): Map<number, number> {
   const currentYear = new Date().getFullYear()
@@ -10,6 +10,7 @@ export function calcPensionByYear(assets: Asset[], currentAge: number): Map<numb
   for (let year = SIM_START_YEAR; year <= endYear; year++) {
     let monthly = 0
     for (const a of assets) {
+      if (a.disposalDate) continue
       if (a.type === 'PENSION') {
         const d = a.detail as PensionDetail | undefined
         if (!d) continue

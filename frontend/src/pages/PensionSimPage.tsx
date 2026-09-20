@@ -1,3 +1,20 @@
+import {annualPension,irpTargetSources} from '@/lib/annualPension'
+import {annualHealth} from '@/lib/annualHealth'
+import {HealthBreakdown} from '@/components/retirement/HealthBreakdown'
+import {FinancialTaxBreakdown} from '@/components/retirement/FinancialTaxBreakdown'
+import {PensionIncomeDetails} from '@/components/retirement/PensionIncomeDetails'
+import {annualVehicle} from '@/lib/annualVehicle'
+import {annualIncomeTax} from '@/lib/incomeTax'
+import {useSettings} from '@/hooks/useSettings'
+import {IncomeTaxSettingsEditor} from '@/components/retirement/IncomeTaxSettingsEditor'
+import {AnalysisNotices} from '@/components/retirement/AnalysisNotices'
+import {PensionLedger} from '@/components/retirement/PensionLedger'
+import {RegisteredPensionPlan} from '@/components/retirement/RegisteredPensionPlan'
+import { useMemo } from 'react'
+import { useAssets } from '@/hooks/useAssets'
+import { pensionInputs, pensionInputNotes } from '@/lib/analysisInputs'
+import { useDividendSummary } from '@/hooks/useDividends'
+import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 // 연금 시뮬레이션 — 법인시뮬과 대칭되는 "연금·개인 vehicle" 모델. 1인(남편/와이프) 과세.
 // 일반주식계좌 = 남편/와이프 각 계좌(잔액·배당률·상승률 입력). 종목 단위 입력은 사용 안 함.
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -9,15 +26,15 @@ import { useRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import {
-  EMPTY_PENSION_PLAN, computePensionVehiclePerPerson, computePerPersonComprehensiveDeduction,
+  EMPTY_PENSION_PLAN,
   stockAccountBalances, stockBalanceFromInflows, totalInflows, sourcesFromAssets, pensionSchedule,
   FINANCIAL_INCOME_LIMIT,
 } from '@/lib/pensionSim'
-import { realEstatePropertyBases, calcHealthInsurance } from '@/lib/healthInsurance'
+import { realEstatePropertyBases } from '@/lib/healthInsurance'
 import { formatManwon, cn } from '@/lib/utils'
 import {
   type PensionSimPlan, type Ownership, type OwnershipPreset, type StockAccountConfig,
-  type PensionDetail,
+  type PensionDetail, type PensionAllocation, type PensionSource,
   ownershipFromPreset, presetFromOwnership,
 } from '@/types'
 
@@ -56,10 +73,11 @@ function OwnershipPreset({ value, onChange, disabled, locked }: {
 
 // ── 목돈 분배 카드 ──────────────────────────────────────────
 // 퇴직IRP는 퇴직금(severance)일 때만 적용. 일반계좌는 항상. 나머지는 자동으로 현금보유.
-function AllocationCard({ lumpsum, allocation, onChange }: {
+function AllocationCard({ lumpsum, allocation, sources, onChange }: {
   lumpsum: { id: string; name: string; amount: number; receiveYear: number; taxKind?: string }
-  allocation: { irpAmount: number; stockAmount: number }
-  onChange: (patch: Partial<{ irpAmount: number; stockAmount: number }>) => void
+  allocation: Pick<PensionAllocation,'irpAmount'|'stockAmount'|'irpSourceId'|'irpRetirementTaxRate'>
+  sources: PensionSource[]
+  onChange: (patch: Partial<Pick<PensionAllocation,'irpAmount'|'stockAmount'|'irpSourceId'|'irpRetirementTaxRate'>>) => void
 }) {
   const isSeverance = lumpsum.taxKind === 'severance'
   const irp = isSeverance ? allocation.irpAmount : 0   // 퇴직금 아니면 IRP 경로 없음
@@ -83,6 +101,18 @@ function AllocationCard({ lumpsum, allocation, onChange }: {
           <AmountInput value={allocation.stockAmount} onChange={(v) => onChange({ stockAmount: v })} />
         </div>
       </div>
+      {allocation.irpAmount>0&&<div className="space-y-2">
+        <label className="block text-xs text-gray-300">합산할 퇴직IRP
+          <select aria-label={lumpsum.name+' 합산할 퇴직IRP'} value={allocation.irpSourceId??''} onChange={e=>onChange({irpSourceId:e.target.value||undefined})} className="mt-1 w-full min-w-0 bg-gray-800 border border-gray-600 rounded p-2 text-sm">
+            <option value="">{sources.length===1?'자동 연결: '+sources[0].name:'연결할 IRP를 선택하세요'}</option>
+            {allocation.irpSourceId&&!sources.some(s=>s.id===allocation.irpSourceId)&&<option value={allocation.irpSourceId}>기존 연결을 찾을 수 없음 · 다시 선택</option>}
+            {sources.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+        <p className="text-xs text-gray-400">입금 연도에 해당 계좌 잔액에 합산합니다. 등록 월수령액은 입금 전후 잔액 비율로 재산정하며, 별도의 목돈 연금을 더하지 않습니다.</p>
+        {isSeverance&&<label className="block text-xs text-gray-300">이 퇴직금의 이연퇴직소득세율 (국세 %)<input aria-label={lumpsum.name+' 이연퇴직소득세율 (국세 %)'} className="mt-1 w-full min-w-0 bg-gray-800 border border-gray-600 rounded p-2 text-sm" type="number" min="0" max="100" step="any" placeholder="미확인 · 기존 계좌 세율과 별도" value={allocation.irpRetirementTaxRate??''} onChange={e=>onChange({irpRetirementTaxRate:e.target.value===''?undefined:Math.min(100,Math.max(0,Number(e.target.value)))})}/><span className="block mt-1 text-gray-400">퇴직금 재원은 자동 연결합니다. 세율은 이 목돈의 이연퇴직소득세(국세) ÷ 이연퇴직소득 × 100이며, 모르면 비워두세요.</span></label>}
+        {!allocation.irpSourceId&&sources.length!==1&&<p className="text-xs text-amber-300">연결 전에는 추가 연금이 미산정입니다. 현재 자산·기존 월수령액은 바뀌지 않습니다.</p>}
+      </div>}
       <p className="text-xs text-gray-500">
         나머지(현금보유) <span className="text-gray-300 font-semibold">{formatManwon(cash)}</span>
         {cash > 0 && <span className="text-gray-600"> → 은퇴계획 목돈 수입</span>}
@@ -93,59 +123,19 @@ function AllocationCard({ lumpsum, allocation, onChange }: {
 
 // ── 메인 ───────────────────────────────────────────────────
 export default function PensionSimPage() {
+  const {data:settings}=useSettings()
   const navigate = useNavigate()
   const { data: saved } = usePensionSim()
   const saveMut = useSavePensionSim()
-  const pensionAssets = useAssetsByType('PENSION')
-  const stockAssets = useAssetsByType('STOCK')
-  const realEstateAssets = useAssetsByType('REAL_ESTATE')
+  const assetQuery=useAssets()
+  const dividendQuery=useDividendSummary(),ownersQuery=useStockAccountOwnership()
+  const pensionAssets=(assetQuery.data??[]).filter(a=>a.type==='PENSION'&&!a.disposalDate)
+  const realEstateAssets=(assetQuery.data??[]).filter(a=>a.type==='REAL_ESTATE')
   const { data: retirement } = useRetirement()
-  // 주식계좌 현재가치 맵 — 계좌명(accountName) 기준 총액 (연금 자산 연동 시)
-  const stockByAccount = new Map<string, number>()
-  for (const s of stockAssets) {
-    const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? ''
-    if (acct) stockByAccount.set(acct, (stockByAccount.get(acct) ?? 0) + s.currentValue)
-  }
-
-  const [plan, setPlan] = useState<PensionSimPlan>(EMPTY_PENSION_PLAN)
-  const [dirty, setDirty] = useState(false)
-
-  const didInit = useRef(false)
-  useEffect(() => {
-    if (didInit.current) return
-    if (saved === undefined) return
-    if (pensionAssets.length === 0 && saved === null) return
-    didInit.current = true
-    // 저장본에 일부 필드가 빠져 있어도 (구 버전 마이그레이션 등) 기본값으로 보완
-    const base = saved
-      ? { ...EMPTY_PENSION_PLAN, ...saved,
-          sources: saved.sources ?? EMPTY_PENSION_PLAN.sources,
-          allocations: saved.allocations ?? [] }
-      : EMPTY_PENSION_PLAN
-    const auto = sourcesFromAssets(
-      pensionAssets.map((a) => ({
-        id: a.id, name: a.name, currentValue: a.currentValue,
-        detail: {
-          pensionType: (a.detail as { pensionType?: string })?.pensionType,
-          linkedStockId: (a.detail as { linkedStockId?: string })?.linkedStockId,
-          expectedMonthlyPayout: (a.detail as { expectedMonthlyPayout?: number })?.expectedMonthlyPayout,
-          expectedStartYear: (a.detail as { expectedStartYear?: number })?.expectedStartYear,
-          expectedEndYear: (a.detail as { expectedEndYear?: number })?.expectedEndYear,
-          annualGrowthRate: (a.detail as { annualGrowthRate?: number })?.annualGrowthRate,
-        },
-      })),
-      base.sources,
-      stockByAccount,
-    )
-    const manual = base.sources.filter((s) => !pensionAssets.find((a) => a.id === s.id))
-    setPlan({
-      ...EMPTY_PENSION_PLAN, ...base,
-      sources: [...auto, ...manual],
-      allocations: base.allocations ?? [],
-      stockAccount: base.stockAccount ?? EMPTY_PENSION_PLAN.stockAccount,
-      stockOwnership: base.stockOwnership ?? { husband: 50, wife: 50 },
-    })
-  }, [saved, pensionAssets])
+  const linkedInputs=useMemo(()=>pensionInputs(saved,assetQuery.data??[],retirement?.retirementYear),[saved,assetQuery.data,retirement?.retirementYear])
+  const [plan,setPlan]=useState<PensionSimPlan>(()=>pensionInputs(null,[]))
+  const [dirty,setDirty]=useState(false)
+  useEffect(()=>{if(saved!==undefined&&!assetQuery.isPending&&!dirty)setPlan(linkedInputs)},[linkedInputs,saved,assetQuery.isPending,dirty])
 
   const update = useCallback(<K extends keyof PensionSimPlan>(key: K, val: PensionSimPlan[K]) => {
     setPlan((p) => ({ ...p, [key]: val }))
@@ -153,7 +143,7 @@ export default function PensionSimPage() {
   }, [])
 
   // 목돈 분배 (lumpsumId 단위 upsert: 퇴직IRP/일반주식계좌 금액)
-  const setAllocation = (lumpsumId: string, patch: Partial<{ irpAmount: number; stockAmount: number }>) => {
+  const setAllocation = (lumpsumId: string, patch: Partial<Pick<PensionAllocation,'irpAmount'|'stockAmount'|'irpSourceId'|'irpRetirementTaxRate'>>) => {
     setPlan((p) => {
       const exists = p.allocations.some((a) => a.lumpsumId === lumpsumId)
       const allocations = exists
@@ -170,7 +160,7 @@ export default function PensionSimPage() {
     setDirty(true)
   }
 
-  const handleSave = () => saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
+  const handleSave = () => saveMut.mutate(pensionInputs(plan,assetQuery.data??[],retirement?.retirementYear), { onSuccess: () => setDirty(false) })
 
   // 부동산 명의 가중 → 1인별 건보 재산분
   const prop = realEstatePropertyBases(realEstateAssets, plan.refYear)
@@ -190,36 +180,20 @@ export default function PensionSimPage() {
     .filter((x): x is NonNullable<typeof x> => x !== null)
 
   // plan 자체가 stockAccount(남편/와이프 계좌 배당률·상승률)를 가지므로 effectivePlan 분리 불필요
-  const effectivePlan = plan
+  const effectivePlan = pensionInputs(plan,assetQuery.data??[],retirement?.retirementYear)
   // IRP 포트폴리오 상승률 (은퇴준비 IRP 포트폴리오) — IRP 퇴직시점 잔액 성장·수령액 산정용
   const { data: portfolio } = usePortfolio()
   const irpGrowthRate = portfolio?.growthRate ?? 0
-  const h = computePensionVehiclePerPerson(effectivePlan, {
-    husbandProperty: prop.husband,
-    wifeProperty: prop.wife,
-    nationalPensions: nationals,
-    irpGrowthRate,
-  })
+  const projection=annualPension(effectivePlan,assetQuery.data??[],new Date().getFullYear(),Math.max(effectivePlan.refYear,effectivePlan.startYear+Math.max(1,effectivePlan.withdrawalYears)-1,...(effectivePlan.monthlyPlan?.accounts.map(a=>Number(a.end?.slice(0,4)??0))??[])),{simulation:true,growth:irpGrowthRate,dividend:portfolio?.dividendYield??0,lumpsums:retirement?.lumpsum??[],stockLink:{dividends:dividendQuery.data?.items,owners:ownersQuery.data}})
+  const schedule=projection.rows
+  const selectedRow=schedule.find(r=>r.year===plan.refYear)
+  const h=annualVehicle(effectivePlan,selectedRow,prop,settings)
+  const incomeTax=selectedRow?annualIncomeTax(selectedRow,effectivePlan,settings):null
+  const health=selectedRow?annualHealth(selectedRow,effectivePlan,prop):null
 
-  // 연도별 연금 스케줄 (국민연금 65세 step-up 가시)
-  const schedule = pensionSchedule(effectivePlan, nationals, effectivePlan.startYear, effectivePlan.startYear + (effectivePlan.withdrawalYears || 1) - 1, { irpGrowthRate })
-
-  // 1인별 종합소득공제 자동 산정 표시
-  const perPersonDed = computePerPersonComprehensiveDeduction(plan)
-
-  // 건보 소득분/재산분 분해 (지출 섹션 표시용)
-  const personHI = (p: typeof h.husband, propBase: { propertyTaxBase: number; rentalDeposit: number }) =>
-    calcHealthInsurance({
-      pensionAnnual: p.annualPensionTaxable + p.annualPensionExempt,
-      dividendAnnual: p.financialIncome,
-      otherAnnual: plan.otherIncome,
-      propertyTaxBase: propBase.propertyTaxBase,
-      rentalDeposit: propBase.rentalDeposit,
-      carValue: 0,
-      scorePerPoint: 208.4,
-    })
-  const husbandHI = personHI(h.husband, prop.husband)
-  const wifeHI = personHI(h.wife, prop.wife)
+  // Same health projection as the annual dashboard; private pension is not public pension income.
+  const husbandHI = health?.husbandSeparate??{grandTotal:0,incomeMonthly:0,propertyMonthly:0}
+  const wifeHI = health?.wifeSeparate??{grandTotal:0,incomeMonthly:0,propertyMonthly:0}
   const stockBalance = stockBalanceFromInflows(plan.allocations)
   const sb = stockAccountBalances(plan)
   const inflowTotal = totalInflows(plan)
@@ -246,10 +220,13 @@ export default function PensionSimPage() {
         </button>
       </div>
 
+      <AnalysisNotices notes={[...projection.notes,...pensionInputNotes(saved,assetQuery.data??[])]} incomplete={projection.incomplete} shortfall={schedule.some(r=>r.shortfall>0)}/>
+      <PensionLedger rows={schedule}/>
+      <RegisteredPensionPlan plan={plan.monthlyPlan}/>
       {/* 면책 (기본 접힘 — 탭하면 전문) */}
       <InfoNote tone="warn" summary="세금·건보 추정치 — 적용 전 세무사 확인 필수">
-        남편/와이프 <b>1인별</b> 세금·건보 추정. 금융소득 2천만 한도·연금소득세 각자 적용.
-        기존 연금원천(IRP·연금저축)은 남편 명의 가정. 실제는 규정·연도별 변동 → <b>세무사·노무사 확인 필수</b>.
+        세금은 명의별 간이 추정이며, 건강보험은 선택한 지역가입 세대 단위로 추정합니다.
+        자산 연결 연금은 최신 자산의 단독 명의, 수동 연금은 저장된 명의를 사용합니다. 실제는 규정·연도별 변동 → <b>세무사·노무사 확인 필수</b>.
       </InfoNote>
 
             {/* ═══ 입력 (사용자가 정하는 것) ═══ */}
@@ -266,7 +243,7 @@ export default function PensionSimPage() {
             <b>일반주식계좌</b>는 항상 넣을 수 있고, <b>퇴직IRP</b>는 <b>퇴직금(위로금)일 때만</b> 선택 가능합니다.
             나누고 남은 금액은 자동으로 <b>현금보유</b>(은퇴계획 목돈 수입)가 됩니다.
           </p>
-          <p>목돈 자금 추가·수정은 은퇴계획(/retirement) 목돈수입에서.</p>
+          <p>목돈의 수령 연도·금액은 분석 → 생활비·목돈 입력에서 수정합니다. 이체는 계좌 입금이며, 생활비 수입은 실제 연금 인출만 반영합니다.</p>
         </InfoNote>
         {lumpsums.length === 0 && (
           <p className="text-center text-xs text-gray-600 py-4">
@@ -277,7 +254,7 @@ export default function PensionSimPage() {
           {lumpsums.map((l) => {
             const alloc = plan.allocations.find((a) => a.lumpsumId === l.id) ?? { irpAmount: 0, stockAmount: 0 }
             return (
-              <AllocationCard key={l.id} lumpsum={l} allocation={alloc}
+              <AllocationCard key={l.id} lumpsum={l} allocation={alloc} sources={irpTargetSources(plan,assetQuery.data??[])}
                 onChange={(patch) => setAllocation(l.id, patch)} />
             )
           })}
@@ -289,18 +266,30 @@ export default function PensionSimPage() {
 
 {/* 일반주식계좌 (남편/와이프 각 계좌) */}
       <Expander title="📈 일반주식계좌 (남편/와이프)">
-        <InfoNote summary="배당률·상승률만 입력 → 연배당·성장 자동 산정">
+        <label className="block text-xs text-gray-300 mb-3">투자금 입력 기준
+          <select aria-label="일반주식 입력 기준" value={plan.stockInputMode??'manual'} onChange={e=>update('stockInputMode',e.target.value as PensionSimPlan['stockInputMode'])} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded p-2">
+            <option value="manual">기존 수동 투자금·배당률</option><option value="assets">현재 일반주식 잔액·배당 연결</option>
+          </select>
+        </label>
+        {plan.stockInputMode==='assets'&&<div className="text-xs text-blue-200 mb-3 space-y-2" data-linked-stock-inputs>
+          <p>현재 보유한 일반주식의 평가액·명의·배당 예상액을 연결합니다. IRP 연결 계좌·연금성 계좌·처분 자산은 제외합니다. 수동 추가 금액은 보존하되 중복 합산하지 않습니다.</p>
+          <p>시세·배당 설정 변경은 자산 화면에서 합니다. 현재 배당은 입력 정보 기반 예상치이며 확정 입금액이 아닙니다. 미래 목돈의 배당률·성장률은 아래 설정을 사용합니다.</p>
+          {dividendQuery.isPending||ownersQuery.isPending?<p role="status">계좌·배당 정보를 불러오는 중…</p>:dividendQuery.error||ownersQuery.error?<p role="alert">계좌·배당 조회 실패: 연결 결과를 확정하지 마세요.</p>:<p>연결 계좌 {projection.stockInputs?.accounts.length??0}개 · 현재 잔액 {formatManwon((projection.stockInputs?.husband.balance??0)+(projection.stockInputs?.wife.balance??0))}</p>}
+          <details><summary className="cursor-pointer">연결 계좌 근거</summary>{projection.stockInputs?.accounts.map(a=><p key={a.id} className="mt-1 break-words">{a.name}: 잔액 {formatManwon(a.balance)} · 연배당 {formatManwon(a.annualDividend)}</p>)}</details>
+        </div>}
+        {plan.stockInputMode!=='assets'&&<InfoNote summary="배당률·상승률만 입력 → 연배당·성장 자동 산정">
           <p>
             잔액 = <b>목돈 분배(stock) 합계 × 명의지분</b> + <b>추가 금액</b>. 종목 입력 없이
             <b> 계좌 단위 배당률·상승률</b>만 입력 → 연배당·연도별 성장 자동 산정.
             <b> 성장배당 비율</b> = 2026 세제개편 선택분리과세 적용 배당 비중 (0% = 기존 종합과세).
           </p>
           <p>목돈 분배금 변경: 위 '목돈 분배' 섹션. 현재 stock 분배 합계 {formatManwon(stockBalance)}.</p>
-        </InfoNote>
+        </InfoNote>}
         {/* 명의 — 연결금액(목돈 분배) 분할 비율 */}
-        <Row label="연결금액 분할 (남편/와이프)">
+        <div className="space-y-2 text-xs text-gray-400 my-3">
+          <p>미래 목돈의 주식 배분 (남편/아내) · 현재 계좌 명의와 별개</p>
           <OwnershipPreset value={plan.stockOwnership} onChange={(o) => update('stockOwnership', o)} />
-        </Row>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {([['husband', '🧑 남편 계좌', 'text-blue-400'], ['wife', '👩 와이프 계좌', 'text-pink-400']] as const).map(([who, title, color]) => {
             const cfg = plan.stockAccount[who]
@@ -313,10 +302,10 @@ export default function PensionSimPage() {
                     <span className="text-gray-500">연결금액 (분배 지분)</span>
                     <span className="text-gray-300">{formatManwon(b.linked)}</span>
                   </div>
-                  <Row label="추가 금액">
+                  {plan.stockInputMode==='assets'?<p className="text-xs text-blue-200">현재 연결 잔액 {formatManwon(projection.stockInputs?.[who].balance??0)} · 수동 추가 금액 {formatManwon(cfg.extraAmount)}은 미반영</p>:<Row label="추가 금액">
                     <AmountInput value={cfg.extraAmount} onChange={(v) => updateStockAccount(who, { extraAmount: v })} placeholder="추가 금액" />
-                  </Row>
-                  <Row label="배당률">
+                  </Row>}
+                  <Row label={plan.stockInputMode==='assets'?'미래 목돈 배당률':'배당률'}>
                     <NumInput value={cfg.dividendYield} onChange={(v) => updateStockAccount(who, { dividendYield: v })} suffix="%" />
                   </Row>
                   <Row label="주가상승률">
@@ -326,7 +315,7 @@ export default function PensionSimPage() {
                     <NumInput value={cfg.growthDividendRatio ?? 0} onChange={(v) => updateStockAccount(who, { growthDividendRatio: v })} suffix="%" />
                   </Row>
                 </div>
-                <div className="border-t border-gray-700/60 pt-1.5 space-y-0.5 text-xs">
+                {plan.stockInputMode==='assets'?<p className="text-xs text-emerald-300">현재 연결 연배당 {formatManwon(projection.stockInputs?.[who].annualDividend??0)} · 미래 목돈은 수령 연도부터 반영</p>:<div className="border-t border-gray-700/60 pt-1.5 space-y-0.5 text-xs">
                   <div className="flex justify-between"><span className="text-gray-500">잔액</span><span className="text-gray-100 font-semibold">{formatManwon(b.total)}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">연배당</span><span className="text-emerald-400 font-semibold">{formatManwon(Math.round(b.dividendBase))}</span></div>
                   <p className="text-xs text-gray-600">{formatManwon(Math.round(b.dividendBase / 12))}/월 · 상승률로 매년 증가</p>
@@ -335,46 +324,40 @@ export default function PensionSimPage() {
                       성장배당 {cfg.growthDividendRatio}% 선택분리과세 (15.4/22/27.5/33% 누진)
                     </p>
                   )}
-                </div>
+                </div>}
               </div>
             )
           })}
         </div>
-        <p className="text-xs text-gray-600">
+        {plan.stockInputMode!=='assets'&&<p className="text-xs text-gray-600">
           합계 잔액 {formatManwon(sb.husband.total + sb.wife.total)} · 합계 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}
-        </p>
+        </p>}
       </Expander>
 
       {/* 과세·수령 기준 — 은퇴준비에서 이관(과세) + 숨은 기본값 공개(수령개시) (UI 간소화 ③) */}
-      <Expander title="⚙️ 과세·수령 기준" badge={`1인별 공제 ${formatManwon(perPersonDed.husband)}`}>
+      <Expander title="⚙️ 과세·수령 기준" badge="연금·금융 통합 계산">
         <InfoNote summary="기본값 그대로 사용 — 필요 시 여기서 편집">
-          수령개시연도 = IRP 잔액이 성장한 뒤 인출을 시작하는 연도 (현금흐름 계좌 잔액 표 기준).
-          연금소득공제 1,200만원은 법정 고정액으로 자동 적용.
-          1인별 공제 = 본인 150만 + (배우자·부양가족·표준) ÷ 2 — 아래 결과의 세금에 그대로 반영.
+          개별 연금의 수령 기간이 우선이며, 비어 있는 항목만 아래 기본값을 사용합니다.
+          국민연금과 종합합산을 선택한 사적연금은 연금소득공제 후 금융·기타소득과 함께 계산합니다.
+          퇴직금 재원은 분리합니다. 기존 배우자·표준공제의 절반 배분 및 고정 1,200만원 연금공제는 더 이상 적용하지 않습니다.
         </InfoNote>
-        <Row label="수령개시연도" hint="이때부터 IRP·주식계좌 인출 시작 · 수령 기간 30년 고정">
+        <Row label="기본 수령개시연도" hint="개별 연금에 등록한 시작·종료 연도가 우선합니다.">
           <YearInput value={plan.startYear} onChange={(v) => update('startYear', v)} />
         </Row>
+        <Row label="기본 수령 기간" hint="개별 종료 연도가 없을 때만 사용합니다. 저장된 실제 기간이며 고정값이 아닙니다.">
+          <NumInput value={plan.withdrawalYears} onChange={v=>update('withdrawalYears',Math.max(1,Math.min(100,Math.round(v))))} suffix="년" />
+        </Row>
+        <label className="block text-xs text-gray-300 my-3">건강보험 가입 가정
+          <select aria-label="건강보험 가입 가정" value={plan.healthHouseholdMode??''} onChange={e=>update('healthHouseholdMode',(e.target.value||undefined) as PensionSimPlan['healthHouseholdMode'])} className="mt-1 w-full bg-gray-800 border border-gray-600 rounded p-2">
+            <option value="">미확인 · 같은 지역가입 세대로 추정</option><option value="joint">부부가 같은 지역가입 세대</option><option value="separate">부부가 각각 별도 지역가입 세대</option>
+          </select><span className="block text-gray-400 mt-1">직장가입자·피부양자 자격 판단은 지원하지 않습니다. 해당되면 이 지역가입 추정액을 사용하지 마세요.</span>
+        </label>
         <Row label="기타 종합소득(연)" hint="남편 근로/사업 소득 등">
           <AmountInput value={plan.otherIncome} onChange={(v) => update('otherIncome', v)} />
         </Row>
-        <div className="flex flex-wrap gap-4 pt-1">
-          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-            <input type="checkbox" checked={plan.spouseDependent} onChange={(e) => update('spouseDependent', e.target.checked)} className="accent-blue-500" />
-            배우자 부양
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-            <input type="checkbox" checked={plan.useStandardDeduction} onChange={(e) => update('useStandardDeduction', e.target.checked)} className="accent-blue-500" />
-            표준공제 100만 사용
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-            부양가족 수
-            <button type="button" onClick={() => update('dependents', Math.max(0, plan.dependents - 1))} className="w-5 h-5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">−</button>
-            <span className="w-5 text-center text-gray-100">{plan.dependents}</span>
-            <button type="button" onClick={() => update('dependents', Math.min(5, plan.dependents + 1))} className="w-5 h-5 bg-gray-700 hover:bg-gray-600 rounded text-gray-200">+</button>
-          </label>
-        </div>
+        <p className="text-xs text-gray-400">소득공제·배당공제·연금 재원은 아래 세금 추가정보에서 확인합니다. 이전 공제 설정은 백업에 보존하지만 새 계산에 사용하지 않습니다.</p>
       </Expander>
+      <IncomeTaxSettingsEditor plan={{...effectivePlan,sources:projection.sources}} onChange={value=>update('incomeTaxSettings',value)} onTransfers={value=>update('irpTransfers',value)} onSave={handleSave} dirty={dirty} saving={saveMut.isPending}/>
 
       {/* ═══ 결과 (자동 계산) ═══ */}
       {/* ═══ 개요 (한눈에 보기) ═══ */}
@@ -402,10 +385,9 @@ export default function PensionSimPage() {
           <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
             <p className="text-xs font-semibold text-gray-300 mb-2">💼 투자 원금 요약 (남편/와이프)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <PrincipalCard title="IRP 원금" husband={irpHusband} wife={irpWife}
-                note={`기존 연금 + IRP 유입 ${formatManwon(irpInflow)} · 연금은 남편 명의 가정`} />
-              <PrincipalCard title="일반주식계좌 원금" husband={h.husband.stockBalance} wife={h.wife.stockBalance}
-                note={`잔액 × 계좌 배당률 = 연배당 ${formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}`} />
+              <div className="bg-gray-900/50 rounded-lg p-2.5"><p className="text-gray-400">{plan.refYear}년말 연금 계좌 잔액</p><p className="font-semibold text-gray-100">{formatManwon(selectedRow?.closing??0)}</p><p className="text-gray-400 mt-1">입금 시점·운용·지급을 반영한 같은 계좌 원장입니다. 미래 입금을 현재 원금에 미리 더하지 않습니다.</p>{(selectedRow?.accounts.some(a=>a.pending&&a.closing>0))&&<p className="text-amber-300">연결 대기 원금 포함 · 추가 연금 미산정</p>}</div>
+              <PrincipalCard title={`${plan.refYear}년말 일반주식 예상 잔액`} husband={h.husband.stockBalance} wife={h.wife.stockBalance}
+                note={`${plan.refYear}년 예상 연배당 ${formatManwon(selectedRow?.financialAnnual??0)} · 연도별 현금흐름과 같은 계산`} />
             </div>
             <p className="text-xs text-gray-600 mt-1.5">
               💡 분배하지 않은 나머지는 현금 수령(은퇴계획 목돈)으로, 투자 원금에서 제외됨.
@@ -447,11 +429,12 @@ export default function PensionSimPage() {
           </div>
         </div>
         <p className="text-xs text-gray-600 mt-1.5">
-          {plan.refYear}년 기준. 국민연금 개시(65세) 전후에 따라 연금수령액이 달라집니다. 세금 = 연금소득세 + 금융소득세, 걸보 = 지역걸보(월).
+          {plan.refYear}년 기준. 각 연금의 등록 수령 시작·종료 연도를 사용합니다. 세금은 공적연금·금융 통합 및 사적연금 선택 과세 추정이며 미확정 항목은 세금 상세에서 확인하세요. 건강보험은 가입 세대 가정에 따른 추정입니다.
         </p>
       </div>
 
       {/* ═══ 수입 상세 ═══ */}
+      {selectedRow&&<details className="bg-gray-800 border border-gray-700 rounded-xl p-4"><summary className="cursor-pointer text-sm text-blue-300">연금별 월수령액·추가 입금 근거</summary><div className="mt-3"><PensionIncomeDetails row={selectedRow} rows={schedule}/></div></details>}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-emerald-400">수입 상세</span>
         <span className="text-xs text-gray-600">연금수입 + 배당수입</span>
@@ -461,16 +444,11 @@ export default function PensionSimPage() {
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 sm:p-4">
           <p className="text-xs font-semibold text-gray-300 mb-2">🛡️ 연금수입 (월 / 연)</p>
           <div className="space-y-1.5 text-xs">
-            <div className="flex justify-between"><span className="text-gray-500">과세 연금 (IRP·연금저축)</span><span className="text-right"><span className="text-gray-100 font-semibold">{formatManwon(Math.round(h.husband.annualPensionTaxable / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.annualPensionTaxable)})</span></span></div>
-            <div className="flex justify-between"><span className="text-gray-500">비과세 연금 (98년)</span><span className="text-right"><span className="text-gray-100 font-semibold">{formatManwon(Math.round(h.husband.annualPensionExempt / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.annualPensionExempt)})</span></span></div>
-            {(() => {
-              const natA = schedule.find((r) => r.nationalAnnual > 0)?.nationalAnnual ?? 0
-              return (
-                <div className="flex justify-between"><span className="text-blue-400">국민연금 ({plan.refYear}년)</span><span className="text-right"><span className="text-blue-300 font-semibold">{formatManwon(Math.round(natA / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(natA)})</span></span></div>
-              )
-            })()}
-            <div className="flex justify-between border-t border-gray-700 pt-1.5"><span className="text-gray-400 font-semibold">연금수입 합계</span><span className="text-right"><span className="text-emerald-400 font-bold">{formatManwon(Math.round((h.husband.annualPensionTaxable + h.husband.annualPensionExempt) / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.annualPensionTaxable + h.husband.annualPensionExempt)})</span></span></div>
-            <p className="text-xs text-gray-600">과세연금 = 자산 등록 월수령액 또는 퇴직시점 잔액÷{plan.withdrawalYears}년 · 국민연금 = 65세부터 종신</p>
+            <div className="flex justify-between"><span className="text-gray-500">과세 연금 (국민연금 포함)</span><span className="text-right"><span className="text-gray-100 font-semibold">{formatManwon(Math.round((h.husband.annualPensionTaxable+h.wife.annualPensionTaxable) / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon((h.husband.annualPensionTaxable+h.wife.annualPensionTaxable))})</span></span></div>
+            <div className="flex justify-between"><span className="text-gray-500">비과세 연금 (98년)</span><span className="text-right"><span className="text-gray-100 font-semibold">{formatManwon(Math.round((h.husband.annualPensionExempt+h.wife.annualPensionExempt) / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon((h.husband.annualPensionExempt+h.wife.annualPensionExempt))})</span></span></div>
+            <p className="text-xs text-gray-400">국민연금 포함: {formatManwon(selectedRow?.nationalAnnual??0)}/연 · 위 과세 연금에 포함된 내역입니다.</p>
+           <div className="flex justify-between border-t border-gray-700 pt-1.5"><span className="text-gray-400 font-semibold">연금수입 합계</span><span className="text-right"><span className="text-emerald-400 font-bold">{formatManwon(Math.round(((h.husband.annualPensionTaxable+h.wife.annualPensionTaxable) + (h.husband.annualPensionExempt+h.wife.annualPensionExempt)) / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon((h.husband.annualPensionTaxable+h.wife.annualPensionTaxable) + (h.husband.annualPensionExempt+h.wife.annualPensionExempt))})</span></span></div>
+            <p className="text-xs text-gray-400">등록 지급 기간을 사용합니다. 계좌 인출형은 지급 가능한 잔액 이내로 제한하고, 국민연금은 원금 인출로 계산하지 않습니다.</p>
           </div>
         </div>
         {/* 배당수입 */}
@@ -480,7 +458,7 @@ export default function PensionSimPage() {
             <div className="flex justify-between"><span className="text-gray-500">일반주식계좌 배당</span><span className="text-right"><span className="text-emerald-400 font-semibold">{formatManwon(Math.round(h.totals.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.totals.financialIncome)})</span></span></div>
             <div className="flex justify-between"><span className="text-xs text-gray-600">— 남편</span><span className="text-right"><span className="text-gray-300">{formatManwon(Math.round(h.husband.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.financialIncome)})</span></span></div>
             <div className="flex justify-between"><span className="text-xs text-gray-600">— 와이프</span><span className="text-right"><span className="text-gray-300">{formatManwon(Math.round(h.wife.financialIncome / 12))}</span><span className="text-gray-500 ml-1">(연 {formatManwon(h.wife.financialIncome)})</span></span></div>
-            <p className="text-xs text-gray-600">잔액 남편 {formatManwon(sb.husband.total)}·와이프 {formatManwon(sb.wife.total)} → 연배당 {formatManwon(Math.round(sb.husband.dividendBase + sb.wife.dividendBase))}</p>
+            <p className="text-xs text-gray-400">{plan.refYear}년말 설정 계좌 잔액: 남편 {formatManwon(selectedRow?.stockHusband??0)} · 와이프 {formatManwon(selectedRow?.stockWife??0)}. 목돈은 등록 수령 연도부터 반영됩니다.</p>
             <p className="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-700/50">※ 연금저축의 배당수입은 <b>배당재투자</b>로 들어가 별도 수입으로 잡지 않습니다.</p>
           </div>
         </div>
@@ -489,9 +467,12 @@ export default function PensionSimPage() {
       {/* ═══ 지출 상세 ═══ */}
       <div className="flex items-center gap-2 pt-1">
         <span className="text-sm font-bold text-red-400">지출 상세</span>
-        <span className="text-xs text-gray-600">세금 + 건보료 (1인별)</span>
+        <span className="text-xs text-gray-600">세금은 명의별 · 건강보험은 세대별</span>
       </div>
 
+      {health&&<div className="bg-gray-800 border border-gray-700 rounded-xl p-4"><HealthBreakdown value={health}/></div>}
+      {selectedRow&&<FinancialTaxBreakdown row={selectedRow} plan={effectivePlan}/>}
+      {incomeTax&&(incomeTax.husband.unresolvedPension>0||incomeTax.wife.unresolvedPension>0)&&<p role="status" className="text-sm text-amber-200">아래 세금은 확인된 항목의 소계입니다. 재원·세율 미확정 IRP 세금이 추가될 수 있습니다.</p>}
       <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
         <table className="w-full text-xs">
           <thead>
@@ -507,12 +488,12 @@ export default function PensionSimPage() {
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(Math.round(h.husband.totalAnnualTax / 12))}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(h.husband.totalAnnualTax)})</span>
-                <p className="text-xs text-gray-600">연금 {formatManwon(Math.round(h.husband.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.husband.financialTax / 12))}{h.husband.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.husband.separatedDividendTax / 12))}</span>}</p>
+                <p className="text-xs text-gray-400">분리 연금세 {formatManwon(Math.round(h.husband.pensionTax / 12))} · 종합·금융세 {formatManwon(Math.round(h.husband.financialTax / 12))}</p>
               </td>
               <td className="py-2 px-3 text-right">
-                <span className="text-gray-100 font-semibold">{formatManwon(husbandHI.grandTotal)}</span>
+                {health?.mode==='joint'?<span className="text-gray-400">세대 합산으로 계산</span>:<><span className="text-gray-100 font-semibold">{formatManwon(husbandHI.grandTotal)}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(husbandHI.grandTotal * 12)})</span>
-                <p className="text-xs text-gray-600">소득분 {formatManwon(husbandHI.incomeMonthly)} · 재산분 {formatManwon(husbandHI.propertyMonthly)}</p>
+                <p className="text-xs text-gray-600">소득분 {formatManwon(husbandHI.incomeMonthly)} · 재산분 {formatManwon(husbandHI.propertyMonthly)}</p></>}
               </td>
             </tr>
             <tr className="border-b border-gray-700/50">
@@ -520,12 +501,12 @@ export default function PensionSimPage() {
               <td className="py-2 px-3 text-right">
                 <span className="text-red-400 font-semibold">{formatManwon(Math.round(h.wife.totalAnnualTax / 12))}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(h.wife.totalAnnualTax)})</span>
-                <p className="text-xs text-gray-600">연금 {formatManwon(Math.round(h.wife.pensionTax / 12))} · 금융 {formatManwon(Math.round(h.wife.financialTax / 12))}{h.wife.separatedDividend > 0 && <span className="text-amber-400/80"> · 분리과세 {formatManwon(Math.round(h.wife.separatedDividendTax / 12))}</span>}</p>
+                <p className="text-xs text-gray-400">분리 연금세 {formatManwon(Math.round(h.wife.pensionTax / 12))} · 종합·금융세 {formatManwon(Math.round(h.wife.financialTax / 12))}</p>
               </td>
               <td className="py-2 px-3 text-right">
-                <span className="text-gray-100 font-semibold">{formatManwon(wifeHI.grandTotal)}</span>
+                {health?.mode==='joint'?<span className="text-gray-400">세대 합산으로 계산</span>:<><span className="text-gray-100 font-semibold">{formatManwon(wifeHI.grandTotal)}</span>
                 <span className="text-gray-500 ml-1">(연 {formatManwon(wifeHI.grandTotal * 12)})</span>
-                <p className="text-xs text-gray-600">소득분 {formatManwon(wifeHI.incomeMonthly)} · 재산분 {formatManwon(wifeHI.propertyMonthly)}</p>
+                <p className="text-xs text-gray-600">소득분 {formatManwon(wifeHI.incomeMonthly)} · 재산분 {formatManwon(wifeHI.propertyMonthly)}</p></>}
               </td>
             </tr>
             <tr className="bg-gray-900/40">
@@ -542,7 +523,7 @@ export default function PensionSimPage() {
           </tbody>
         </table>
         <p className="text-xs text-gray-600 px-3 py-2 border-t border-gray-700">
-          세금 = 연금소득세 + 금융소득세. 건보 = 소득분 + 재산분(부동산 명의 지분 반영) + 장기요양. {plan.refYear}년 기준.
+          세금 = 종합·금융세 + 분리 연금세 (해외 납부액이 있으면 포함). 국민연금 종합합산 세금은 종합·금융세에 포함되며 연금세로 중복 가산하지 않습니다. 건보는 세대별 별도 계산. {plan.refYear}년 기준.
         </p>
       </div>
     </div>

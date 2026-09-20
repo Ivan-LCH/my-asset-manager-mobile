@@ -30,6 +30,7 @@ export interface HistoryItem {
   value?:    number
   price?:    number
   quantity?: number
+  quantitySourceDate?: string
 }
 
 export interface RealEstateDetail {
@@ -40,6 +41,8 @@ export interface RealEstateDetail {
   loanAmount:    number
   futureValue?:  number   // 재건축 후 예상 가치 (입주 시점)
   futureYear?:   number   // 재건축 완료(입주) 예정 연도
+  housingTaxStartDate?: string // 주택 과세대상 전환일 가정 (자동 법적 판정 아님)
+  constructionHoldingTaxAnnual?: number // 공사 중 토지 등 연 보유세 직접 확인값; 미입력과 0 구분
 }
 
 export interface StockDetail {
@@ -167,6 +170,8 @@ export interface HealthInsuranceInputs {
 }
 
 export interface RetirementPlan {
+  expenseInflationRate?: number // 생활비·여행비·의료비 연 증가율(%). 미설정은 기존 고정 금액 유지.
+  expenseBaseYear?: number // 입력 지출 금액의 기준연도
   expenses:        ExpenseItem[]
   travel:          TravelItem[]
   medicalMonthly:  number
@@ -259,6 +264,8 @@ export interface PensionSource {
 export interface PensionAllocation {
   lumpsumId: string       // RetirementPlan.lumpsum 참조
   irpAmount: number       // → 퇴직IRP 원금
+  irpSourceId?: string    // 합산할 기존 IRP 연금 원천. 여러 후보일 때 명시적으로 선택.
+  irpRetirementTaxRate?: number // 이 목돈의 이연퇴직소득세 국세율(%). 기존 계좌 세율과 별개.
   stockAmount: number     // → 일반주식계좌 원금
   // 현금 = lumpsum.amount - irpAmount - stockAmount (나머지, 은퇴계획 목돈)
 }
@@ -273,6 +280,11 @@ export interface StockAccountConfig {
 }
 
 export interface PensionSimPlan {
+  monthlyPlan?: import('@/lib/monthlyPensionPlan').MonthlyPensionPlan
+  incomeTaxSettings?: IncomeTaxSettings
+  irpTransfers?: {sourceId:string; targetId:string; year:number}[] // 실제 합산 계획. 같은 명의만 가능.
+  stockInputMode?: 'manual' | 'assets' // 기존 수동 입력 보존. assets 선택 시 일반주식 현재 잔액·배당 연결.
+  healthHouseholdMode?: 'joint' | 'separate' // 미지정은 같은 지역가입 세대 가정으로 표시, 자격 확정 아님
   sources:                  PensionSource[]     // 기존 연금원천 (PensionPage에서 과세구분 관리)
   allocations:              PensionAllocation[] // 은퇴계획 목돈을 퇴직IRP/일반주식계좌로 분배
   stockAccount: {                               // 일반주식계좌 (남편/와이프 각각)
@@ -287,6 +299,43 @@ export interface PensionSimPlan {
   withdrawalYears:          number              // 수령 기간(연)
   startYear:                number              // 수령 개시 연도
   refYear:                  number              // 기준년도 (수입·지출 스냅샷 기준, 기본 2030)
-  pensionDeduction:         number              // 연금소득공제 (법정 고정 12,000,000)
+  pensionDeduction:         number              // 구 간이 모형 호환값. 새 연간 소득세 계산에서는 미사용.
+}
+
+/** Optional evidence-backed assumptions. Missing is distinct from confirmed zero. */
+export interface PersonIncomeTaxSettings {
+  eligibleDividendRatio?: number // 일반 금융소득 중 배당가산 대상 확인 비율(%)
+  publicPensionTaxableRatio?: number // 국민연금 과세대상 지급액 비율(%)
+  incomeDeduction?: number // 인적·기타 소득공제 합계, 연금소득공제 제외
+  privatePensionMode?: 'separate' | 'comprehensive'
+}
+export interface PensionSourceTaxSettings {
+  fundingKind?: 'retirement' | 'personal' | 'exempt' | 'mixed' // 이름 추론 금지. 현재 잔액의 확인된 재원.
+  retirementPrincipal?: number // mixed: 현재 잔액 중 이연퇴직소득 원금(원)
+  exemptPrincipal?: number // mixed: 현재 잔액 중 과세제외 금액(원), 나머지는 개인납입/수익
+  retirementShare?: number // 해당 연도 인출액 중 이연퇴직소득 비율, 잔액 비율 아님
+  exemptShare?: number // 해당 연도 인출액 중 과세제외 원금 비율
+  retirementTaxRate?: number // 이연퇴직소득세 / 이연퇴직소득, 국세 %
+  firstReceiptYear?: number
+  lifetime?: boolean // 중도해지 불가 종신계약 확인
+}
+export interface PensionWithdrawalFunding {
+  exempt:number; personal:number; unknown:number
+  retirement:{amount:number; name:string; taxRate?:number; firstReceiptYear?:number}[]
+}
+export interface IncomeTaxYearAdjustment {
+  foreignIncome?: number // 해당 연도 금융소득에 이미 포함된 국외소득, 추가 수입 아님
+  foreignTaxPaid?: number
+  foreignCreditNational?: number // 국가별 한도 검토가 끝난 공제 가능 국세
+  foreignCreditLocal?: number // 지방세 공제 가능액, 국세에서 자동 유추하지 않음
+  domesticWithholding?: number // 연금·금융·기타 전체 국내 기납부세액(지방세 포함), 명시적 0 허용
+  nationalCredit?: number // 표준·자녀 등 확인된 국세 세액공제, 배당·외국납부 제외
+  localCredit?: number
+}
+export interface IncomeTaxSettings {
+  people?: Partial<Record<'husband' | 'wife', PersonIncomeTaxSettings>>
+  sources?: Record<string, PensionSourceTaxSettings>
+  sourceYears?: Record<string, Record<string, PensionSourceTaxSettings>>
+  years?: Record<string, Partial<Record<'husband' | 'wife', IncomeTaxYearAdjustment>>>
 }
 

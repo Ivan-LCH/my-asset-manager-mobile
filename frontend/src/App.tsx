@@ -1,82 +1,55 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useLocation } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import AppLayout from '@/components/layout/AppLayout'
 import Dashboard from '@/pages/Dashboard'
 import AssetsPage from '@/pages/AssetsPage'
 import AnalysisPage from '@/pages/AnalysisPage'
 import Settings from '@/pages/Settings'
-import { getAllAssets, getSettings, saveSettings, seedSampleData, migrateStockOwnershipToAccount, migrateInflowsToLumpsumAndAllocations, migrateSettingsToBirth, migrateBackfillHistory } from '@/lib/db'
+import { getAllAssets, seedSampleData, isDemoDatabase } from '@/lib/db'
+import { PlannerProvider } from '@/planner/context'
+import UpdatePrompt from '@/components/common/UpdatePrompt'
+import { PlannerHome, PlanPage, PlannerAnalysis, AssetInspect } from '@/planner/pages'
 
 const qc = new QueryClient()
-
-/** 최초 실행(빈 DB) 시 샘플 데이터 1회 시드 */
-function Bootstrap() {
-  const c = useQueryClient()
-  useEffect(() => {
-    void (async () => {
-      try {
-        const all = await getAllAssets()
-        const s = await getSettings()
-        const seeded = (s as Record<string, unknown>).sampleSeeded
-        if (all.length === 0 && !seeded) {
-          await seedSampleData()
-          await saveSettings({ sampleSeeded: '1' })
-          c.invalidateQueries()
-        }
-        // 주식 계좌 명의 마이그레이션 (구 종목별 ownership → 계좌별)
-        await migrateStockOwnershipToAccount()
-        c.invalidateQueries({ queryKey: ['stock_account_ownership'] })
-        // 설정 나이 → 생년월/은퇴연도 변환
-        await migrateSettingsToBirth()
-        // 시뮬 inflows → 은퇴계획 목돈 + 시뮬 allocations로 되돌림 (목돈 단일 소스화)
-        const migrated = await migrateInflowsToLumpsumAndAllocations()
-        if (migrated) {
-          c.invalidateQueries({ queryKey: ['pension-sim'] })
-          c.invalidateQueries({ queryKey: ['retirement'] })
-        }
-        // 기존 이력의 빈 날짜 소급 백필 (1회)
-        if (await migrateBackfillHistory()) {
-          c.invalidateQueries({ queryKey: ['assets'] })
-          c.invalidateQueries({ queryKey: ['chart'] })
-        }
-        c.invalidateQueries()
-      } catch {
-        /* 무시 */
-      }
-    })()
-  }, [c])
-  return null
+let demoSeed: Promise<void> | undefined
+function DemoBanner() {
+  const [error,setError]=useState('')
+  useEffect(()=>{
+    if(!isDemoDatabase)return
+    demoSeed ??= getAllAssets().then(async assets=>{if(!assets.length)await seedSampleData()}).then(()=>{void qc.invalidateQueries()})
+    void demoSeed.catch(e=>setError(String(e)))
+  },[])
+  if(!isDemoDatabase)return null
+  return <div className="bg-amber-900 text-amber-100 p-3 text-center text-sm" role="status">샘플 전용 저장소 · 실제 자산과 분리됨 {error}<button className="underline ml-3" onClick={()=>{sessionStorage.removeItem('myasset-demo');location.href='/'}}>실제 자산으로 돌아가기</button></div>
 }
-
+function LegacyAnalysis() {
+  const location=useLocation(); return <Navigate replace to={'/analysis'+location.search+location.hash}/>
+}
+function AnalysisEntry() { const [params]=useSearchParams(); return params.has('run')?<PlannerAnalysis/>:<AnalysisPage/> }
 export default function App() {
-  return (
-    <QueryClientProvider client={qc}>
-      <Bootstrap />
-      <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route index element={<Dashboard />} />
-            {/* 간소화된 4-tab 구조 */}
-            <Route path="assets"   element={<AssetsPage />} />
-            <Route path="analysis" element={<AnalysisPage />} />
-            <Route path="settings" element={<Settings />} />
-            {/* 기존 라우트 호환 — 통합 페이지의 해당 칩/탭으로 리다이렉트 */}
-            <Route path="real-estate" element={<Navigate to="/assets?type=REAL_ESTATE" replace />} />
-            <Route path="stock"       element={<Navigate to="/assets?type=STOCK" replace />} />
-            <Route path="pension"     element={<Navigate to="/assets?type=PENSION" replace />} />
-            <Route path="pension/sim" element={<Navigate to="/analysis?tab=pension-sim" replace />} />
-            <Route path="prep"        element={<Navigate to="/analysis?tab=prep" replace />} />
-            <Route path="savings"     element={<Navigate to="/assets?type=SAVINGS" replace />} />
-            <Route path="physical"    element={<Navigate to="/assets?type=PHYSICAL" replace />} />
-            <Route path="etc"         element={<Navigate to="/assets?type=ETC" replace />} />
-            <Route path="retirement"  element={<Navigate to="/analysis?tab=cashflow" replace />} />
-            <Route path="corp-sim"    element={<Navigate to="/analysis?tab=corp-sim" replace />} />
-            <Route path="portfolio"   element={<Navigate to="/analysis" replace />} />
-            <Route path="*"           element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
-  )
+  return <QueryClientProvider client={qc}><PlannerProvider><UpdatePrompt/><DemoBanner/><BrowserRouter><Routes>
+    <Route element={<AppLayout/>}>
+      <Route index element={<PlannerHome/>}/>
+      <Route path="assets" element={<AssetsPage/>}/>
+      <Route path="assets/:assetId" element={<AssetInspect/>}/>
+      <Route path="plan" element={<PlanPage/>}/>
+      <Route path="analysis" element={<AnalysisEntry/>}/>
+      <Route path="advanced-analysis" element={<PlannerAnalysis/>}/>
+      <Route path="settings" element={<Settings/>}/>
+      <Route path="history" element={<Dashboard/>}/>
+      <Route path="legacy-analysis" element={<LegacyAnalysis/>}/>
+      <Route path="real-estate" element={<Navigate to="/assets?type=REAL_ESTATE" replace/>}/>
+      <Route path="stock" element={<Navigate to="/assets?type=STOCK" replace/>}/>
+      <Route path="pension" element={<Navigate to="/assets?type=PENSION" replace/>}/>
+      <Route path="pension/sim" element={<Navigate to="/analysis?tab=pension-sim" replace/>}/>
+      <Route path="prep" element={<Navigate to="/analysis?tab=prep" replace/>}/>
+      <Route path="savings" element={<Navigate to="/assets?type=SAVINGS" replace/>}/>
+      <Route path="physical" element={<Navigate to="/assets?type=ETC" replace/>}/>
+      <Route path="etc" element={<Navigate to="/assets?type=ETC" replace/>}/>
+      <Route path="retirement" element={<Navigate to="/analysis?tab=cashflow" replace/>}/>
+      <Route path="corp-sim" element={<Navigate to="/legacy-analysis?tab=corp-sim" replace/>}/>
+      <Route path="portfolio" element={<Navigate to="/analysis" replace/>}/>
+      <Route path="*" element={<Navigate to="/" replace/>}/>
+    </Route></Routes></BrowserRouter></PlannerProvider></QueryClientProvider>
 }

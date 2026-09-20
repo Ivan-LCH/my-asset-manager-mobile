@@ -20,7 +20,7 @@ const SIM_START_YEAR = 2029
 const AREA_COLORS = ['#60a5fa', '#34d399', '#fb923c', '#c084fc', '#f87171', '#a3e635', '#fbbf24', '#22d3ee']
 
 const TAX_LABELS: Record<PensionTaxType, string> = {
-  irp: 'IRP(퇴직)', national: '국민연금', taxable: '과세', taxExempt: '비과세',
+  irp: 'IRP', national: '국민연금', taxable: '과세', taxExempt: '비과세',
 }
 const TAX_ACTIVE: Record<PensionTaxType, string> = {
   irp: 'bg-blue-600 text-white',
@@ -168,10 +168,6 @@ export default function PensionPage() {
     if ((a.type === 'STOCK' || a.type === 'SAVINGS') && (a.detail as StockDetail & SavingsDetail)?.isPensionLike) return true
     return false
   })
-  const { rows: simData, sources: simSources } = buildSimulation(pensionLikeAssets, currentAge, retirementAge)
-  const peakMonthly = Math.max(...simData.map((r) => r.total), 0)
-  const retirementYear = resolveRetirementYear(settings)
-  const retirementRow = simData.find((r) => r.year >= retirementYear)
   const active = pensionAssets.filter((a) => !a.disposalDate)
 
   if (loadPension) {
@@ -185,10 +181,10 @@ export default function PensionPage() {
         <h2 className="text-lg sm:text-xl font-bold text-gray-100">🛡️ 연금</h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/pension/sim')}
+            onClick={() => navigate('/analysis?tab=pension-sim')}
             className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors"
           >
-            🪙 시뮬레이션
+            연금 분석 보기
           </button>
           <button
             onClick={() => setShowCreate((v) => !v)}
@@ -205,41 +201,13 @@ export default function PensionPage() {
         </div>
       )}
 
-      {/* 기존 KPI + 시뮬 KPI */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <KpiCard label="은퇴 시 월 수령" value={retirementRow ? formatMoney(retirementRow.total) : '-'} color="blue" />
-        <KpiCard label="최대 월 수령" value={formatMoney(peakMonthly)} color="green" />
-        <KpiCard label="연금 자산 수" value={`${pensionLikeAssets.length}개`} color="default" />
-      </div>
-
-      {/* 시뮬레이션 차트 */}
-      {simData.length > 0 && (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연금 수령 시뮬레이션</h3>
-          <p className="text-xs text-gray-500 mb-4">
-            은퇴 연령 {retirementAge}세 기준 · 현재 연령 {currentAge}세 · {SIM_START_YEAR}년부터 표시
-          </p>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={simData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-              <XAxis dataKey="year" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} interval={4} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickLine={false} axisLine={false}
-                tickFormatter={(v: number) => `${Math.round(v / 10000).toLocaleString()}만`} width={40} />
-              <Tooltip content={<SimTooltip />} />
-              {simSources.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af', paddingTop: 8 }} />}
-              {simSources.map((src, i) => (
-                <Bar key={src} dataKey={src} stackId="1" fill={AREA_COLORS[i % AREA_COLORS.length]}
-                  radius={i === simSources.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      <section className="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-2"><h3 className="font-semibold">현재 연금 계약·등록 지급 목표</h3><p className="text-sm text-gray-400">아래 월 지급액은 등록 목표입니다. 이 입력과 기존 연금 설정은 분석에서 재사용합니다. 실제 수령액은 잔액·지급 조건·세금에 따라 달라집니다.</p><button className="text-blue-300 underline p-2" onClick={()=>navigate('/analysis')}>은퇴 분석 요약 보기 →</button></section>
 
       {/* 연금 자산 타일 (과세구분 버튼 포함) */}
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-gray-400">
           연금 자산 ({active.length})
-          <span className="ml-1.5 text-gray-600">· 과세 구분 선택 시 즉시 저장</span>
+          <span className="ml-1.5 text-gray-500">· IRP 재원·합산은 연금 분석에서 설정</span>
         </h3>
         {active.length === 0 && (
           <div className="text-center py-12 text-gray-500 bg-gray-800/50 rounded-xl border border-gray-700">

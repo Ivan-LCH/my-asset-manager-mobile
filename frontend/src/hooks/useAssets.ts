@@ -32,6 +32,7 @@ export function useCreateAsset() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ASSETS_KEY })
       qc.invalidateQueries({ queryKey: ['chart'] })
+      qc.invalidateQueries({ queryKey: ['dividends', 'summary'] })
     },
   })
 }
@@ -44,6 +45,7 @@ export function useUpdateAsset() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ASSETS_KEY })
       qc.invalidateQueries({ queryKey: ['chart'] })
+      qc.invalidateQueries({ queryKey: ['dividends', 'summary'] })
     },
   })
 }
@@ -55,6 +57,7 @@ export function useDeleteAsset() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ASSETS_KEY })
       qc.invalidateQueries({ queryKey: ['chart'] })
+      qc.invalidateQueries({ queryKey: ['dividends', 'summary'] })
     },
   })
 }

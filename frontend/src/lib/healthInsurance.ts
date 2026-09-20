@@ -3,7 +3,7 @@
 import type { Asset, RealEstateDetail } from '@/types'
 
 // 지역가입자 재산 등급별 점수표 (시행령 제42조 [별표 4], 공식 60등급).
-// 단위: 만원 (재산금액 = 재산세 과세표준 − 기본공제 1억). [하한, 점수]
+// 단위: 만원 (재산금액 = 재산세 과세표준 − 기본공제 1억). [상한(이하), 점수]
 export const PROPERTY_SCORE_TABLE: [number, number][] = [
   [450,     22],  [900,     44],  [1_350,   66],  [1_800,   97],
   [2_250,  122],  [2_700,  146],  [3_150,  171],  [3_600,  195],
@@ -14,20 +14,20 @@ export const PROPERTY_SCORE_TABLE: [number, number][] = [
   [22_700, 611],  [25_300, 637],  [28_100, 659],  [31_300, 681],
   [34_900, 706],  [38_800, 731],  [43_200, 757],  [48_100, 785],
   [53_600, 812],  [59_700, 841],  [66_500, 881],  [74_000, 921],
-  [82_400, 961],  [91_800, 1_001],[103_000,1_091],[114_000,1_141],
-  [127_000,1_191],[142_000,1_241],[158_000,1_291],[176_000,1_341],
-  [196_000,1_391],[218_000,1_451],[242_000,1_511],[270_000,1_571],
-  [300_000,1_641],[330_000,1_711],[363_000,1_781],[399_300,1_851],
-  [439_230,1_921],[483_153,1_991],[531_468,2_061],[584_615,2_131],
-  [643_077,2_201],[707_385,2_271],[778_124,2_341],
+  [82_400, 961],  [91_800,1_001],[103_000,1_041],[114_000,1_091],
+  [127_000,1_141],[142_000,1_191],[158_000,1_241],[176_000,1_291],
+  [196_000,1_341],[218_000,1_391],[242_000,1_451],[270_000,1_511],
+  [300_000,1_571],[330_000,1_641],[363_000,1_711],[399_300,1_781],
+  [439_230,1_851],[483_153,1_921],[531_468,1_991],[584_615,2_061],
+  [643_077,2_131],[707_385,2_201],[778_124,2_271],[Infinity,2_341],
 ]
 
 export function getPropertyScore(taxBase: number): number {
   const baseMan = taxBase / 10_000
   const deducted = baseMan - 10_000 // 기본공제 1억 (구 5천만에서 정정)
   if (deducted <= 0) return 0
-  for (let i = PROPERTY_SCORE_TABLE.length - 1; i >= 0; i--) {
-    if (deducted >= PROPERTY_SCORE_TABLE[i][0]) return PROPERTY_SCORE_TABLE[i][1]
+  for (let i = 0; i < PROPERTY_SCORE_TABLE.length; i++) {
+    if (deducted <= PROPERTY_SCORE_TABLE[i][0]) return PROPERTY_SCORE_TABLE[i][1]
   }
   return 0
 }
@@ -90,24 +90,25 @@ export function calcHealthInsurance(hi: HealthInputs): HealthResult {
  * refYear 지정 시: futureValue/futureYear이 있고 refYear >= futureYear이면 futureValue 사용 (재건축 후 가치).
  * rentalDeposit(전세금)도 지분별로 합산 — 건보 재산분은 보증금의 30% 반영되므로 여기선 원금을 반환(계산측에서 ×0.3).
  */
-const ASSESSED_RATIO = 0.6  // 공정시장가액비율 (주택 60%)
+import {propertyAtYear} from './propertyTiming'
+const ASSESSED_RATIO = 0.75*0.6 // 보유세와 같은 공시가격 추정 × 주택 과표 비율
 export function realEstatePropertyBases(
   assets: Asset[],
   refYear?: number,
 ): { husband: { propertyTaxBase: number; rentalDeposit: number }; wife: { propertyTaxBase: number; rentalDeposit: number } } {
   let hp = 0, hd = 0, wp = 0, wd = 0
   for (const a of assets) {
-    if (a.type !== 'REAL_ESTATE' || a.disposalDate) continue
+    if (a.type !== 'REAL_ESTATE') continue
     const d = a.detail as RealEstateDetail | undefined
     if (!d) continue
     const o = a.ownership ?? { husband: 50, wife: 50 }
     // 재건축: refYear >= futureYear이면 futureValue 사용
-    const useFuture = d.futureValue != null && d.futureYear != null && refYear != null && refYear >= d.futureYear
-    const value = useFuture ? (d.futureValue as number) : a.currentValue
+    const state=propertyAtYear({...a,...d},refYear??new Date().getFullYear())
+    if(!state.held||!state.housing)continue // 공사 중 토지 과표는 미확정; 별도 안내
+    const value=state.value
     hp += value * ASSESSED_RATIO * (o.husband / 100)
     wp += value * ASSESSED_RATIO * (o.wife / 100)
-    hd += (d.tenantDeposit ?? 0) * (o.husband / 100)
-    wd += (d.tenantDeposit ?? 0) * (o.wife / 100)
+    // tenantDeposit is money received from a tenant (a liability), not this household's rented-home deposit.
   }
   return {
     husband: { propertyTaxBase: Math.round(hp), rentalDeposit: Math.round(hd) },

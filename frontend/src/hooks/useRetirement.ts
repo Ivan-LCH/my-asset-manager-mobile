@@ -15,7 +15,7 @@ export function useRetirement() {
 export function useSaveRetirement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: RetirementPlan) => saveRetirement(data),
+    mutationFn: (data: Partial<RetirementPlan>) => saveRetirement(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   })
 }

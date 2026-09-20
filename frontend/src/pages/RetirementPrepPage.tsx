@@ -1,7 +1,10 @@
+import { useSettings } from '@/hooks/useSettings'
+import { Link } from 'react-router-dom'
+import { retirementInputs } from '@/lib/analysisInputs'
 // 은퇴 준비 — 입력 전용 페이지.
 // 생활비/여행/의료비 + 목돈수입/긴급자금 + IRP 투자 포트폴리오.
 // 결과는 연금시뮬 / 법인시뮬 / 현금흐름(은퇴계획)에서 확인.
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Trash2, RotateCcw, Save } from 'lucide-react'
 import { Expander, AmountInput, TextInput, YearInput, TimesInput, Section, InfoNote } from '@/components/sim'
 import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
@@ -11,7 +14,7 @@ import type {
   RetirementPlan, ExpenseItem, TravelItem, LumpsumItem, EmergencyItem,
   PortfolioSettings,
 } from '@/types'
-import { uid, DEFAULT_EXPENSES, DEFAULT_HI } from '@/lib/retirementPlan'
+import { uid, DEFAULT_EXPENSES, normalizeSavedPlan } from '@/lib/retirementPlan'
 
 // ── 유틸/헬퍼 ──────────────────────────────────────────────
 
@@ -184,36 +187,28 @@ function PortfolioSection({ value, onChange }: {
 export default function RetirementPrepPage() {
   const { data: saved } = useRetirement()
   const saveMut = useSaveRetirement()
+  const {data:settings}=useSettings()
   const { data: portfolioSaved } = usePortfolio()
   const portfolioSaveMut = useSavePortfolio()
   const [plan, setPlan] = useState<RetirementPlan | null>(null)
   const [dirty, setDirty] = useState(false)
+  const editedFields = useRef(new Set<keyof RetirementPlan>())
+  const editVersion = useRef(0)
   const [portfolio, setPortfolio] = useState<PortfolioSettings>(DEFAULT_PORTFOLIO)
   const [portfolioDirty, setPortfolioDirty] = useState(false)
 
   useEffect(() => {
-    if (saved && Object.keys(saved).length > 0) {
-      setPlan({
-        expenses: saved.expenses ?? DEFAULT_EXPENSES,
-        travel: saved.travel ?? [],
-        medicalMonthly: saved.medicalMonthly ?? 200_000,
-        lumpsum: (saved.lumpsum ?? []).map((l) => ({
-          ...l,
-          taxKind: ((l as { taxKind?: string }).taxKind === 'rental' ? 'other' : (l.taxKind ?? 'other')) as LumpsumItem['taxKind'],
-        })),
-        emergency: saved.emergency ?? [],
-        retirementYear: saved.retirementYear ?? new Date().getFullYear() + 10,
-        healthInsurance: saved.healthInsurance ?? DEFAULT_HI,
-        linkCorpSim: saved.linkCorpSim ?? false,
-        linkPensionSim: saved.linkPensionSim ?? false,
-      })
+    if (saved && !dirty) {
+      setPlan(retirementInputs(saved,settings).plan)
     }
-  }, [saved])
+  }, [saved,settings,dirty])
 
   useEffect(() => { if (portfolioSaved) setPortfolio(portfolioSaved) }, [portfolioSaved])
 
   const update = useCallback(<K extends keyof RetirementPlan>(key: K, val: RetirementPlan[K]) => {
     setPlan((p) => (p ? { ...p, [key]: val } : p))
+    editedFields.current.add(key)
+    editVersion.current += 1
     setDirty(true)
   }, [])
 
@@ -223,7 +218,17 @@ export default function RetirementPrepPage() {
   }, [])
 
   const handleSave = () => {
-    if (plan) saveMut.mutate(plan, { onSuccess: () => setDirty(false) })
+    if (plan && dirty) {
+      const version = editVersion.current
+      const patch = Object.fromEntries([...editedFields.current].map((key) => [key, plan[key]])) as Partial<RetirementPlan>
+      saveMut.mutate(patch, { onSuccess: () => {
+        // 저장 중 추가된 편집은 미저장 상태로 유지한다.
+        if (editVersion.current === version) {
+          editedFields.current.clear()
+          setDirty(false)
+        }
+      } })
+    }
     if (portfolioDirty) portfolioSaveMut.mutate(portfolio, { onSuccess: () => setPortfolioDirty(false) })
   }
   const anyDirty = dirty || portfolioDirty
@@ -233,10 +238,15 @@ export default function RetirementPrepPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-xl mx-auto">
+      {(saveMut.isError || portfolioSaveMut.isError) && (
+        <p role="alert" className="rounded-lg border border-red-700 p-3 text-sm text-red-300">
+          저장하지 못했습니다. 입력은 유지되어 있습니다. 다시 저장해 주세요.
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-gray-100">📝 은퇴 준비 (입력)</h2>
-          <p className="text-xs text-gray-500 mt-0.5">생활비·목돈·IRP 포트폴리오 입력. 결과는 연금시뮬 / 법인시뮬 / 현금흐름에서 확인.</p>
+          <p className="text-xs text-gray-500 mt-0.5">기존 생활비와 목돈만 수정하세요. 저장하면 분석 요약과 현금흐름에 함께 반영됩니다.</p>
         </div>
         <button onClick={handleSave} disabled={!anyDirty || saving}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 shrink-0">
@@ -245,8 +255,17 @@ export default function RetirementPrepPage() {
         </button>
       </div>
 
+      <Link className="inline-block text-sm text-blue-300" to="/analysis">← 분석 요약으로 돌아가기</Link>
       <Expander title="✏️ 💰 생활비 / 여행 / 의료비"
         badge={`월 ${formatManwon(plan.expenses.reduce((s, e) => s + e.amount, 0) + plan.travel.reduce((s, t) => s + (t.phase1Times * t.costPerTrip) / 12, 0) + plan.medicalMonthly)}`}>
+        <div className="rounded border border-gray-700 p-3 mb-4 text-xs space-y-2">
+          <p className="font-semibold text-gray-200">입력 금액의 기준연도·물가상승률</p>
+          <div className="flex flex-wrap gap-3">
+            <label>기준연도 <input aria-label="생활비 기준연도" type="number" min="1900" max="2200" value={plan.expenseBaseYear??new Date().getFullYear()} onChange={e=>{const y=Number(e.target.value);if(Number.isInteger(y)&&y>=1900&&y<=2200)update('expenseBaseYear',y)}} className="w-20 bg-gray-800 border border-gray-600 rounded p-2" /></label>
+            <label>연 증가율 <input aria-label="생활비 물가상승률" type="number" min="-99" max="100" step="0.1" placeholder="미설정" value={plan.expenseInflationRate??''} onChange={e=>{const n=e.target.value===''?undefined:Number(e.target.value);if(n==null||Number.isFinite(n)&&n>=-99&&n<=100){update('expenseInflationRate',n);if(plan.expenseBaseYear==null)update('expenseBaseYear',new Date().getFullYear())}}} className="w-20 bg-gray-800 border border-gray-600 rounded p-2" /> %</label>
+          </div>
+          <p className="text-gray-400">미설정은 기존 고정 금액을 유지합니다. 기준연도 이후 생활비·여행비·의료비에만 복리 적용하며, 목돈·일회 지출·세금·건보에는 중복 적용하지 않습니다. 아래 입력값 자체는 바뀌지 않습니다.</p>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ExpensesSection items={plan.expenses} onChange={(v) => update('expenses', v)} />
           <div className="space-y-5">

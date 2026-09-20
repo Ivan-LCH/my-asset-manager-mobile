@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { PanelLeftClose, PanelLeftOpen, Home, FolderOpen, BarChart3, Settings } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Home, FolderOpen, BarChart3, CalendarDays } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { cn } from '@/lib/utils'
 
@@ -14,15 +14,30 @@ const TABS = [
       ['/stock', '/real-estate', '/pension', '/savings', '/physical', '/etc'].includes(p) },
   { to: '/analysis', icon: BarChart3,  label: '분석',
     match: (p: string) =>
-      p.startsWith('/analysis') ||
+      p.startsWith('/analysis') || p.startsWith('/plan') || p.startsWith('/advanced-analysis') ||
       ['/prep', '/pension/sim', '/corp-sim', '/retirement'].includes(p) },
-  { to: '/settings', icon: Settings,   label: '설정',
-    match: (p: string) => p.startsWith('/settings') },
 ]
 
 export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
+  const scrollMemory = useRef(new Map<string,number>())
+  const scrollParams = new URLSearchParams(search); if(pathname==='/assets')scrollParams.delete('asset')
+  const scrollKey = pathname + '?' + scrollParams.toString()
+  useLayoutEffect(()=>{
+    const main=mainRef.current;if(!main)return
+    const target=scrollMemory.current.get(scrollKey)??0
+    let restoring=target>0
+    const restore=()=>{if(restoring&&main.scrollHeight-main.clientHeight>=target){main.scrollTop=target;restoring=false}}
+    if(!restoring)main.scrollTop=0
+    restore()
+    const observer=new MutationObserver(restore);observer.observe(main,{childList:true,subtree:true})
+    const remember=()=>{if(!restoring)scrollMemory.current.set(scrollKey,main.scrollTop)}
+    const cancel=()=>{restoring=false;remember()}
+    main.addEventListener('scroll',remember);main.addEventListener('wheel',cancel);main.addEventListener('touchstart',cancel);main.addEventListener('pointerdown',cancel)
+    return()=>{remember();observer.disconnect();main.removeEventListener('scroll',remember);main.removeEventListener('wheel',cancel);main.removeEventListener('touchstart',cancel);main.removeEventListener('pointerdown',cancel)}
+  },[scrollKey])
 
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
@@ -42,7 +57,7 @@ export default function AppLayout() {
 
       {/* 본문 컬럼 */}
       <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
 

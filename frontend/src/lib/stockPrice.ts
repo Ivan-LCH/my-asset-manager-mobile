@@ -77,7 +77,8 @@ export async function fetchStockHistory(
     for (let i = 0; i < ts.length; i++) {
       const c = closes[i]
       if (typeof c !== 'number' || !(c > 0)) continue
-      out.push({ date: fmt.format(new Date(ts[i] * 1000)), close: c })
+      const parts = Object.fromEntries(fmt.formatToParts(new Date(ts[i] * 1000)).map(p => [p.type, p.value]))
+      out.push({ date: `${parts.year}-${parts.month}-${parts.day}`, close: c })
     }
     return out.length > 0 ? out : null
   } catch {

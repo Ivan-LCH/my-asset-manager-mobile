@@ -5,8 +5,8 @@ import type { PortfolioSettings } from '@/types'
 const KEY = ['portfolio']
 
 const DEFAULT: PortfolioSettings = {
-  dividendYield: 4,
-  growthRate: 5,
+  dividendYield: 0,
+  growthRate: 0,
 }
 
 export { DEFAULT as DEFAULT_PORTFOLIO }

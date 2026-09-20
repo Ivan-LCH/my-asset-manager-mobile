@@ -46,6 +46,8 @@ export const EMPTY_PLAN: RetirementPlan = {
  *  RetirementPage 로드 로직의 공용화(연도별 대시보드 등 분석 화면 공유). */
 export function normalizeSavedPlan(saved: Partial<RetirementPlan>): RetirementPlan {
   return {
+    expenseInflationRate: saved.expenseInflationRate,
+    expenseBaseYear: saved.expenseBaseYear,
     expenses:       saved.expenses       ?? DEFAULT_EXPENSES,
     travel:         saved.travel         ?? [],
     medicalMonthly: saved.medicalMonthly ?? 200_000,

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, BarChart3, Settings } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BarChart3, Settings, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // 간소화된 4개 메뉴 (자산/분석 상세는 각 통합 페이지 안의 칩·탭에서)

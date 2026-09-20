@@ -39,6 +39,8 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [futureYear,    setFutureYear]    = useState((d?.futureYear    as number)  ?? 0)
 
   // 주식
+  const [housingTaxStartDate,setHousingTaxStartDate]=useState((d?.housingTaxStartDate as string)??'')
+  const [constructionHoldingTaxAnnual,setConstructionHoldingTaxAnnual]=useState<number|undefined>(d?.constructionHoldingTaxAnnual as number|undefined)
   const [accountName,   setAccountName]   = useState((d?.accountName   as string)  ?? '')
   const [currency,      setCurrency]      = useState<Currency>((d?.currency as Currency) ?? 'KRW')
   const [ticker,        setTicker]        = useState((d?.ticker         as string)  ?? '')
@@ -62,7 +64,7 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [pensionMonthlySav,   setPensionMonthlySav]   = useState((d?.pensionMonthly   as number) ?? 0)
 
   const buildDetail = (type: AssetType) => {
-    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined }
+    if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined, housingTaxStartDate: housingTaxStartDate || undefined, constructionHoldingTaxAnnual }
     if (type === 'STOCK') return {
       accountName, currency, ticker: ticker || undefined,
       isPensionLike, isAccountLevel,
@@ -173,6 +175,8 @@ export default function AssetForm({ asset, onClose }: Props) {
             futureYear={futureYear}
             onFutureValue={setFutureValue}
             onFutureYear={setFutureYear}
+            housingTaxStartDate={housingTaxStartDate} onHousingTaxStartDate={setHousingTaxStartDate}
+            constructionHoldingTaxAnnual={constructionHoldingTaxAnnual} onConstructionHoldingTaxAnnual={setConstructionHoldingTaxAnnual}
           />
         </div>
       )}

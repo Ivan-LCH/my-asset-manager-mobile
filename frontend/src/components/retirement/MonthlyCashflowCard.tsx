@@ -12,7 +12,7 @@ export function MonthlyCashflowCard({ retirementRow, retirementYear, linkMode }:
     <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-200">📊 월 현금흐름 ({retirementYear}년 기준)</h3>
-        <span className="text-xs text-gray-500">현황 뷰 — 수입·세금·건보는 시뮬에서 자동 반영</span>
+        <span className="text-xs text-amber-300">연간 세금·일회성 지출 차감 전 예상 월수지</span>
       </div>
       <div className="grid grid-cols-3 gap-3">
         {/* 월 수입 */}

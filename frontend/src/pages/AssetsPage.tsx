@@ -6,6 +6,7 @@ import PensionPage from './PensionPage'
 import AssetPage from './AssetPage'
 import { SegmentedTabs } from '@/components/common/SegmentedTabs'
 import type { AssetType } from '@/types'
+import { CurrentAssetsOverview } from '@/planner/pages'
 
 // 유형별 아이콘/색 (칩) — 실물·기타는 하나로 병합 (UI 간소화 ④)
 const CHIPS: { value: AssetType | 'ALL'; label: string; emoji: string }[] = [
@@ -25,15 +26,10 @@ const normalizeTab = (v: string | null) => (v === 'PHYSICAL' ? 'ETC' : v) as Ass
  * 칩 선택값은 localStorage에 기억 (다음 방문 시 마지막 유형).
  */
 export default function AssetsPage() {
-  const [params] = useSearchParams()
-  const initial = normalizeTab(params.get('type'))
-  const [type, setType] = useState<AssetType | 'ALL'>(
-    initial ?? normalizeTab(localStorage.getItem('assets_tab')) ?? 'STOCK',
-  )
-
-  useEffect(() => {
-    localStorage.setItem('assets_tab', type)
-  }, [type])
+  const [params, setParams] = useSearchParams()
+  const requested = normalizeTab(params.get('type'))
+  const type = CHIPS.some(c => c.value === requested) ? requested! : 'ALL'
+  const setType = (value: AssetType | 'ALL') => setParams({ type: value })
 
   return (
     <div>
@@ -46,7 +42,7 @@ export default function AssetsPage() {
       {type === 'PENSION'     && <PensionPage />}
       {type === 'SAVINGS'     && <AssetPage types={['SAVINGS']} />}
       {type === 'ETC'         && <AssetPage types={['PHYSICAL', 'ETC']} />}
-      {type === 'ALL'         && <AllSummary />}
+      {type === 'ALL'         && <CurrentAssetsOverview />}
     </div>
   )
 }

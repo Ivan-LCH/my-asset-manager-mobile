@@ -163,7 +163,7 @@ export default function HistoryTable({ asset }: Props) {
                 </div>
                 {qtyBased && editing && (
                   <p className="col-span-2 text-xs text-yellow-400">
-                    ⚠️ 수량 변경 시 이후 날짜 데이터에도 전파됩니다.
+                    이 날짜만 수정합니다. 이후 거래 수량·이력은 변경하지 않습니다.
                   </p>
                 )}
               </>
@@ -235,6 +235,7 @@ export default function HistoryTable({ asset }: Props) {
                     </td>
                     <td className="px-3 py-2 text-right text-gray-300">
                       {h.quantity?.toLocaleString() ?? '-'}
+                      {!h.filled && h.quantitySourceDate && <small className="block text-amber-300" title={`${h.quantitySourceDate}의 수량 유지 가정 · 실제 거래 수량은 확인 후 수정하세요`}>추정 수량</small>}
                     </td>
                   </>
                 )}

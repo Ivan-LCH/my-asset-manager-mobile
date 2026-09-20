@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>은퇴계획 · 화면 흐름 시제품</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif;color:#19332f;background:#f3f6f3;font-size:16px;line-height:1.6}*{box-sizing:border-box}body{margin:0}button,select{font:inherit}button,select,a{touch-action:manipulation}button,select{min-height:46px;border:1px solid #becfc5;border-radius:12px;background:white;padding:10px 14px;color:inherit}button{cursor:pointer}button:hover{background:#eef5ef}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #246dce;outline-offset:3px}main{max-width:1060px;margin:auto;padding:30px 24px 60px}header{display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:28px;margin:4px 0}h2{font-size:21px;margin:0 0 12px}h3{font-size:17px}p{margin:8px 0}.sub{color:#536a60}.eyebrow{font-size:13px;letter-spacing:.08em;color:#426755}.notice{background:#fff5dd;border:1px solid #e5ce91;border-radius:12px;padding:14px 18px;margin:24px 0}.toolbar{display:flex;gap:20px;flex-wrap:wrap;align-items:end;margin:24px 0}.toolbar label{display:grid;gap:6px}.toolbar select{min-width:180px}.hero{padding:28px;border-radius:20px;background:#164b3c;color:#fff}.hero .sub{color:#d2e5dc}.hero h2{font-size:25px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0}.card{display:flex;text-align:left;flex-direction:column;padding:20px;border-radius:16px;min-width:0}.card .value{font-size:27px;font-weight:750;letter-spacing:-.04em;margin:8px 0}.card .hint{font-size:14px;color:#526b5f}.card .more{margin-top:14px;color:#185e44}.panels{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}.panel{background:white;border:1px solid #d4dfd7;padding:24px;border-radius:16px}.event{display:block;width:100%;text-align:left;margin:10px 0}.event small{display:block;color:#506457}.compare{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:right;padding:12px 6px;border-bottom:1px solid #e0e7e1}th:first-child,td:first-child{text-align:left}.negative{color:#ab332b}.badge{display:inline-block;font-size:13px;background:#edf3ed;border-radius:6px;padding:2px 8px;color:#426050}.footer{margin:24px 0;color:#536a60}.footer a{color:#185e44}dialog{border:0;border-radius:20px;padding:0;width:min(600px,calc(100% - 28px));max-height:86dvh;box-shadow:0 24px 100px #102f3860;color:#19332f}dialog::backdrop{background:#102c2bb0}.dialogHead{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 22px;background:white;border-bottom:1px solid #d4dfd7}.dialogHead h2{margin:0;font-size:20px}.dialogBody{padding:22px}.line{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid #e0e7e1}.line span:last-child{white-space:nowrap;font-weight:650}.explain{padding:14px;background:#f0f5f0;border-radius:12px;margin-top:16px}.sr{position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;overflow:hidden}@media(max-width:700px){main{padding:20px 16px 40px}.grid{grid-template-columns:1fr}.card{padding:16px}.card .value{font-size:28px}.panels{grid-template-columns:1fr}header{align-items:start}header .badge{max-width:110px}.hero{padding:22px}.hero h2{font-size:22px}.toolbar{gap:12px}.toolbar label{flex:1}.toolbar select{min-width:0;width:100%}.panel{padding:18px}dialog{max-height:90dvh}.line{font-size:15px}}
+</style>
+<style>[hidden]{display:none!important}</style>
+</head>
+<body>
+<main>
+<div class="notice"><strong>전체 페이지를 보려면:</strong> <a href="full-app.html#/guide">홈·자산·계획·분석·설정이 연결된 전체 앱 열기 →</a> · <a href="screenshots.html">전체 화면 이미지 모음</a><br>아래는 이전에 만든 분석 단독 시제품입니다.</div>
+<header><div><div class="eyebrow">MY RETIREMENT PLAN</div><h1>내 은퇴 계획</h1><p class="sub">앞으로의 변화와 생활자금을 함께 봅니다.</p></div><span class="badge">화면 흐름 시제품</span></header>
+<div class="notice"><strong>예시 데이터입니다.</strong> 아래 사용자 선택은 검토용입니다. 실제 앱은 입력 데이터에서 표시할 기능을 결정합니다. 금액·세금·보험료는 고정 예시이며 설치·서버·외부 통신 없이 동작합니다.</div>
+<div class="toolbar"><label>사용자 예시<select id="profile"><option value="financial">부동산 없음 · 금융·연금</option><option value="home">일반 자가 · 대출 보유</option><option value="rental">임대 부동산 보유</option><option value="rebuild">재건축 부동산 보유</option><option value="retired">은퇴한 1인 가구</option><option value="empty">아직 입력하지 않은 사용자</option></select></label><label>비교할 계획<select id="scenario"></select></label><label>살펴볼 연도<select id="year"><option value="2030">2030년</option><option value="2031">2031년</option><option value="2032">2032년</option></select></label><span class="sub">금액 기준: 만원 · 명목</span></div>
+<p class="sub" id="profileNote"></p>
+<section class="hero" aria-labelledby="summary"><p>선택 연도의 생활자금</p><h2 id="summary"></h2><p class="sub" id="summaryNote"></p></section>
+<div id="status" class="sr" role="status" aria-live="polite"></div>
+<section class="grid" id="metrics" aria-label="분석 요약 · 카드를 누르면 내역이 열립니다">
+<button class="card" data-detail="monthly"><span>세후 반복 수지 · 월평균</span><span class="value" id="monthly"></span><span class="hint">계좌 이전·일회성 지출은 별도 표시</span><span class="more">수입·지출 내역 보기 →</span></button>
+<button class="card" data-detail="cash"><span>연말 생활자금</span><span class="value" id="cash"></span><span class="hint">연초 현금에서 실제 증감을 반영</span><span class="more">기초부터 기말까지 보기 →</span></button>
+<button class="card" data-detail="tax"><span>연간 세금 · 예시 입력액</span><span class="value" id="tax"></span><span class="hint">실제 세액은 과세자료 확인 필요</span><span class="more">입력 근거·시점 보기 →</span></button>
+</section>
+<div class="panels" id="panels"><section class="panel" id="eventsPanel"><h2>내 자산·계획의 주요 일정</h2><p class="sub">예시에 등록된 일정을 현재 상태와 함께 봅니다.</p><div id="events"></div><p class="sub" id="eventNote"></p></section>
+<section class="panel"><h2 id="compareTitle"></h2><p class="sub" id="compareNote"></p><table class="compare"><caption class="sr">연말 생활자금 비교 · 만원</caption><thead><tr><th>연도</th><th>기본안</th><th id="alternativeLabel">대안</th></tr></thead><tbody id="comparison"></tbody></table><p id="difference"></p><p class="sub" id="compareExplanation"></p></section></div>
+<section class="panel" id="emptyState" hidden><h2>내 계획을 시작해 보세요</h2><p>가구와 은퇴 상태 → 현재 자산·부채 → 수입·생활비 순서로 입력합니다.</p><p>아직 입력하지 않은 영역을 0원이나 ‘보유하지 않음’으로 간주하지 않습니다. 입력 전에는 은퇴 가능 여부를 판정하지 않습니다.</p><p class="sub">이 시제품은 실제 입력·저장을 제공하지 않습니다. 위 사용자 예시에서 다른 화면을 확인할 수 있습니다.</p></section>
+<p class="footer">이 화면은 3년간의 합성 현금 비교입니다. 은퇴 전체 기간의 성공 여부나 최초 부족월을 판정하지 않습니다. <a href="05-implementation-spec.md">전체 수정·보완 적용 명세</a></p>
+</main>
+<dialog id="detail" aria-labelledby="detailTitle"><div class="dialogHead"><h2 id="detailTitle"></h2><button id="close" aria-label="상세 닫기">닫기 ✕</button></div><div class="dialogBody" id="detailBody"></div></dialog>
+<script>
+// 검토용 예시 선택기. 실제 제품의 기능 노출/월별 은퇴 엔진은 05 명세에 따라 별도 구현한다.
+const years=[2030,2031,2032];
+const profileSpecs={
+ financial:{label:'부동산 없음 · 금융·연금',initial:6000,pension:260,interest:10,living:250,health:20,tax:60,alternative:'생활비 10% 증가안',description:'부동산 없음이 확인된 예시입니다. 연금·생활비·현금만 표시합니다.',explanation:'연금·이자와 고정 세금은 같고 생활비만 10% 늘립니다.',events:[{year:2030,title:'2030.01 · 연금 수령 시작',body:'외부 연금 월 260만원을 12개월 반영합니다. IRP 원금 인출은 이 예시에 포함하지 않았습니다.'}]},
+ home:{label:'일반 자가 · 대출 보유',initial:5000,pension:300,living:230,health:30,tax:180,interestExpense:20,alternative:'생활비 10% 증가안',description:'일반 자가와 대출이 있는 예시입니다. 임대나 재건축 사건을 만들지 않습니다.',explanation:'대출 이자·원금 상환 일정은 유지하고 생활비만 10% 늘립니다.',paymentLabel:'대출 원금 상환',events:[{year:2031,title:'2031.12 · 대출 원금 1,000만원 상환',body:'2031년 생활 현금에서 1,000만원을 출금합니다. 이 예시는 현금 증감만 표시하며 실제 제품은 대출 잔액 감소도 함께 기록합니다.'}]},
+ rental:{label:'임대 부동산 보유',initial:4000,pension:200,living:250,health:30,tax:180,rent:100,alternative:'매년 공실 2개월안',description:'임대 계약이 있는 예시입니다. 임대료와 보증금 반환을 표시합니다.',explanation:'월 임대료 100만원의 수입 기간을 12개월에서 10개월로 줄입니다. 세금은 비교용 고정값으로 유지합니다.',paymentLabel:'임차인 보증금 반환',events:[{year:2031,title:'2031.12 · 보증금 2,000만원 반환',body:'기초 현금에는 과거 받은 보증금이 포함된 것으로 가정했습니다. 반환을 현금에서 한 번 차감합니다. 실제 제품은 보증금 반환부채도 동시에 감소시킵니다.'}]},
+ rebuild:{label:'재건축 부동산 보유',initial:6000,pension:300,living:250,health:30,alternative:'준공 1년 지연안',description:'공사 중인 자산이 있어 준공·임대 시작·분담금과 지연 비교를 표시합니다.',explanation:'연결된 임대 개시·임시 거주비·분담금 지급이 이동합니다. 세금은 각 안에 직접 정한 예시 금액입니다.',paymentLabel:'잔여 분담금'},
+ retired:{label:'은퇴한 1인 가구',initial:3000,pension:180,living:190,health:15,tax:36,alternative:'생활비 10% 증가안',description:'이미 은퇴한 본인 1명의 현금과 생활비 예시입니다. 추가 예정 사건이 없어 일정 카드를 숨깁니다.',explanation:'배우자나 은퇴 연기를 가정하지 않고 생활비만 비교합니다.',events:[]},
+ empty:{label:'아직 입력하지 않음',description:'미입력은 자산·지출이 없다는 뜻이 아닙니다.'}
+};
+function project(profileId,alternative=false){
+ const p=profileSpecs[profileId];if(profileId==='empty')return [];
+ let balance=p.initial;
+ return years.map(year=>{
+  const cy=alternative?2031:2030;
+  const rentMonths=profileId==='rebuild'?(year<cy?0:year===cy?3:12):profileId==='rental'?(alternative?10:12):0;
+  const tempMonths=profileId==='rebuild'?(year<cy?12:year===cy?9:0):0;
+  const pension=p.pension*12,interest=(p.interest||0)*12,rent=(profileId==='rebuild'?150:p.rent||0)*rentMonths;
+  const living=p.living*12*(alternative&&['financial','home','retired'].includes(profileId)?1.1:1);
+  const health=p.health*12,temp=50*tempMonths,interestExpense=(p.interestExpense||0)*12;
+  const tax=profileId==='rebuild'?(year<cy?180:year===cy?240:360):p.tax;
+  const payment=profileId==='rebuild'?(year===cy?2000:0):profileId==='home'?(year===2031?1000:0):profileId==='rental'?(year===2031?2000:0):0;
+  const opening=balance,regular=pension+interest+rent-living-health-temp-interestExpense-tax;
+  balance+=regular-payment;
+  return {year,opening,pension,interest,rent,rentMonths,living,health,temp,tempMonths,interestExpense,tax,payment,regular,balance};
+ });
+}
+function eventsFor(profileId,alternative){
+ if(profileId!=='rebuild')return profileSpecs[profileId].events||[];
+ const cy=alternative?2031:2030;
+ return [{year:cy,title:cy+'.09 · 준공 예상',body:'예정 준공 사건입니다. 실제 사용승인·입주·세무 판단일은 각각 확인해야 합니다. 지연안에서는 연결 사건도 1년 이동합니다.'},{year:cy,title:cy+'.10 · 임대 시작',body:'준공 후 1개월에 월 150만원 임대를 시작합니다. 시작 연도에 3개월분 450만원, 다음 연도부터 12개월을 반영한 단순 예시입니다.'},{year:cy,title:cy+'.09 · 잔여 분담금 2,000만원',body:'준공에 연결된 일회성 출금입니다. 부동산 예상 가격 상승은 생활 현금에 더하지 않습니다.'}];
+}
+const byId=id=>document.getElementById(id);
+const fmt=n=>n.toLocaleString('ko-KR',{maximumFractionDigits:1})+'만원';
+const signed=n=>(n>0?'+':'')+fmt(n);
+function selected(){return project(byId('profile').value,byId('scenario').value==='alternative').find(x=>x.year===Number(byId('year').value));}
+function changeProfile(){const p=profileSpecs[byId('profile').value];byId('scenario').replaceChildren(new Option('기본안','base'));if(p.alternative)byId('scenario').add(new Option(p.alternative,'alternative'));byId('scenario').value='base';if(byId('detail').open)byId('detail').close();render();}
+function render(){
+ const id=byId('profile').value,p=profileSpecs[id],empty=id==='empty';
+ byId('profileNote').textContent=p.description;byId('metrics').hidden=empty;byId('panels').hidden=empty;byId('emptyState').hidden=!empty;byId('scenario').disabled=empty;byId('year').disabled=empty;
+ if(empty){byId('summary').textContent='아직 은퇴 전망을 계산할 수 없습니다';byId('summaryNote').textContent='가구·자산·수입·지출을 확인한 뒤 결과를 제공합니다.';for(const key of ['monthly','cash','tax'])byId(key).textContent='—';byId('events').replaceChildren();byId('comparison').replaceChildren();byId('status').textContent='미입력 사용자. 계산 결론 보류.';return;}
+ const r=selected(),alternative=byId('scenario').value==='alternative';
+ byId('monthly').textContent=signed(r.regular/12);byId('monthly').classList.toggle('negative',r.regular<0);byId('cash').textContent=fmt(r.balance);byId('tax').textContent=fmt(r.tax);
+ byId('summary').textContent=r.year+'년 말, 생활자금 '+fmt(r.balance);byId('summaryNote').textContent='반복 수지 '+signed(r.regular)+' / '+(p.paymentLabel||'일회성 출금')+' '+fmt(r.payment)+'를 연초 현금에 반영했습니다.';
+ const events=eventsFor(id,alternative);byId('eventsPanel').hidden=events.length===0;byId('events').replaceChildren();
+ for(const event of events){const b=document.createElement('button');b.className='event';const title=document.createElement('strong');title.textContent=event.title;const caption=document.createElement('small');caption.textContent=event.year<r.year?'선택 연도 이전의 일정':event.year===r.year?'선택 연도에 해당하는 일정':'선택 연도 이후의 일정';b.append(title,caption);b.addEventListener('click',()=>openDetail(event.title,'<p>'+event.body+'</p>'+note('일정과 금액은 합성 예시입니다. 실제 제품에서는 원천 입력과 같은 사건 ID로 연결합니다.')));byId('events').append(b);}
+ byId('eventNote').textContent='연도를 바꾸어도 계획의 일정은 보존하고 선택 연도와의 관계를 표시합니다.';
+ byId('compareTitle').textContent=p.alternative+' 비교';byId('alternativeLabel').textContent='대안';byId('compareNote').textContent='두 안 모두 시작 현금 '+fmt(p.initial)+' 기준입니다.';byId('compareExplanation').textContent=p.explanation;
+ const base=project(id),alt=project(id,true);byId('comparison').innerHTML=base.map((b,i)=>'<tr><th>'+b.year+'</th><td>'+fmt(b.balance)+'</td><td>'+fmt(alt[i].balance)+'</td></tr>').join('');const index=years.indexOf(r.year);byId('difference').textContent=r.year+'년 말 대안의 차이: '+signed(alt[index].balance-base[index].balance);byId('status').textContent=p.label+', '+r.year+'년 '+byId('scenario').selectedOptions[0].text+', 연말 현금 '+fmt(r.balance);
+}
+function line(label,value){return '<div class="line"><span>'+label+'</span><span>'+value+'</span></div>';}
+function note(text){return '<div class="explain">'+text+'</div>';}
+function openDetail(title,html){byId('detailTitle').textContent=title;byId('detailBody').innerHTML=html;byId('detail').showModal();}
+function show(kind){const r=selected();if(!r)return;const p=profileSpecs[byId('profile').value];let title='',html='';
+ if(kind==='monthly'){title=r.year+'년 반복 수지';html=line('외부 연금 유입',fmt(r.pension));if(r.interest)html+=line('이자 유입',fmt(r.interest));if(p.rent||byId('profile').value==='rebuild')html+=line('임대 유입 · '+r.rentMonths+'개월',fmt(r.rent));html+=line('생활비',signed(-r.living))+line('건강보험 · 예시 입력액',signed(-r.health));if(r.temp)html+=line('임시 거주비',signed(-r.temp));if(r.interestExpense)html+=line('대출 이자',signed(-r.interestExpense));html+=line('세금 · 예시 입력액',signed(-r.tax))+line('연 반복 수지',signed(r.regular))+line('12개월로 나눈 월평균',signed(r.regular/12))+note('해당 사용자에게 적용되는 항목만 표시합니다. 예시 연금은 외부 지급액이며, 실제 제품에서는 IRP 원금 인출을 분리합니다. 실제 월 현금은 월평균과 다릅니다.');}
+ if(kind==='cash'){title=r.year+'년 생활자금 증감';html=line('연초 현금',fmt(r.opening))+line('반복 수지 · 세금 포함',signed(r.regular));if(p.paymentLabel)html+=line(p.paymentLabel,signed(-r.payment));html+=line('연말 현금',fmt(r.balance))+note('연말 현금 = 연초 현금 + 반복 수지 − 일회성 출금. 이 시제품은 현금 증감 설명용입니다. 실제 제품의 계좌별 잔액·부채·투자·세금 원장은 통합 엔진으로 계산해야 합니다.');}
+ if(kind==='tax'){title=r.year+'년 세금 입력 근거';html=line('예시에 직접 정한 연 세금',fmt(r.tax))+line('실제 세액의 상태','미확정')+note('세법 계산값이 아닙니다. 실제 제품에서는 해당 사용자의 소득·거래에 적용되는 세목만 표시하고, 원천 입력·적용기간·납부일·규칙을 연결합니다. 자산이 없다는 이유로 모든 세금을 0원 처리하지 않습니다.');}
+ openDetail(title,html);}
+byId('profile').addEventListener('change',changeProfile);byId('scenario').addEventListener('change',render);byId('year').addEventListener('change',render);document.querySelectorAll('[data-detail]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.detail)));byId('close').addEventListener('click',()=>byId('detail').close());byId('detail').addEventListener('click',e=>{if(e.target===byId('detail')){const b=e.target.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)e.target.close();}});changeProfile();
+</script>
+</body>
+</html>

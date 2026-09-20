@@ -1,5 +1,33 @@
 # 💼 My Asset Manager
 
+## 현재 실행 버전: 현재 자산 관리 + 월별 은퇴설계
+
+React·TypeScript·Dexie(브라우저 IndexedDB) 기반 앱입니다. **Docker·Python·DB 서버 없이** 실행합니다.
+현재 자산/주식 관리와 별도로 계획을 저장하고, 날짜별 사건·실제 인출 한도·예상 세금 납부를
+월별 원장으로 계산합니다. 자동 세법 판정 도구는 아닙니다.
+
+- [적용 내용·전체 화면 대응·사용법·지원 경계](docs/redesign/APPLIED-REDESIGN.md)
+- [실제 앱 화면](docs/redesign/actual-screens.html) · [검증 기록](docs/redesign/09-implementation-progress.md)
+- [최소 설치 WSL 실행법](docs/WSL-DEVELOPMENT.md)
+- [다른 서버로 소스·데이터 이전하기](docs/SERVER-MIGRATION.md)
+
+```powershell
+# 저장소 루트. 이미 환경을 준비했다면 dev만 실행합니다.
+powershell -NoProfile -File .\tools\wsl-dev.ps1 -Action install
+powershell -NoProfile -File .\tools\wsl-dev.ps1 -Action dev
+# Windows 브라우저: http://127.0.0.1:5173
+```
+
+새 기기에서는 잠금파일 기반 의존성을 한 번 설치합니다. 기존 개인 데이터는 브라우저에 있으며
+소스 ZIP에 포함되지 않습니다. 샘플은 별도 저장소를 사용하고 실제 백업 복원은 확인 후 실행합니다.
+배포 시 시세 조회에는 기존 `frontend/api`의 서버리스 엔드포인트 또는 동등한 서버가 필요합니다.
+
+---
+
+## 초기 서버형 버전의 원문 설명 (현 로컬 앱 실행 지침 아님)
+
+아래 Python/SQLite/Docker 설명은 초기 구성 기록으로 보존합니다. 현재 실행에는 위 WSL 안내를 사용하세요.
+
 개인 자산 통합 관리 + 은퇴 현금흐름 시뮬레이션 시스템.
 부동산·주식·연금·예적금·실물·기타 6가지 자산 유형을 하나의 대시보드에서 관리하며, 은퇴 후 생활비 계획까지 지원합니다.
 

@@ -58,3 +58,7 @@ frontend/public/migration-backup.json
 *-backup.json
 Capture.PNG
 asset-manager-backup*.json
+
+# 로컬 스크래치·개인 전달물 (커밋 금지)
+temp/
+.smoke/

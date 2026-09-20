@@ -11,6 +11,7 @@ export function CashFlowTable({ rows, retirementYear, linkMode }: {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
       <h3 className="text-sm font-semibold text-gray-300 mb-1">📊 연도별 현금흐름 <span className="text-xs font-normal text-gray-500">(단위: 만원 · /월=월, (연)=연간)</span></h3>
+      <p className="text-xs text-amber-300 mb-2">배당 수입은 개인 세금 차감 전입니다. 월 수지는 연간 세금·일회성 지출 차감 전이며, 이 항목들은 누적 금액에 반영됩니다.</p>
       <div className="overflow-x-auto">
         <p className="text-xs text-gray-500 mb-2 landscape:hidden">📌 세로 모드: 핵심 6열만 표시. 전체 내역은 가로로 돌려보세요.</p>
         <table className="w-full text-xs">

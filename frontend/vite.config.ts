@@ -113,7 +113,7 @@ export default defineConfig({
     yieldProxyDev(),
     searchProxyDev(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: ['favicon-32.png', 'apple-touch-icon.png', 'icon.svg'],
       manifest: {
@@ -141,5 +141,7 @@ export default defineConfig({
   ],
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   server: { host: true, port: 5173, watch: { usePolling: true } },
-  build: { outDir: 'dist' },
+  build: { outDir: 'dist', rollupOptions: { output: { manualChunks: {
+    charts: ['recharts'], framework: ['react','react-dom','react-router-dom'], data: ['dexie','zod'], icons: ['lucide-react'],
+  } } } },
 })

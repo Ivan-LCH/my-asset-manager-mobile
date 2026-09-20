@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { accountName, stockAccounts } from '@/planner/accounts'
 import { RefreshCw, Plus, TrendingUp, TrendingDown, Minus, ChevronRight, Pencil, Check, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAssets, useAssetsByType, useRenameStockAccount } from '@/hooks/useAssets'
@@ -9,15 +11,20 @@ import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import { useStockAccountOwnership, useSaveStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
-import { updateHistory, getAllAssets } from '@/lib/db'
+import { beginQuoteRequest, applyQuoteObservation, getAllAssets, FALLBACK_RATES } from '@/lib/db'
 import { fetchPrices } from '@/lib/stockPrice'
 import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice, cn } from '@/lib/utils'
 import type { Asset, Settings, StockDetail } from '@/types'
+import { usePlanner } from '@/planner/context'
+import type { Position } from '@/planner/model'
+
+function inAggregate(asset:Asset,positions:Position[]) {const p=positions.find(p=>p.assetId===asset.id);return !p||(!p.linkedTo&&!['excluded','entitlement'].includes(p.role))}
+function stockTotals(stocks:Asset[],settings:Settings|undefined,positions:Position[]) {const included=stocks.filter(a=>inAggregate(a,positions));return {val:included.reduce((s,a)=>s+a.currentValue,0),cost:included.reduce((s,a)=>s+costKrw(a,settings),0)}}
 
 // settings KV 키는 snake_case (exchange_rate_USD). db.getExchangeRate 와 동일.
 function getRate(settings: Settings | undefined, currency?: string): number {
   if (!currency || currency === 'KRW') return 1
-  return (settings?.[`exchange_rate_${currency}`] as number) ?? 1
+  return (settings?.[`exchange_rate_${currency}`] as number) ?? FALLBACK_RATES[currency] ?? 1
 }
 
 // acquisitionPrice = 주식 네이티브 통화 기준 (USD 주식 → USD, KRW 주식 → KRW)
@@ -28,6 +35,7 @@ function costKrw(asset: Asset, settings: Settings | undefined): number {
 }
 
 export default function StockPage() {
+  const {data:planner}=usePlanner(),positions=planner?.current.positions??[]
   const assets = useAssetsByType('STOCK')
   const { isLoading } = useAssets()
   const { data: divSummary } = useDividendSummary()
@@ -38,8 +46,17 @@ export default function StockPage() {
   const qc = useQueryClient()
 
   // 계좌별 뷰: null=계좌 목록, string=선택된 계좌명
-  const [activeAccount, setActiveAccount] = useState<string | null>(null)
-  const [modalId,       setModalId]       = useState<string | null>(null)
+  const [params, setParams] = useSearchParams()
+  const anchor = assets.find(a => a.id === params.get('account'))
+  const activeAccount = anchor ? accountName(anchor) : null
+  const setActiveAccount = (name: string | null) => {
+    const next = new URLSearchParams(params); next.set('type','STOCK'); next.delete('asset')
+    const group = stockAccounts(assets).find(g => g.name === name)
+    if (group) next.set('account',group.id); else next.delete('account')
+    setParams(next)
+  }
+  const modalId = params.get('asset')
+  const setModalId = (id: string | null) => { const next = new URLSearchParams(params); if(id) next.set('asset',id); else next.delete('asset'); setParams(next) }
   const [showCreate,    setShowCreate]    = useState(false)
   const [updating,      setUpdating]      = useState(false)
   const [updMsg,        setUpdMsg]        = useState('')
@@ -61,6 +78,9 @@ export default function StockPage() {
     }
     setUpdating(true)
     setUpdMsg('갱신 중...')
+    try {
+    const requestId = crypto.randomUUID()
+    await beginQuoteRequest(items.map(it=>it.id),requestId)
     const today = new Date()
     const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
     const totalBefore = active.reduce((s, a) => s + a.currentValue, 0)
@@ -68,17 +88,16 @@ export default function StockPage() {
     let cnt = 0
     await Promise.all(items.map(async (it) => {
       const p = result[it.id]
-      if (p == null) return
-      await updateHistory(it.id, todayStr, { price: p, quantity: it.qty })
-      cnt++
+      if (await applyQuoteObservation(it.id,it.ticker,p??null,todayStr,requestId)) cnt++
     }))
     await qc.invalidateQueries({ queryKey: ['assets'] })
     await qc.invalidateQueries({ queryKey: ['chart'] })
     await qc.invalidateQueries({ queryKey: ['dividends', 'summary'] })
     // 갱신 후 총액 변동 계산 (invalidate 로 assets 재조회된 값 사용)
-    const fresh = await qc.fetchQuery({ queryKey: ['assets'], queryFn: () => getAllAssets('STOCK') })
+    await qc.invalidateQueries({queryKey:['settings']})
+    const fresh = await qc.fetchQuery({ queryKey: ['assets'], queryFn: () => getAllAssets() })
     const totalAfter = fresh
-      .filter((a) => !a.disposalDate)
+      .filter((a) => a.type==='STOCK' && !a.disposalDate)
       .reduce((s, a) => s + a.currentValue, 0)
     const diff = totalAfter - totalBefore
     const diffStr = cnt > 0 && Math.abs(diff) > 0
@@ -86,7 +105,8 @@ export default function StockPage() {
       : ''
     setUpdating(false)
     setUpdMsg(cnt > 0 ? `갱신 완료 ${cnt}/${items.length}${diffStr}` : '갱신 실패')
-    setTimeout(() => setUpdMsg(''), 4000)
+    } catch(e) {setUpdMsg('일부 시세를 반영하지 못했습니다: '+String(e))}
+    finally {setUpdating(false)}
   }
 
   // 계좌별 명의 (계좌 안 모든 종목 공유) — 저장 헬퍼
@@ -100,12 +120,12 @@ export default function StockPage() {
     if (!trimmed || trimmed === oldName) return
     renameAccount.mutate(
       { oldName, newName: trimmed },
-      { onSuccess: () => setActiveAccount(trimmed) },
+      { onSuccess: () => { /* URL anchors the existing asset ID; refresh resolves its new account name. */ } },
     )
   }
 
-  const totalVal  = active.reduce((s, a) => s + a.currentValue, 0)
-  const totalCost = active.reduce((s, a) => s + costKrw(a, settings), 0)
+  const {val:totalVal,cost:totalCost}=stockTotals(active,settings,positions)
+  const aggregateDividend=divSummary?.items.filter(item=>{const a=assets.find(a=>a.id===item.assetId);return a&&inAggregate(a,positions)}).reduce((s,item)=>s+item.annualKrw,0)
   const pnl = totalVal - totalCost
   const roi = totalCost > 0 ? (pnl / totalCost) * 100 : 0
 
@@ -122,7 +142,7 @@ export default function StockPage() {
   }
 
   // 계좌 목록: 평가액 합계 내림차순
-  const accountTotal = (stocks: Asset[]) => stocks.reduce((s, a) => s + a.currentValue, 0)
+  const accountTotal = (stocks: Asset[]) => stockTotals(stocks,settings,positions).val
   const accountEntries = Array.from(accountMap.entries())
     .sort(([, a], [, b]) => accountTotal(b) - accountTotal(a))
   const currentStocks  = activeAccount ? (accountMap.get(activeAccount) ?? []) : []
@@ -214,6 +234,7 @@ export default function StockPage() {
         </details>
       )}
 
+      <details className="rounded-xl border border-gray-700 p-3 text-xs text-gray-300"><summary className="cursor-pointer py-2">종목별 시세 조회 상태 · 거래소 기준시각은 제공되지 않습니다</summary>{active.map(a=>{const raw=settings?.['quote-status:'+a.id];let status:any=null;try{status=raw?JSON.parse(String(raw)):null}catch{}return <p key={a.id} className="py-2">{a.name} · {status?`${status.ok?'조회 반영':'기존 가격 유지'} · ${new Date(status.observedAt).toLocaleString('ko-KR')} ${status.reason??''}`:'아직 조회하지 않음 / 수동 입력'}{(a.detail as StockDetail)?.currency!=='KRW'&&!settings?.['exchange_rate_'+(a.detail as StockDetail)?.currency]?' · 환율 기본 가정 사용 중':''}</p>})}</details>
       {/* KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="평가 총액" value={formatMoney(totalVal)} color="default" />
@@ -225,12 +246,13 @@ export default function StockPage() {
         <KpiCard label="투자 원금" value={formatMoney(totalCost)} color="default" />
         <KpiCard
           label="연간 예상 배당"
-          value={divSummary ? formatManwon(divSummary.totalAnnual) : '-'}
+          value={aggregateDividend!=null ? formatManwon(aggregateDividend) : '-'}
           color="blue"
-          sub={divSummary ? `월 ${formatManwon(divSummary.totalMonthly)}` : undefined}
+          sub={aggregateDividend!=null ? `월 ${formatManwon(aggregateDividend/12)}` : undefined}
         />
       </div>
 
+      <p className="text-xs text-gray-400">현재 합계는 홈과 같은 중복 제외 규칙입니다. 종목 원본·배당 기록은 지우지 않습니다. 아래 과거 차트는 원본 이력 합산이며 연결 보정 전 값입니다.</p>
       {/* 성장 추이 차트 */}
       {active.length > 0 && (
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
@@ -315,7 +337,7 @@ export default function StockPage() {
                   key={a.id}
                   asset={a}
                   settings={settings}
-                  accountTotal={currentStocks.reduce((s, x) => s + x.currentValue, 0)}
+                  accountTotal={accountTotal(currentStocks)}
                   onClick={() => setModalId(a.id)}
                 />
               ))}
@@ -340,8 +362,8 @@ function AccountCard({
   settings: Settings | undefined
   onClick: () => void
 }) {
-  const val  = stocks.reduce((s, a) => s + a.currentValue, 0)
-  const cost = stocks.reduce((s, a) => s + costKrw(a, settings), 0)
+  const {data:planner}=usePlanner()
+  const {val,cost}=stockTotals(stocks,settings,planner?.current.positions??[])
   const pnl  = val - cost
   const roi  = cost > 0 ? (pnl / cost) * 100 : 0
   const topStocks = stocks.slice(0, 3)
@@ -424,8 +446,8 @@ function AccountSummaryBanner({
   onRename: (newName: string) => void
   renaming: boolean
 }) {
-  const val  = stocks.reduce((s, a) => s + a.currentValue, 0)
-  const cost = stocks.reduce((s, a) => s + costKrw(a, settings), 0)
+  const {data:planner}=usePlanner()
+  const {val,cost}=stockTotals(stocks,settings,planner?.current.positions??[])
   const pnl  = val - cost
   const roi  = cost > 0 ? (pnl / cost) * 100 : 0
 
@@ -501,6 +523,8 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
   accountTotal?: number
   onClick: () => void
 }) {
+  const {data:planner}=usePlanner()
+  const included=inAggregate(asset,planner?.current.positions??[])
   const isSold   = !!asset.disposalDate
   const valKrw   = isSold ? (asset.disposalPrice ?? 0) : asset.currentValue
   const d        = asset.detail as StockDetail | undefined
@@ -529,7 +553,7 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
   const priceChangePct = hasDaily ? (priceChange / (prevPrice as number)) * 100 : 0
 
   // 계좌 내 비중
-  const weight = !isSold && accountTotal && accountTotal > 0
+  const weight = included && !isSold && accountTotal && accountTotal > 0
     ? (valKrw / accountTotal) * 100
     : null
 
@@ -569,6 +593,7 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
               {asset.acquisitionDate && (
                 <span className="text-xs text-gray-500">{asset.acquisitionDate.slice(0, 7)} 취득</span>
               )}
+              {!included && <span className="text-xs text-amber-300">합산 제외</span>}
               {weight != null && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">
                   {weight.toFixed(1)}%

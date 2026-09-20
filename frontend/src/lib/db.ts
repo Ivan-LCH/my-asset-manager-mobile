@@ -6,6 +6,9 @@ import type {
 } from '@/types'
 import { generateChartData } from './chartData'
 import { fetchStockHistory } from './stockPrice'
+import { validateBackup } from '@/planner/backup'
+import { fingerprint } from '@/planner/model'
+import {backupSummary,backupReplacementWarnings} from './backupInfo'
 
 // ──────────────────────────────────────────────────────────────
 // IndexedDB 스키마 (Dexie)
@@ -23,7 +26,7 @@ export interface AssetRow {
   type:             AssetType
   name:             string
   currentValue:     number
-  acquisitionDate:  string
+  acquisitionDate:  string | null // legacy backup: not entered
   acquisitionPrice: number
   disposalDate?:    string | null
   disposalPrice?:   number | null
@@ -40,6 +43,7 @@ export interface HistoryRow {
   value?:    number | null  // 평가액 (KRW, 환율 적용 후)
   price?:    number | null  // 단가 (주식/실물자산용, 원래 통화)
   quantity?: number | null  // 수량 (주식/실물자산용)
+  quantitySourceDate?: string // 빈 거래일: 이 날짜의 기록 수량을 유지했다고 가정
 }
 
 export interface RealEstateRow {
@@ -51,6 +55,8 @@ export interface RealEstateRow {
   loanAmount:    number
   futureValue?:  number
   futureYear?:   number
+  housingTaxStartDate?: string
+  constructionHoldingTaxAnnual?: number
 }
 
 export interface StockRow {
@@ -115,7 +121,7 @@ export class AssetDB extends Dexie {
   settings!:          Table<SettingRow, string>
 
   constructor() {
-    super('asset_manager_m')
+    super(isDemoDatabase ? 'asset_manager_m_demo' : 'asset_manager_m')
 
     // 인덱싱 대상만 선언 (나머지 필드는 자유 저장)
     this.version(1).stores({
@@ -128,9 +134,15 @@ export class AssetDB extends Dexie {
       dividendHistory:   '++id, assetId, date',
       settings:          'key',
     })
+    // Additive upgrade only: original assets/history are never rewritten here.
+    this.version(2).stores({
+      plannerPlans: 'id', plannerRuns: 'id,createdAt', plannerDrafts: 'id', plannerRecovery: 'id,createdAt',
+    })
   }
 }
 
+if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1') window.sessionStorage.setItem('myasset-demo', '1')
+export const isDemoDatabase = typeof window !== 'undefined' && window.sessionStorage.getItem('myasset-demo') === '1'
 export const db = new AssetDB()
 
 // ──────────────────────────────────────────────────────────────
@@ -171,7 +183,7 @@ async function composeAsset(row: AssetRow): Promise<Asset> {
     currentValue:     row.currentValue,
     previousValue:    prev?.value ?? undefined,
     previousPrice:    prev?.price ?? undefined,
-    acquisitionDate:  row.acquisitionDate,
+    acquisitionDate:  row.acquisitionDate ?? '',
     acquisitionPrice: row.acquisitionPrice,
     disposalDate:     row.disposalDate ?? undefined,
     disposalPrice:    row.disposalPrice ?? undefined,
@@ -184,6 +196,7 @@ async function composeAsset(row: AssetRow): Promise<Asset> {
       value:    h.value ?? undefined,
       price:    h.price ?? undefined,
       quantity: h.quantity ?? undefined,
+    ...(h.quantitySourceDate ? { quantitySourceDate: h.quantitySourceDate } : {}),
     })),
     createdAt:        row.createdAt,
     updatedAt:        row.updatedAt,
@@ -204,6 +217,8 @@ async function putDetail(id: string, type: AssetType, detail: Record<string, any
         loanAmount:    detail.loanAmount ?? 0,
         futureValue:   detail.futureValue,
         futureYear:    detail.futureYear,
+        housingTaxStartDate: detail.housingTaxStartDate,
+        constructionHoldingTaxAnnual: detail.constructionHoldingTaxAnnual,
       })
       break
     case 'STOCK': {
@@ -381,7 +396,7 @@ export async function deleteAsset(id: string): Promise<void> {
 // `exchange_rate_<통화>` 값을 우선 사용하고, 없으면 기본값으로 대체한다.
 // (원본 dividends.py 의 COALESCE 로직과 동일)
 // ──────────────────────────────────────────────────────────────
-const FALLBACK_RATES: Record<string, number> = { USD: 1450, JPY: 9.5 }
+export const FALLBACK_RATES: Record<string, number> = { USD: 1450, JPY: 9.5 }
 
 export async function getExchangeRate(currency: string): Promise<number> {
   if (currency === 'KRW') return 1
@@ -420,6 +435,7 @@ export async function getHistory(assetId: string): Promise<HistoryItem[]> {
     value:    h.value ?? undefined,
     price:    h.price ?? undefined,
     quantity: h.quantity ?? undefined,
+    ...(h.quantitySourceDate ? { quantitySourceDate: h.quantitySourceDate } : {}),
   }))
 }
 
@@ -479,7 +495,7 @@ export async function addHistory(assetId: string, data: HistoryItem): Promise<vo
     if (value == null && data.price != null && data.quantity != null) {
       value = data.price * data.quantity * rate
     }
-    await backfillGaps(assetId, data.date)
+    if (await db.assetHistory.where('[assetId+date]').equals([assetId,data.date]).count()) throw new Error('이미 기록된 날짜입니다. 해당 이력을 수정해 주세요.')
     await db.assetHistory.add({
       assetId,
       date:     data.date,
@@ -523,7 +539,7 @@ export async function updateHistory(
 
     if (!existing) {
       // 신규 추가 (upsert) — 이전 기록과의 빈 날짜 백필(31일 이하 갭)
-      await backfillGaps(assetId, date)
+      // Missing observations remain missing; continuous chart display is read-only.
       await db.assetHistory.add({
         assetId,
         date,
@@ -535,22 +551,13 @@ export async function updateHistory(
       const oldQty = existing.quantity
       await db.assetHistory.put({
         ...existing,
+        quantitySourceDate: newQuantity != null ? undefined : existing.quantitySourceDate,
         price:    newPrice    != null ? newPrice    : existing.price,
         quantity: newQuantity != null ? newQuantity : existing.quantity,
         value:    newValue    != null ? newValue    : existing.value,
       })
 
-      // 수량 변경 시 이후 날짜 이력에 전파
-      if (newQuantity != null && oldQty !== newQuantity) {
-        const future = (await db.assetHistory.where('assetId').equals(assetId).toArray())
-          .filter((h) => h.date > date)
-        for (const fh of future) {
-          fh.quantity = newQuantity
-          if (fh.price != null) fh.value = fh.price * newQuantity * rate
-          await db.assetHistory.put(fh)
-          propagated++
-        }
-      }
+      // A correction is scoped to this date. Later actual trades are independent.
     }
 
     await syncAssetValue(assetId)
@@ -622,8 +629,44 @@ export async function getRetirement(): Promise<RetirementPlan> {
   }
 }
 
-export async function saveRetirement(data: RetirementPlan): Promise<void> {
-  await db.settings.put({ key: RETIREMENT_KEY, value: JSON.stringify(data) })
+export async function saveRetirement(data: Partial<RetirementPlan>): Promise<void> {
+  // 화면에서 편집한 필드만 최신 저장본에 병합한다. 읽기와 쓰기를 하나의
+  // 트랜잭션으로 묶어 다른 섹션의 설정이 오래된 폼 값으로 사라지지 않게 한다.
+  await db.transaction('rw', db.settings, async () => {
+    const row = await db.settings.get(RETIREMENT_KEY)
+    const previous = row ? JSON.parse(row.value) as Partial<RetirementPlan> : {}
+    if (!previous || typeof previous !== 'object' || Array.isArray(previous)) {
+      throw new Error('저장된 은퇴계획을 읽을 수 없습니다. 원본을 백업한 뒤 확인해 주세요.')
+    }
+    // 키 생략은 보존, 명시적 undefined는 해당 선택값 삭제로 구분한다.
+    await db.settings.put({ key: RETIREMENT_KEY, value: JSON.stringify({ ...previous, ...data }) })
+  })
+}
+
+/** Quote observations never carry a stale quantity or rewrite later history. */
+export async function beginQuoteRequest(assetIds: string[], requestId: string) {
+  await db.transaction('rw', db.settings, async () => {
+    for (const id of assetIds) await db.settings.put({key:'quote-request:'+id,value:requestId})
+  })
+}
+export async function applyQuoteObservation(assetId:string,ticker:string,price:number|null,date:string,requestId:string):Promise<boolean> {
+  return db.transaction('rw', db.assets, db.stockDetails, db.assetHistory, db.settings, async () => {
+    if ((await db.settings.get('quote-request:'+assetId))?.value !== requestId) return false
+    const a=await db.assets.get(assetId), stock=await db.stockDetails.get(assetId)
+    let reason=''
+    if (!a || a.type!=='STOCK' || a.disposalDate) reason='처분되었거나 존재하지 않는 종목'
+    else if(stock?.ticker!==ticker || stock?.isAccountLevel) reason='티커/계좌 입력이 변경되어 재조회 필요'
+    else if(price===null || !Number.isFinite(price) || price<=0) reason='시세 조회 실패 — 기존 평가액 유지'
+    else if((await db.assetHistory.where('assetId').equals(assetId).toArray()).some(h=>h.date>date)) reason='미래 이력이 있어 확인 필요'
+    const observedAt=new Date().toISOString()
+    await db.settings.put({key:'quote-status:'+assetId,value:JSON.stringify({observedAt,ok:!reason,reason,marketTimestamp:null})})
+    if(reason || !a || price===null)return false
+    const rate=await getExchangeRate(stock?.currency??'KRW'),value=price*a.quantity*rate
+    const existing=await db.assetHistory.where('[assetId+date]').equals([assetId,date]).first()
+    await db.assetHistory.put({...existing,assetId,date,price,quantity:a.quantity,value})
+    await db.assets.update(assetId,{currentValue:value,updatedAt:observedAt})
+    return true
+  })
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -749,34 +792,47 @@ export async function getDividendSummary(): Promise<DividendSummary> {
 // ──────────────────────────────────────────────────────────────
 export interface BackupData {
   app:         'asset_manager_m'
-  version:     1
+  version:     1 | 2
   exportedAt:  string
   tables:      Record<string, unknown[]>
 }
 
 /** 모든 테이블 스냅샷 → 백업 객체 */
 export async function exportBackup(): Promise<BackupData> {
-  const tables: Record<string, unknown[]> = {}
-  for (const t of db.tables) {
-    tables[t.name] = await t.toArray()
-  }
-  return { app: 'asset_manager_m', version: 1, exportedAt: new Date().toISOString(), tables }
+  return db.transaction('r', db.tables, async () => {
+    const tables: Record<string, unknown[]> = {}
+    for (const t of db.tables.filter(t => t.name !== 'plannerRecovery')) tables[t.name] = await t.toArray()
+    return { app: 'asset_manager_m', version: 2, exportedAt: new Date().toISOString(), tables }
+  })
 }
 
 /** 백업 객체 → 기존 데이터 전체 교체(모든 테이블 clear 후 bulkAdd) */
-export async function importBackup(data: BackupData): Promise<void> {
-  if (!data || data.app !== 'asset_manager_m') {
-    throw new Error('잘못된 백업 파일입니다.')
-  }
+export async function previewBackup(data: unknown) {
+  const validated = validateBackup(data), current = await exportBackup()
+  const warnings=backupReplacementWarnings(current,validated)
+  return { data: validated, expected: fingerprint(current.tables), warnings, summary: backupSummary(validated)+(warnings.length?'\n\n확인 필요:\n'+warnings.join('\n'):'') }
+}
+export async function importBackup(data: BackupData, expected?: string, sourceName?:string): Promise<void> {
+  const validated = validateBackup(data)
   await db.transaction('rw', db.tables, async () => {
-    for (const t of db.tables) {
+    const previous = await exportBackup()
+    if (expected && expected !== fingerprint(previous.tables)) throw new Error('미리보기 이후 데이터가 변경되었습니다. 다시 검토해 주세요.')
+    await db.table('plannerRecovery').put({ id: 'before-import', createdAt: new Date().toISOString(), backup: previous })
+    for (const t of db.tables.filter(t => t.name !== 'plannerRecovery')) {
       await t.clear()
-      const rows = data.tables?.[t.name]
+      const rows = validated.tables[t.name]
       if (rows && rows.length > 0) await t.bulkAdd(rows as Record<string, unknown>[])
     }
+    await db.table('plannerRecovery').put({id:'last-import',sourceName:sourceName??'백업 파일',importedAt:new Date().toISOString(),exportedAt:validated.exportedAt,summary:backupSummary(validated)})
   })
-  // 복원된 과거 이력의 빈 날짜도 즉시 소급 백필 (Bootstrap 마이그레이션은 이미 지나갔을 수 있음)
-  await backfillAllHistoryGaps()
+}
+export async function getLastBackupImport():Promise<{sourceName:string;importedAt:string;exportedAt:string;summary:string}|null>{
+  return (await db.table('plannerRecovery').get('last-import'))??null
+}
+export async function restorePreviousImport() {
+  const row = await db.table('plannerRecovery').get('before-import')
+  if (!row) throw new Error('이 브라우저에 복원 직전 사본이 없습니다.')
+  await importBackup(row.backup,undefined,'직전 사본 복구')
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1014,11 +1070,11 @@ export async function getPortfolio(): Promise<PortfolioSettings | null> {
       }
       // 상승률: holdings growthRate 가중평균
       const holdings = legacy.holdings ?? []
-      const gH = holdings.filter((h) => (h.weight ?? 0) > 0 && (h.growthRate ?? 0) > 0)
+      const gH = holdings.filter((h) => (h.weight ?? 0) > 0 && Number.isFinite(h.growthRate))
       const gW = gH.reduce((s, h) => s + (h.weight ?? 0), 0)
       const gr = gW > 0 ? gH.reduce((s, h) => s + (h.growthRate ?? 0) * ((h.weight ?? 0) / gW), 0) : 0
-      parsed.dividendYield = dy > 0 ? dy : 4
-      parsed.growthRate = gr > 0 ? gr : 5
+      parsed.dividendYield = Math.max(0,dy)
+      parsed.growthRate = gr
       delete (parsed as { holdings?: unknown }).holdings
       delete (parsed as { blendedYield?: unknown }).blendedYield
       delete (parsed as { manualYields?: unknown }).manualYields
@@ -1194,6 +1250,98 @@ export async function backfillStockPrices(
     onProgress?.(done, stocks.length, a.name)
   }
   return { assets: stocks.length, updated, failed }
+}
+
+export interface PriceCorrectionPreview {
+  assets: number; failed: string[]; from: string; to: string
+  changes: {before: HistoryRow; after: HistoryRow}[]
+  additions?: HistoryRow[]
+  guards?: {assetId: string; fingerprint: string}[]
+  checked?: number; unchanged?: number; noHistory?: number; excluded?: number; missingQuantity?: number
+}
+async function correctionState(assetId: string) {
+  return {
+    asset: await db.assets.get(assetId),
+    stock: await db.stockDetails.get(assetId),
+    history: (await db.assetHistory.where('assetId').equals(assetId).toArray()).sort((a,b)=>a.date.localeCompare(b.date)),
+  }
+}
+export async function previewStockPriceCorrection(months=3, onProgress?: (done: number, total: number) => void):Promise<PriceCorrectionPreview> {
+  const end=new Date(),start=new Date(end),day=start.getUTCDate()
+  start.setUTCDate(1);start.setUTCMonth(start.getUTCMonth()-months)
+  start.setUTCDate(Math.min(day,new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,0)).getUTCDate()))
+  const from=start.toISOString().slice(0,10),to=end.toISOString().slice(0,10)
+  // Foreign KRW valuations require historical FX. Never use today's rate for past dates.
+  const all=(await getAllAssets('STOCK')).filter(a=>!a.disposalDate&&(a.detail as StockRow)?.ticker)
+  const stocks=all.filter(a=>(a.detail as StockRow)?.currency==='KRW'&&!(a.detail as StockRow)?.isAccountLevel)
+  const preview:PriceCorrectionPreview={assets:stocks.length,failed:[],excluded:all.length-stocks.length,from,to,changes:[],additions:[],guards:[],checked:0,unchanged:0,noHistory:0,missingQuantity:0}
+  const cache=new Map<string,Awaited<ReturnType<typeof fetchStockHistory>>>();let done=0
+  onProgress?.(0,stocks.length)
+  for(const a of stocks){
+    const ticker=(a.detail as StockRow).ticker!
+    if(!cache.has(ticker))cache.set(ticker,await fetchStockHistory(ticker,months<=3?'3mo':'1y'))
+    const series=cache.get(ticker)
+    if(!series){preview.failed.push(a.name);onProgress?.(++done,stocks.length);continue}
+    const state=await db.transaction('r',db.assets,db.stockDetails,db.assetHistory,()=>correctionState(a.id))
+    if(!state.asset||state.asset.disposalDate||state.stock?.ticker!==ticker||state.stock.currency!=='KRW'||state.stock.isAccountLevel)throw new Error('조회 중 자산 정보가 변경되었습니다. 다시 조회해 주세요.')
+    preview.guards!.push({assetId:a.id,fingerprint:fingerprint(state)})
+    const rows=state.history,byDate=new Map(rows.map(h=>[h.date,h]))
+    const anchors=rows.filter(h=>!h.quantitySourceDate)
+    const seen=new Set<string>();let matched=0
+    for(const observation of [...series].sort((x,y)=>x.date.localeCompare(y.date))){
+      const date=observation.date
+      if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)||date<from||date>=to||(state.asset.acquisitionDate&&date<state.asset.acquisitionDate)||seen.has(date)||!Number.isFinite(observation.close)||observation.close<=0)continue
+      seen.add(date)
+      const row=byDate.get(date)
+      const previous=anchors.filter(h=>h.date<date)
+      const source=row&&!row.quantitySourceDate?row:previous[previous.length-1]
+      const quantity=source?.quantity
+      if(quantity==null||!Number.isFinite(quantity)||quantity<0){preview.missingQuantity!++;continue}
+      matched++;preview.checked!++
+      const after:HistoryRow={...(row??{assetId:a.id,date}),price:observation.close,quantity,value:observation.close*quantity}
+      if(!row||row.quantitySourceDate)after.quantitySourceDate=source!.date
+      if(!row)preview.additions!.push(after)
+      else if(fingerprint(row)!==fingerprint(after))preview.changes.push({before:row,after})
+      else preview.unchanged!++
+    }
+    if(!matched)preview.noHistory!++
+    onProgress?.(++done,stocks.length)
+  }
+  return preview
+}
+export async function applyStockPriceCorrection(preview:PriceCorrectionPreview) {
+  if(!preview.changes.length&&!preview.additions?.length)return
+  await db.transaction('rw',db.assets,db.stockDetails,db.assetHistory,db.table('plannerRecovery'),async()=>{
+    for(const guard of preview.guards??[]){
+      if(fingerprint(await correctionState(guard.assetId))!==guard.fingerprint)throw new Error('미리보기 뒤 자산·수량·이력이 변경되었습니다. 다시 조회해 주세요.')
+    }
+    for(const change of preview.changes){
+      const current=await db.assetHistory.get(change.before.id!)
+      if(fingerprint(current)!==fingerprint(change.before))throw new Error('미리보기 뒤 이력이 변경되었습니다. 다시 조회해 주세요.')
+    }
+    const keys=new Set<string>()
+    for(const row of preview.additions??[]){
+      const key=row.assetId+':'+row.date
+      if(keys.has(key)||await db.assetHistory.where('[assetId+date]').equals([row.assetId,row.date]).count())throw new Error('추가할 날짜에 이미 이력이 있습니다. 다시 조회해 주세요.')
+      keys.add(key)
+    }
+    const additions:HistoryRow[]=[]
+    for(const row of preview.additions??[]){const {id: _id,...value}=row;const id=await db.assetHistory.add(value);additions.push({...value,id})}
+    for(const change of preview.changes)await db.assetHistory.put(change.after)
+    await db.table('plannerRecovery').put({id:'price-correction',createdAt:new Date().toISOString(),changes:preview.changes,additions})
+  })
+}
+export async function undoStockPriceCorrection() {
+  await db.transaction('rw',db.assetHistory,db.table('plannerRecovery'),async()=>{
+    const row=await db.table('plannerRecovery').get('price-correction');if(!row)throw new Error('되돌릴 시세 보정이 없습니다.')
+    for(const after of [...row.changes.map((change:{after:HistoryRow})=>change.after),...(row.additions??[])]){
+      const current=await db.assetHistory.get(after.id)
+      if(fingerprint(current)!==fingerprint(after))throw new Error('보정 이후 해당 이력이 변경되어 자동 되돌리기를 중단했습니다.')
+    }
+    for(const change of row.changes)await db.assetHistory.put(change.before)
+    for(const added of row.additions??[])await db.assetHistory.delete(added.id)
+    await db.table('plannerRecovery').delete('price-correction')
+  })
 }
 
 export async function migrateBackfillHistory(): Promise<boolean> {

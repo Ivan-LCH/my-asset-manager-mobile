@@ -1,6 +1,11 @@
+import {annualVehicle} from '@/lib/annualVehicle'
+import {annualIncomeTax} from '@/lib/incomeTax'
+import { annualPension } from '@/lib/annualPension'
+import { annualHealth, type AnnualHealthResult } from '@/lib/annualHealth'
 // 은퇴 분석 엔진 — RetirementPage의 파생 계산 전부를 훅으로 추출 (연도별 대시보드와 공유).
 // 순수 리팩터: 계산 순서·산식은 RetirementPage 원본과 동일. plan(은퇴계획)과 저장된 시뮬 설정을 받아
 // 현금흐름·연금 스케줄·1인별 세금/건보·보유세 자동 산출까지 한 번에 계산한다.
+import { pensionInputs, pensionInputNotes } from '@/lib/analysisInputs'
 import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { useDividendSummary } from '@/hooks/useDividends'
@@ -8,10 +13,11 @@ import { useCorpSim } from '@/hooks/useCorpSim'
 import { usePensionSim } from '@/hooks/usePensionSim'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
-import { computeCorp, corpTaxOn, corpHealthMonthly, employerInsuranceMonthly, EMPTY_CORP_PLAN, mergeCorpTax } from '@/lib/corpSim'
+import { corpHealthMonthly, EMPTY_CORP_PLAN, mergeCorpTax } from '@/lib/corpSim'
+import { buildCorpCashFlow } from '@/lib/corpCashFlow'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { resolveAge } from '@/lib/people'
-import { computePensionVehiclePerPerson, pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountBalances, perPersonYearTaxHealth } from '@/lib/pensionSim'
+import { pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountBalances, perPersonYearTaxHealth } from '@/lib/pensionSim'
 import { calcHealthInsurance, realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { holdingTaxByYear, toHoldingTaxAssets } from '@/lib/holdingTax'
 import { simulateAccounts } from '@/lib/accountSim'
@@ -20,9 +26,9 @@ import type { Asset, StockDetail, SavingsDetail, PensionDetail, RetirementPlan, 
 
 /** 은퇴 계획 → 현금흐름·세금·건보·보유세 등 분석 결과 일괄 산출. */
 export function useAnalysisEngine(plan: RetirementPlan) {
-  const { data: allAssets = [] } = useAssets()
-  const { data: settings } = useSettings()
-  const { data: divSummary } = useDividendSummary()
+  const assetQuery=useAssets(), settingsQuery=useSettings(), dividendQuery=useDividendSummary()
+  const allAssets=(assetQuery.data??[]).filter(a=>!a.disposalDate)
+  const settings=settingsQuery.data, divSummary=dividendQuery.data
 
   const currentAge = resolveAge(settings)
   const linkMode: 'none' | 'corp' | 'pension' = plan.linkCorpSim ? 'corp' : plan.linkPensionSim ? 'pension' : 'none'
@@ -33,10 +39,10 @@ export function useAnalysisEngine(plan: RetirementPlan) {
     if ((a.type === 'STOCK' || a.type === 'SAVINGS') && (a.detail as StockDetail & SavingsDetail)?.isPensionLike) return true
     return false
   })
-  const stockDivMonthly = divSummary?.totalMonthly ?? 0
+  let stockDivMonthly = divSummary?.totalMonthly ?? 0
 
   // ── 투자법인 연동 ──
-  const { data: rawCorpPlan } = useCorpSim()
+  const corpQuery=useCorpSim(), rawCorpPlan=corpQuery.data
   // 구버전 저장 데이터 방어: EMPTY_CORP_PLAN + DEFAULT_CORP_TAX 로 머지
   // + 목돈 분배(corpInflow)를 가수금(loanAmount)에 합산 — CorpSimPage와 일치
   const corpAllocTotal = (rawCorpPlan?.lumpsumCorp ?? []).reduce((s, c) => s + c.corpAmount, 0)
@@ -49,73 +55,29 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   // 법인 현금흐름 Phase 1/2 계산
   let corpCF: CorpCashFlow | undefined
   if (linked && corpPlan) {
-    const ep = corpPlan
-    const gross = ep.targetDividendTotal > 0 ? ep.targetDividendTotal : (ep.capitalContribution + ep.loanAmount) * (ep.dividendYield / 100)
-    const salAnnual = (ep.repSalaryMonthly + ep.repSalaryHusbandMonthly) * 12
-    const empInsAnnual = employerInsuranceMonthly(ep).total * 12
-    // 급여 + 4대보험 사업주분 모두 법인 비용(공제)
-    const corpTax = corpTaxOn(Math.max(0, gross - salAnnual - empInsAnnual), ep.tax)
-    const cashAfterTax = gross - corpTax - salAnnual - empInsAnnual  // 급여·4대보험·법인세 후 잔여
-    const returnAnnual = ep.monthlyReturn * 12
-    const rMonths = ep.monthlyReturn > 0 ? Math.floor(ep.loanAmount / ep.monthlyReturn) : 0
-    // 부부 지분(%) + 배당소득세 15.4% 후 실수령
-    const coupleShare = (ep.shareHusband + ep.shareWife) / 100
-    const netFactor = 1 - ep.tax.dividendTaxRate
-
-    corpCF = {
-      salaryMonthly: ep.repSalaryMonthly + ep.repSalaryHusbandMonthly,
-      phaseBoundaryYear: SIM_START_YEAR + Math.ceil(rMonths / 12),
-      returnP1Monthly: ep.monthlyReturn,
-      divP1Monthly: Math.max(0, cashAfterTax - returnAnnual) * coupleShare * netFactor / 12,
-      divP2Monthly: Math.max(0, cashAfterTax) * coupleShare * netFactor / 12,
-    }
+    corpCF = buildCorpCashFlow(corpPlan)
   }
 
-  const pensionMap = calcPensionByYear(pensionLikeAssets, currentAge)
+  let pensionMap = calcPensionByYear(pensionLikeAssets, currentAge)
+  let registeredNationalByYear=calcPensionByYear(pensionLikeAssets.filter(a=>a.type==='PENSION'&&/국민|national/i.test((a.detail as PensionDetail)?.pensionType??'')),currentAge)
 
   // 1인별 STOCK 배당 (실제 주식자산 배당 × 계좌 명의)
-  const { data: accountOwners = {} } = useStockAccountOwnership()
+  const ownersQuery=useStockAccountOwnership(), accountOwners=ownersQuery.data??{}
   const stockDiv = divSummary ? stockDividendsByOwner(allAssets, divSummary, accountOwners) : { husband: 0, wife: 0 }
 
   // ── 연금시뮬 연동 (linkMode==='pension') ──
-  const { data: rawPensionSim } = usePensionSim()
-  const realEstateAssets: Asset[] = allAssets.filter((a) => a.type === 'REAL_ESTATE')
+  const pensionQuery=usePensionSim(), rawPensionSim=pensionQuery.data
+  const realEstateAssets: Asset[] = (assetQuery.data??[]).filter((a) => a.type === 'REAL_ESTATE')
   const pensionAssetsAll = allAssets.filter((a) => a.type === 'PENSION')
   // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서) — 퇴직시점 잔액 성장·수령액 산정용
-  const { data: portfolio } = usePortfolio()
+  const portfolioQuery=usePortfolio(), portfolio=portfolioQuery.data
   const irpGrowthRate = portfolio?.growthRate ?? 0
   const irpDivYield = portfolio?.dividendYield ?? 0
   // IRP 잔액(현재 PENSION 자산 가치 합)
   const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate)
   const irpInitial = irpAssets.reduce((s, a) => s + a.currentValue, 0)
 
-  const pensionSimPlanBase = rawPensionSim ? { ...EMPTY_PENSION_PLAN, ...rawPensionSim } : null
-  // sources 보강 — 자산 detail의 expectedMonthlyPayout(비과세·과세 연금저축 등록 월수령액) 주입
-  const pensionSimPlan = (() => {
-    if (!pensionSimPlanBase) return null
-    const stockByAccount = new Map<string, number>()
-    for (const s of allAssets.filter((a) => a.type === 'STOCK')) {
-      const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? ''
-      if (acct) stockByAccount.set(acct, (stockByAccount.get(acct) ?? 0) + s.currentValue)
-    }
-    const augmented = sourcesFromAssets(
-      pensionAssetsAll.map((a) => ({
-        id: a.id, name: a.name, currentValue: a.currentValue,
-        detail: {
-          pensionType: (a.detail as { pensionType?: string })?.pensionType,
-          linkedStockId: (a.detail as { linkedStockId?: string })?.linkedStockId,
-          expectedMonthlyPayout: (a.detail as { expectedMonthlyPayout?: number })?.expectedMonthlyPayout,
-          expectedStartYear: (a.detail as { expectedStartYear?: number })?.expectedStartYear,
-          expectedEndYear: (a.detail as { expectedEndYear?: number })?.expectedEndYear,
-          annualGrowthRate: (a.detail as { annualGrowthRate?: number })?.annualGrowthRate,
-        },
-      })),
-      pensionSimPlanBase.sources,
-      stockByAccount,
-    )
-    // stockAccount(남편/와이프 각 계좌 배당률·상승률)는 plan 자체에 저장 → 그대로 사용
-    return { ...pensionSimPlanBase, sources: augmented }
-  })()
+  const pensionSimPlan = rawPensionSim ? pensionInputs(rawPensionSim,assetQuery.data??[],plan.retirementYear) : null
   const pensionLinked = linkMode === 'pension' && !!pensionSimPlan
   // 국민연금 자산(확정급여) 추출
   const nationals = (pensionSimPlan ? pensionAssetsAll
@@ -130,28 +92,38 @@ export function useAnalysisEngine(plan: RetirementPlan) {
       } : null
     })
     .filter((x): x is NonNullable<typeof x> => x !== null) : [])
-  const perPerson = (pensionLinked && pensionSimPlan)
-    ? computePensionVehiclePerPerson(pensionSimPlan, {
-        husbandProperty: realEstatePropertyBases(realEstateAssets, pensionSimPlan.refYear).husband,
-        wifeProperty: realEstatePropertyBases(realEstateAssets, pensionSimPlan.refYear).wife,
-        nationalPensions: nationals,
-        irpGrowthRate,
-      })
-    : null
   // 연도별 가구 연금(월) Map — 국민연금·개인연금 분리, 65세 step-up 반영
   // buildCashFlow의 전체 범위(SIM_START_YEAR ~ 100세)를 커버하도록 넓게 생성
   const schedFromYear = SIM_START_YEAR
   const schedToYear = new Date().getFullYear() + (100 - resolveAge(settings))
-  const sched = (pensionLinked && pensionSimPlan)
-    ? pensionSchedule(pensionSimPlan, nationals, schedFromYear, schedToYear, { irpGrowthRate })
-    : []
-  const nationalByYear = new Map(sched.map((r) => [r.year, Math.round(r.nationalAnnual / 12)]))
-  const privateByYear  = new Map(sched.map((r) => [r.year, Math.round(r.drawdownAnnual / 12)]))
+  const projection=annualPension(pensionLinked&&pensionSimPlan?pensionSimPlan:pensionInputs(null,assetQuery.data??[],plan.retirementYear),assetQuery.data??[],schedFromYear,schedToYear,{
+    simulation:pensionLinked,growth:irpGrowthRate,dividend:irpDivYield,lumpsums:plan.lumpsum,stockLink:{dividends:divSummary?.items,owners:accountOwners},
+  })
+  const sched=projection.rows
+  const perPerson=pensionLinked&&pensionSimPlan?annualVehicle(pensionSimPlan,sched.find(r=>r.year===pensionSimPlan.refYear),realEstatePropertyBases(realEstateAssets,pensionSimPlan.refYear),settings):null
+  if(!pensionLinked){
+    pensionMap=new Map(sched.map(r=>[r.year,(r.nationalAnnual+r.drawdownAnnual)/12]))
+    registeredNationalByYear=new Map(sched.map(r=>[r.year,r.nationalAnnual/12]))
+    stockDivMonthly=(divSummary?.items??[]).filter(r=>!projection.fundedStockIds.has(r.assetId)).reduce((sum,r)=>sum+r.monthlyKrw,0)
+  }
+  const analysisNotes=[...projection.notes,...pensionInputNotes(rawPensionSim,assetQuery.data??[])]
+  analysisNotes.push(plan.expenseInflationRate==null?'생활비·여행비·의료비 물가상승률 미설정: 기존 고정 금액으로 계산합니다. 생활비·목돈 입력에서 확인하세요.':`생활비·여행비·의료비는 ${plan.expenseBaseYear??new Date().getFullYear()}년 금액 기준, 연 ${plan.expenseInflationRate}% 증가 가정입니다. 세금·건보·목돈·일회 지출에는 이 비율을 중복 적용하지 않습니다.`)
+  if(projection.rows.some(r=>r.opening>0||r.inflow>0))analysisNotes.push(`연금 계좌 운용 가정: 상승률 ${irpGrowthRate}% + 배당률 ${irpDivYield}%. 미저장 기본값은 각각 0%이며 실제 수익을 보장하지 않습니다.`)
+  if(!plan.holdingTaxAuto&&realEstateAssets.length)analysisNotes.push('수동 보유세 적용 중입니다. 재건축 날짜와 연동하려면 연도별 현금흐름의 보유세를 자동으로 선택하세요.')
+  if(!plan.holdingTaxAuto&&plan.holdingTaxAnnual&&!plan.holdingTaxStartYear)analysisNotes.push('수동 보유세 개시 연도가 없어 은퇴 예정 연도부터 적용했습니다.')
+  if(realEstateAssets.some(a=>(a.detail as {futureYear?:number})?.futureYear))analysisNotes.push('공사 중 토지의 건강보험 재산 과표는 별도 확인이 필요합니다. 주택으로 전환되기 전 주택 과표는 포함하지 않습니다.')
+  if(linkMode==='pension'&&!pensionLinked)analysisNotes.push('저장된 연금 시뮬레이션이 없어 등록 자산 지급액으로 계산 중입니다. 세부 계산에서 연금 설정을 확인하세요.')
+  if(linkMode==='corp'&&!linked)analysisNotes.push('저장된 법인 설정이 없어 법인 소득을 반영하지 못했습니다.')
+  if(!pensionLinked&&sched.some(r=>r.drawdownAnnual>0||r.nationalAnnual>0))analysisNotes.push('기본 모드는 등록 지급액 기준입니다. 연금소득세는 미산정이므로 세금 합계를 확정 납부액으로 보지 마세요.')
+  const nationalByYear = new Map(sched.map((r) => [r.year, r.nationalAnnual / 12]))
+  const privateByYear  = new Map(sched.map((r) => [r.year, r.drawdownAnnual / 12]))
   // 배당도 연도별 (성장률 반영) — financialAnnual를 월로 변환
-  const dividendByYear = new Map(sched.map((r) => [r.year, Math.round(r.financialAnnual / 12)]))
+  const dividendByYear = new Map(sched.map((r) => [r.year, r.financialAnnual / 12]))
   // 건보·세금 연도별 재산정 — 매년 연금·배당 성장·재산(재건축 전환) 반영
   const healthByYear = new Map<number, number>()
+  const healthDetailsByYear=new Map<number,AnnualHealthResult>()
   const taxByYear = new Map<number, number>()
+  const incomeTaxDetailsByYear = new Map<number, ReturnType<typeof annualIncomeTax>>()
   // 1인별 연도별 맵 — 연도별 대시보드 상세 표시용
   const husbandTaxByYear = new Map<number, number>()
   const wifeTaxByYear = new Map<number, number>()
@@ -160,8 +132,11 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   if (pensionLinked && pensionSimPlan) {
     for (const r of sched) {
       const propsY = realEstatePropertyBases(realEstateAssets, r.year)
-      const th = perPersonYearTaxHealth(r, pensionSimPlan, propsY.husband, propsY.wife)
-      healthByYear.set(r.year, th.husbandHealth + th.wifeHealth)
+      const th = perPersonYearTaxHealth(r, pensionSimPlan, propsY.husband, propsY.wife, undefined, settings)
+      incomeTaxDetailsByYear.set(r.year, annualIncomeTax(r, pensionSimPlan, settings))
+      const health=annualHealth(r,pensionSimPlan,propsY)
+      healthDetailsByYear.set(r.year,health)
+      healthByYear.set(r.year,health.totalMonthly)
       taxByYear.set(r.year, th.husbandTax + th.wifeTax)
       husbandTaxByYear.set(r.year, th.husbandTax)
       wifeTaxByYear.set(r.year, th.wifeTax)
@@ -169,6 +144,9 @@ export function useAnalysisEngine(plan: RetirementPlan) {
       wifeHealthByYear.set(r.year, th.wifeHealth)
     }
   }
+  if(pensionLinked)analysisNotes.push('건강보험은 2026년 제도 유지 가정의 지역가입 추정입니다. 공적연금과 사적연금·IRP 인출을 구분하며, 가입 형태·실제 부과 시차는 확인이 필요합니다.')
+  if([...incomeTaxDetailsByYear.values()].some(t=>t.incomplete))analysisNotes.push('연금·금융 통합세금에 확인할 정보가 있습니다. 세금 상세에서 확인 후 연금 시뮬레이션의 세금 추가정보에 입력하세요. 재원·세율 미확정 IRP 세금은 합계에서 제외된 소계이며 세금 0원이 아닙니다.')
+  if(pensionLinked&&!pensionSimPlan?.healthHouseholdMode)analysisNotes.push('건강보험 세대 설정이 없어 같은 지역가입 세대로 가정했습니다. 연금 시뮬레이션의 과세·수령 기준에서 확인하세요.')
   const linkedOverride = perPerson ? {
     nationalByYear,
     privateByYear,
@@ -200,7 +178,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
 
   // 목돈 수입 = 은퇴계획 목돈수입(단일 소스)에서 투자 분배 나머지 (이중계산 방지).
   // linkMode=pension → 개인 분배(IRP/주식) 제외분, corp → 법인 분배 제외분, none → 전액.
-  const pensionAllocations = pensionSimPlan?.allocations ?? []
+  const pensionAllocations = projection.allocations
   const corpAllocations = corpPlan?.lumpsumCorp ?? []
   const cashLumpsum: LumpsumItem[] = (plan.lumpsum ?? []).map((l) => {
     let allocated = 0
@@ -209,7 +187,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
       allocated = (a?.irpAmount ?? 0) + (a?.stockAmount ?? 0)
     } else if (linkMode === 'corp') {
       const c = corpAllocations.find((x) => x.lumpsumId === l.id)
-      allocated = c?.corpAmount ?? 0
+      allocated = Math.min(l.amount,Math.max(0,c?.corpAmount ?? 0))
     }
     return { ...l, amount: Math.max(0, l.amount - allocated) }
   }).filter((l) => l.amount > 0)
@@ -225,49 +203,33 @@ export function useAnalysisEngine(plan: RetirementPlan) {
     plan, pensionMap, currentAge, stockDivMonthly, healthInsuranceMonthly,
     corpCF, linked && corpPlan ? corpPlan.loanAmount : 0, linkedOverride, cashLumpsum, lumpsumTaxByYear,
     plan.holdingTaxAuto ? autoHoldingTaxByYear : undefined,
+    registeredNationalByYear,
+    new Map(sched.map(r=>[r.year,linked&&corpPlan?corpHealthMonthly(corpPlan):calcHealthInsurance({
+      pensionAnnual:hi.autoLinkPension?(r.nationalAnnual+r.drawdownAnnual):hi.pensionIncome,
+      dividendAnnual:hi.autoLinkDividend?stockDivMonthly*12:hi.interestDividendIncome,otherAnnual:hi.otherIncome,
+      propertyTaxBase:hi.propertyTaxBase,rentalDeposit:hi.rentalDeposit,carValue:hi.carValue,scorePerPoint:hi.scorePerPoint,
+    }).grandTotal])),
   )
 
-  // 계좌 잔액 추적 (IRP + 일반주식계좌) — 연도별 시장가치 변화
-  // IRP 퇴직시점 잔액 = 현재 PENSION 자산합 + 목돈 IRP분배 → 수령개시(startYear)까지 성장
-  const startYear = pensionSimPlan?.startYear ?? plan.retirementYear
-  const withYears = pensionSimPlan?.withdrawalYears ?? 30
-  const irpInflow = (pensionSimPlan?.allocations ?? []).reduce((s, a) => s + a.irpAmount, 0)
-  const yearsToStart = Math.max(0, startYear - new Date().getFullYear())
-  const irpProjected = (irpInitial + irpInflow) * Math.pow(1 + irpGrowthRate / 100, yearsToStart)
-  // 일반주식계좌 (남편/와이프 각 계좌) — 잔액·배당률·상승률을 stockAccountBalances에서 산출
-  const sb = pensionSimPlan ? stockAccountBalances(pensionSimPlan) : null
-  const accountSim = simulateAccounts({
-    irpInitial: irpProjected,
-    irpGrowthRate,
-    irpDividendYield: irpDivYield,
-    irpMonthlyPension: irpProjected / withYears / 12,
-    stockAccounts: sb
-      ? [
-          { initial: sb.husband.total, growthRate: sb.husband.growthRate, dividendYield: sb.husband.dividendYield },
-          { initial: sb.wife.total,    growthRate: sb.wife.growthRate,    dividendYield: sb.wife.dividendYield },
-        ]
-      : [],
-    realEstateItems: realEstateAssets.map((a) => ({
-      currentValue: a.currentValue,
-      futureValue: (a.detail as PensionDetail | undefined && a.detail as { futureValue?: number })?.futureValue,
-      futureYear: (a.detail as { futureYear?: number })?.futureYear,
-    })),
-    fromYear: startYear,
-    toYear: startYear + withYears - 1,
-  })
-
+  // Paid income and pension capital use the same annual ledger.
+  const startYear=pensionSimPlan?.startYear??plan.retirementYear
+  const sb=pensionSimPlan?stockAccountBalances(pensionSimPlan):null
+  const accountSim=projection.rows
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
 
+  const queries=[assetQuery,settingsQuery,dividendQuery,corpQuery,ownersQuery,pensionQuery,portfolioQuery]
   return {
+    projection, analysisNotes,
+    isLoading:queries.some(q=>q.isPending), error:queries.find(q=>q.error)?.error,
     // 입력 스냅샷
     currentAge, linkMode, retirementYear,
     realEstateAssets,
     // 연동 시뮬
-    corpPlan, pensionSimPlan, pensionLinked,
+    corpPlan, pensionSimPlan, pensionLinked, incomeTaxDetailsByYear,
     // 연금·연도별 맵
     pensionMap, nationalByYear, privateByYear, dividendByYear, healthByYear, taxByYear,
-    husbandTaxByYear, wifeTaxByYear, husbandHealthByYear, wifeHealthByYear,
+    husbandTaxByYear, wifeTaxByYear, husbandHealthByYear, wifeHealthByYear, healthDetailsByYear,
     // 1인별
     perPerson, stockDiv,
     // 목돈
