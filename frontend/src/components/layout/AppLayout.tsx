@@ -2,6 +2,7 @@ import { useState, useLayoutEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen, Home, FolderOpen, BarChart3, CalendarDays } from 'lucide-react'
 import Sidebar from './Sidebar'
+import DriveBackupBanner from '@/components/common/DriveBackupBanner'
 import { cn } from '@/lib/utils'
 
 // 하단 탭 4개 (모바일 전용 — 데스크톱은 사이드바)
@@ -57,6 +58,7 @@ export default function AppLayout() {
 
       {/* 본문 컬럼 */}
       <div className="flex-1 flex flex-col min-w-0">
+        <DriveBackupBanner />
         <main ref={mainRef} className="flex-1 overflow-y-auto">
           <Outlet />
         </main>

@@ -9,7 +9,9 @@ import { exportBackup, importBackup, previewBackup, restorePreviousImport, clear
 import {backupFileName,backupSummary} from '@/lib/backupInfo'
 import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
 import { fmtQty } from '@/lib/utils'
-import { googleSignIn, logout, isLoggedIn, saveToDrive, listBackupFiles, loadFromDrive, pickFolder } from '@/lib/googleDrive'
+import { googleSignIn, ensureSignedIn, logout, isLoggedIn, onAuthChange, saveToDrive, listBackupFiles, loadFromDrive, pickFolder, pickBackupFile, pickerConfigured, type DriveFile } from '@/lib/googleDrive'
+import { recordBackupSuccess } from '@/lib/autoBackup'
+import RestoreDiffDialog, { type RestoreRequest } from '@/components/common/RestoreDiffDialog'
 
 export default function Settings() {
   const { data: settings, isLoading } = useSettings()
@@ -26,8 +28,13 @@ export default function Settings() {
   // Google Drive 상태
   const [gDriveLoggedIn, setGDriveLoggedIn] = useState(isLoggedIn())
   const [driveFolder,    setDriveFolder]    = useState<{ id: string; name: string } | null>(null)
-  const [driveFiles,     setDriveFiles]     = useState<{ id: string; name: string; modifiedTime: string }[]>([])
+  const [driveFiles,     setDriveFiles]     = useState<DriveFile[]>([])
   const [driveLoading,   setDriveLoading]   = useState(false)
+  // 복원 확인 모달 (변경 미리보기)
+  const [pendingRestore, setPendingRestore] = useState<{ request: RestoreRequest; data: BackupData; expected: string } | null>(null)
+  const [restoring,      setRestoring]      = useState(false)
+  // 토큰 만료·401·로그아웃을 화면 상태에 반영 (실제 판단은 각 동작 시점의 isLoggedIn())
+  useEffect(() => onAuthChange(() => setGDriveLoggedIn(isLoggedIn())), [])
   // 과거 시세 소급 업데이트 상태
   const [priceBackfill, setPriceBackfill] = useState<{
     running: boolean; done: boolean; ok: boolean; msg: string
@@ -116,14 +123,35 @@ export default function Settings() {
         setBackupMsg({ok:true,text:message+' 분석 → 개인투자시뮬에서 등록한 연금 계획을 확인하세요.'})
         return
       }
-      const preview = await previewBackup(data)
-      if (!window.confirm('파일: '+file.name+'\n검증된 백업으로 현재 데이터 전체를 교체합니다. 원본 이력을 자동 보간하지 않습니다.\n'+preview.summary+'\n\n진행할까요? 직전 사본은 이 브라우저에 보관합니다.')) return
-      await importBackup(preview.data, preview.expected,file.name)
+      await startRestore(data, file.name)
+    } catch (err) {
+      setBackupMsg({ ok: false, text: err instanceof Error ? err.message : '가져오기 실패' })
+      setTimeout(() => setBackupMsg(null), 4000)
+    }
+  }
+
+  // 검증·변경 미리보기 → 모달에서 확인 후 전체 교체 (파일 가져오기·Drive 공통)
+  const startRestore = async (data: unknown, source: string) => {
+    const preview = await previewBackup(data)
+    setPendingRestore({
+      request: { source, summary: backupSummary(preview.data), warnings: preview.warnings, diff: preview.diff },
+      data: preview.data, expected: preview.expected,
+    })
+  }
+
+  const confirmRestore = async () => {
+    if (!pendingRestore) return
+    const { request, data, expected } = pendingRestore
+    setRestoring(true)
+    try {
+      await importBackup(data, expected, request.source)
       await qc.invalidateQueries()   // 모든 쿼리 갱신
-      setBackupMsg({ ok: true, text: '가져오기 완료: '+file.name+'\n'+backupSummary(preview.data) })
+      setBackupMsg({ ok: true, text: '가져오기 완료: '+request.source+'\n'+backupSummary(data) })
     } catch (err) {
       setBackupMsg({ ok: false, text: err instanceof Error ? err.message : '가져오기 실패' })
     }
+    setRestoring(false)
+    setPendingRestore(null)
     setTimeout(() => setBackupMsg(null), 4000)
   }
 
@@ -145,62 +173,59 @@ export default function Settings() {
   }
 
   // ── Google Drive ──
-  const handleGDriveLogin = async () => {
+  // 각 동작은 시작 시점에 isLoggedIn()을 다시 확인한다. 만료됐으면 ensureSignedIn()이
+  // await 전에 동기적으로 로그인 팝업을 연다(탭 제스처 유지).
+  const driveAction = async (run: () => Promise<void>, fallback: string, ms = 4000, signIn = ensureSignedIn()) => {
+    setDriveLoading(true)
     try {
-      setDriveLoading(true)
-      await googleSignIn()
+      await signIn
       setGDriveLoggedIn(true)
-      const files = await listBackupFiles()
-      setDriveFiles(files)
-      setBackupMsg({ ok: true, text: 'Google Drive 연결됨' })
+      await run()
     } catch (e) {
-      setBackupMsg({ ok: false, text: e instanceof Error ? e.message : '로그인 실패' })
+      setBackupMsg({ ok: false, text: e instanceof Error ? e.message : fallback })
     }
+    setGDriveLoggedIn(isLoggedIn())
     setDriveLoading(false)
-    setTimeout(() => setBackupMsg(null), 3000)
+    setTimeout(() => setBackupMsg(null), ms)
   }
 
-  const handleGDriveSave = async () => {
-    try {
-      setDriveLoading(true)
-      const data = await exportBackup()
-      const json = JSON.stringify(data, null, 2)
-      const result = await saveToDrive(json, driveFolder?.id)
-      const files = await listBackupFiles()
-      setDriveFiles(files)
-      setBackupMsg({ ok: true, text: `Drive에 저장됨: ${result.name}` })
-    } catch (e) {
-      setBackupMsg({ ok: false, text: e instanceof Error ? e.message : '저장 실패' })
-    }
-    setDriveLoading(false)
-    setTimeout(() => setBackupMsg(null), 4000)
-  }
+  const handleGDriveLogin = () => driveAction(async () => {
+    setDriveFiles(await listBackupFiles())
+    setBackupMsg({ ok: true, text: 'Google Drive 연결됨' })
+  }, '로그인 실패', 3000, googleSignIn())
 
-  const handleGDriveLoad = async (fileId: string) => {
-    try {
-      setDriveLoading(true)
+  const handleGDriveSave = () => driveAction(async () => {
+    const data = await exportBackup()
+    const json = JSON.stringify(data, null, 2)
+    const result = await saveToDrive(json, driveFolder?.id)
+    recordBackupSuccess(data, result.id)   // 자동 백업 배너 기한 갱신
+    setDriveFiles(await listBackupFiles())
+    setBackupMsg({ ok: true, text: `Drive에 저장됨: ${result.name}` })
+  }, '저장 실패')
+
+  const handleGDriveLoad = (fileId: string) => driveAction(async () => {
       const json = await loadFromDrive(fileId)
       const data = JSON.parse(json.replace(/^\uFEFF/,'')) as BackupData
-      const preview = await previewBackup(data)
-      if (!window.confirm('Drive 백업으로 전체 교체:\n'+preview.summary+'\n진행할까요?')) { setDriveLoading(false); return }
-      await importBackup(preview.data, preview.expected,'Drive: '+(driveFiles.find(f=>f.id===fileId)?.name??'백업 파일'))
-      await qc.invalidateQueries()
-      setBackupMsg({ ok: true, text: 'Drive에서 복원 완료 (새로고침 권장)' })
-    } catch (e) {
-      setBackupMsg({ ok: false, text: e instanceof Error ? e.message : '복원 실패' })
-    }
-    setDriveLoading(false)
-    setTimeout(() => setBackupMsg(null), 4000)
-  }
+      await startRestore(data, 'Drive: '+(driveFiles.find(f=>f.id===fileId)?.name??'백업 파일'))
+  }, '복원 실패')
 
-  const handlePickFolder = async () => {
+  // Picker: 직접 업로드한 백업 파일도 선택 가능(선택 시 drive.file 접근 권한 부여) → 같은 미리보기·교체 흐름
+  const handlePickFile = () => driveAction(async () => {
+    const picked = await pickBackupFile()
+    if (!picked) return
+    const json = await loadFromDrive(picked.id)
+    await startRestore(JSON.parse(json.trim()), 'Drive: '+picked.name)   // trim 은 BOM 도 제거
+  }, '파일 선택 실패')
+
+  const handlePickFolder = () => driveAction(async () => {
     const folder = await pickFolder()
     if (folder) {
       setDriveFolder(folder)
       setBackupMsg({ ok: true, text: `폴더 선택: ${folder.name}` })
-      setTimeout(() => setBackupMsg(null), 3000)
     }
-  }
+  }, '폴더 선택 실패', 3000)
+
+  const handleRefreshFiles = () => driveAction(async () => { setDriveFiles(await listBackupFiles()) }, '목록 조회 실패')
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64 text-gray-400">로딩 중...</div>
@@ -281,6 +306,9 @@ export default function Settings() {
           <p className="text-xs text-gray-500 mt-1">
             Google 계정으로 로그인 → 본인 Drive에 백업 저장/복원. 폰 교체 시 같은 계정으로 복원.
           </p>
+          <p className="text-xs text-gray-500 mt-1">
+            자동 백업: 앱을 열 때 마지막 백업 후 3일이 지났고 데이터가 바뀌었으면, 로그인 상태에서 자동 저장합니다(자동 백업은 최근 3개만 유지). 로그인이 풀려 있으면 상단 배너로 알려 드립니다.
+          </p>
         </div>
         {!gDriveLoggedIn ? (
           <button
@@ -293,15 +321,18 @@ export default function Settings() {
           </button>
         ) : (
           <div className="space-y-3">
-            {/* 폴더 선택 */}
+            {/* 폴더 선택 (Picker 설정 시에만) */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={handlePickFolder}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                폴더 선택
-              </button>
+              {pickerConfigured() && (
+                <button
+                  onClick={handlePickFolder}
+                  disabled={driveLoading}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors disabled:opacity-50"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  폴더 선택
+                </button>
+              )}
               <span className="text-xs text-gray-400">
                 {driveFolder ? `📁 ${driveFolder.name}` : '내 Drive 루트'}
               </span>
@@ -339,16 +370,36 @@ export default function Settings() {
                 </div>
               </div>
             )}
-            <button
-              onClick={async () => { const files = await listBackupFiles(); setDriveFiles(files) }}
-              disabled={driveLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> 새로고침
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleRefreshFiles}
+                disabled={driveLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> 새로고침
+              </button>
+              {pickerConfigured() && (
+                <button
+                  onClick={handlePickFile}
+                  disabled={driveLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 disabled:opacity-50"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" /> Drive에서 파일 선택
+                </button>
+              )}
+            </div>
           </div>
         )}
+        {!pickerConfigured() && (
+          <p className="text-xs text-gray-500">목록에는 이 앱이 저장한 파일만 보입니다. 외부 업로드 파일은 '가져오기'로 열 수 있습니다.</p>
+        )}
       </div>
+      <RestoreDiffDialog
+        request={pendingRestore?.request ?? null}
+        busy={restoring}
+        onConfirm={confirmRestore}
+        onCancel={() => setPendingRestore(null)}
+      />
 
       <MigrationReview />
       {/* 데이터 백업 / 복원 */}

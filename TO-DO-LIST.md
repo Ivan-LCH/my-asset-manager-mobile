@@ -25,12 +25,18 @@
   - 단위 규칙 적용(후속): 화면 종류별 표준 단위 확정·적용 — 홈·대시보드 큰 총액·유형 탭 최상단 KPI는 `formatEok`(1억 미만 자동 만원), 목록·카드·타일은 `formatManwon`, 상세·폼·거래는 원 전체("원" 접미, AssetDetail·HistoryTable·주당 배당은 `formatWon`), 차트 축·툴팁은 신규 `formatAxisAmount(value, {input:'won'|'manwon'})` 자동 억/만원(백만 표기 전면 제거, AssetChart 6곳·AssetDetail 미니차트). 손익 KPI는 부호 억 `formatPnlEok` + 옆 % 유지. 예외: 주식 갱신 토스트(만원 반올림 0 시 원으로 보존), 배당 이력 행·분석/시뮬 표는 만원 유지, 외화는 네이티브 통화. YearDashboard 건강보험·PensionIncomeDetails·HealthBreakdown·PensionPage 월수령의 원/만원 혼용은 만원으로 통일. planner 홈 총액 억·CurrentOverview 유형별 합계 만원.
 
 ## 3단계 (2~3주) — 데이터 안전
-- [ ] 자동 Drive 백업(주기적, 실패 시 알림). 목록 20개 제한 완화.
+- [x] 자동 Drive 백업(주기적, 실패 시 알림). 목록 20개 제한 완화.
+  - 결정: PWA는 닫혀 있으면 실행 불가·토큰은 메모리 전용이라 "주기적" = **앱 시작·화면 복귀(visibilitychange→visible) 시 판단**(`lib/autoBackup.ts decideAutoBackup`, 순수 함수). 마지막 성공 3일 초과 + 데이터 지문(`fingerprint(tables)`) 변경 + 유효 토큰 → `asset-manager-backup-auto-<timestamp>.json` 업로드(appProperties `assetManagerAuto=1`), 앱이 만든 자동 백업만 최신 K=3 유지(수동·외부 파일 불삭제). 토큰 없음 → 상단 배너 "Drive 백업 N일 경과 — [지금 백업]"(탭 = 로그인 제스처, 팝업 자동 실행 없음), 실패 → 배너에 매핑된 오류. 데이터 없음(신규 사용자)·내용 동일이면 배너 없음. 상태는 localStorage `drive_last_backup {at,fileId,fingerprint,error}`(settings 테이블 아님 — 백업 대상·기기별 상태 분리). 수동 "Drive에 저장"도 성공 기록. 같은 이름 조회 실패는 throw(중복 누적 방지). 목록: `pageSize=100` + `nextPageToken` 끝까지(최대 10쪽), `mimeType='application/json'` 필터. 데모 저장소는 제외.
 - [ ] 외부 업로드 백업 열기: `lib/googleDrive.ts`의 `drive.file` 범위로는 앱이 만든 파일만 목록에 나옴 → Google Picker로 파일 선택 지원.
+  - 부분 완료(코드 준비, **Cloud 콘솔 설정 필요**): `gapi.load('picker')` 누락·`window.gapi` 타입 위치 수정, `VITE_GOOGLE_API_KEY`+`VITE_GOOGLE_APP_ID`가 모두 있을 때만 "Drive에서 파일 선택"·"폴더 선택" 버튼 표시(`setDeveloperKey`·`setAppId`·DocsView json·query `asset-manager-backup`) → `loadFromDrive(id)` → 기존 미리보기/가져오기. 미설정 시 버튼 숨김 + 안내 "외부 업로드 파일은 '가져오기'로 열 수 있습니다". `frontend/.env.example` 참고. 콘솔 설정·실기기 확인 후 [x].
 - [ ] 복원 개선 (`importBackup`): 변경 미리보기(diff), 전체교체/병합 선택.
-- [ ] 시세·환율: `lib/stockPrice.ts` 실패 시 null 삼키지 말고 UI에 실패·마지막 갱신 시각 표시. 환율(`exchange_rate_USD` 고정 1,508.85) 자동 갱신.
-- [ ] `/api/*` 프록시: `Access-Control-Allow-Origin: *` 제거(동일 출처), 티커 형식 검증.
-- [ ] Google 토큰: `logout()` 순서 버그 수정 및 revoke 호출, 만료 시 재발급, 매번 `prompt:'consent'` 지양. Drive 오류 메시지 세분화.
+  - 부분 완료: 변경 미리보기 완료 — 순수 함수 `lib/backupDiff.ts diffBackup`(자산 id·상세 assetId·설정 key·planner id·이력 `[assetId+date]`·배당 assetId+date+amountKrw 근사, 기기별 ++id 무시), 추가/삭제/변경 건수 + 자산명을 모달(`RestoreDiffDialog`)로 표시, `window.confirm` 대체(파일 가져오기·Drive 공통). 복원은 **전체 교체만**. **병합 보류**: ++id 기기별 충돌, 삭제 기록(tombstone) 없음, 이력·설정에 updatedAt 없음, settings JSON blob 병합 불가 — 필요 시 "백업에만 있는 자산(+상세·이력) 추가"부터.
+- [x] 시세·환율: `lib/stockPrice.ts` 실패 시 null 삼키지 말고 UI에 실패·마지막 갱신 시각 표시. 환율(`exchange_rate_USD` 고정 1,508.85) 자동 갱신.
+  - 결정: `fetchStockQuote` → `{price} | {error:'http'|'timeout'|'network'|'no_price', status?}`, 기존 `fetchStockPrice`/`fetchPrices`는 래퍼로 유지. 사유는 `quote-status`(error/status/라벨)에 저장, 주식 화면에 "마지막 갱신 HH:MM · 실패 N건 (사유)" 상시 표시. 환율(`lib/fx.ts`): 시세 갱신 시작 시 `/api/price?ticker=KRW=X`(JPY 보유 시 `JPYKRW=X`) → ≤0 거절, 저장값 ±15% 밖이면 **2회 연속 비슷한 값**일 때만 반영(대기값 localStorage `fx_pending_<통화>`), `exchange_rate_USD_updatedAt` 저장(분석 assetRevision 지문에서는 제외), 실패 시 기존 값 유지 + "환율 갱신 실패 · 기존 X (날짜)". AssetDetail 환율 기본값 1 → `FALLBACK_RATES`(parseFloat). Yahoo 실응답은 네트워크 없이 미검증.
+- [x] `/api/*` 프록시: `Access-Control-Allow-Origin: *` 제거(동일 출처), 티커 형식 검증.
+  - 결정: price·search·yield에서 ACAO 제거, 공통 `api/_validate.ts`(티커 `^[A-Za-z0-9^=.\-]{1,20}$` — 0040X0.KS·KRW=X·^KS11·BRK-B 허용, 검색어 ≤50자, 위반 400)를 prod 함수와 `vite.config.ts` dev 미들웨어가 공유. `_search.ts` 티커 폴백도 영문 섞인 KRX 코드 허용. `yield.ts`는 호출자 없음(미사용)이나 보존. 외부(다른 사이트) 소비자 여부는 사용자 확인 사항, curl 등 서버 호출은 여전히 가능(rate limit은 범위 밖).
+- [x] Google 토큰: `logout()` 순서 버그 수정 및 revoke 호출, 만료 시 재발급, 매번 `prompt:'consent'` 지양. Drive 오류 메시지 세분화.
+  - 결정: logout = 토큰 지운 뒤 `google.accounts.oauth2.revoke`, `prompt:''`, 토큰 클라이언트 1회 생성, `expires_in`−60초로 만료, 401이면 토큰 삭제. 만료 시 재발급 = 다음 동작(탭) 시점에 `isLoggedIn()` 재확인 후 팝업 재요청(implicit flow라 무음 갱신 없음). GIS 오류(popup_closed/popup_failed_to_open/access_denied) 및 Drive 상태별(401 로그인 만료·403 권한/한도·404 파일 없음/권한·5xx/네트워크 일시 오류) 메시지. 선택 env `VITE_GOOGLE_CLIENT_ID`(없으면 기존 ID).
 
 ## 4단계 — 정리
 - [ ] '기존 계산기'와 '새 계획' 이중 체계 통합.

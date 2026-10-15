@@ -170,7 +170,7 @@ export function buildSnapshot(assets: Asset[], settings: Settings, plan: Planner
         }
     }
     for(const d of debts)if(/^(loan|deposit):/.test(d.id)&&d.assetId&&!assets.some(a=>a.id===d.assetId))issues.push({code:'ORPHAN_DEBT',severity:'missing',sourceId:d.id,message:`${d.name}: 원본 자산이 삭제되었습니다. 남은 부채인지 확인하거나 조건을 제거하세요.`});
-    const assetRevision = fingerprint({ assets, fx: Object.fromEntries(Object.entries(settings).filter(([key]) => key.startsWith('exchange_rate_'))) });
+    const assetRevision = fingerprint({ assets, fx: Object.fromEntries(Object.entries(settings).filter(([key]) => key.startsWith('exchange_rate_') && !key.endsWith('_updatedAt'))) });
     const snapshot = { id: '', assetRevision, positions, debts, plan, capturedAt, issues };
     snapshot.id = fingerprint({ assetRevision, plan });
     return snapshot;

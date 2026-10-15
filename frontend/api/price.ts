@@ -1,17 +1,24 @@
 // Vercel serverless function — Yahoo Finance 시세 프록시.
-// 앱과 같은 출처(/api/price)라 브라우저 CORS 제약이 없다.
+// 앱과 같은 출처(/api/price)에서만 쓰므로 CORS 헤더(ACAO)를 두지 않는다.
 // 클라이언트: GET /api/price?ticker=005930.KS → Yahoo chart JSON 그대로 반환.
 // (Vercel 이 api/ 디렉토리의 .ts 를 자동으로 서버리스 함수로 컴파일·배포한다.)
 // 타입은 any 로 둬 @types/node 의존 없이도 Vercel 함수 빌드가 에러 없게.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { validTicker } from './_validate.js'
+
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Cache-Control', 'public, max-age=60')
 
-  const ticker = req.query?.ticker
-  if (!ticker) {
+  const raw = req.query?.ticker
+  if (!raw) {
     res.statusCode = 400
     res.end(JSON.stringify({ error: 'missing ticker' }))
+    return
+  }
+  const ticker = validTicker(raw)
+  if (!ticker) {
+    res.statusCode = 400
+    res.end(JSON.stringify({ error: 'invalid ticker' }))
     return
   }
 

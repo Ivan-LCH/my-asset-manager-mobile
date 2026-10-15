@@ -2,6 +2,7 @@ import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import { validTicker, validQuery } from './api/_validate'
 
 function priceProxyDev(): PluginOption {
   return {
@@ -10,8 +11,11 @@ function priceProxyDev(): PluginOption {
       server.middlewares.use('/api/price', async (req, res) => {
         try {
           const url = new URL(req.url ?? '', 'http://localhost')
-          const ticker = url.searchParams.get('ticker')
-          if (!ticker) { res.statusCode = 400; res.end('missing ticker'); return }
+          const raw = url.searchParams.get('ticker')
+          if (!raw) { res.statusCode = 400; res.end(JSON.stringify({ error: 'missing ticker' })); return }
+          // prod(api/price.ts)와 같은 검증 규칙
+          const ticker = validTicker(raw)
+          if (!ticker) { res.statusCode = 400; res.end(JSON.stringify({ error: 'invalid ticker' })); return }
           const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'max']
           const INTERVALS = ['1d', '1wk', '1mo']
           const range = RANGES.includes(url.searchParams.get('range') ?? '') ? url.searchParams.get('range') : '1d'
@@ -37,8 +41,10 @@ function yieldProxyDev(): PluginOption {
       server.middlewares.use('/api/yield', async (req, res) => {
         try {
           const url = new URL(req.url ?? '', 'http://localhost')
-          const ticker = url.searchParams.get('ticker')
-          if (!ticker) { res.statusCode = 400; res.end('missing ticker'); return }
+          const raw = url.searchParams.get('ticker')
+          if (!raw) { res.statusCode = 400; res.end(JSON.stringify({ error: 'missing ticker' })); return }
+          const ticker = validTicker(raw)
+          if (!ticker) { res.statusCode = 400; res.end(JSON.stringify({ error: 'invalid ticker' })); return }
           const r = await fetch(
             `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=3y&interval=1d&events=div`,
             { headers: { 'User-Agent': 'Mozilla/5.0 (asset-manager-pwa)' } },
@@ -87,9 +93,11 @@ function searchProxyDev(): PluginOption {
       server.middlewares.use('/api/search', async (req, res) => {
         try {
           const url = new URL(req.url ?? '', 'http://localhost')
-          const q = url.searchParams.get('q')
+          const raw = url.searchParams.get('q')
           const krOnly = url.searchParams.get('krOnly') === '1'
-          if (!q) { res.statusCode = 400; res.end('missing query'); return }
+          if (!raw) { res.statusCode = 400; res.end(JSON.stringify({ error: 'missing query' })); return }
+          const q = validQuery(raw)
+          if (!q) { res.statusCode = 400; res.end(JSON.stringify({ error: 'invalid query' })); return }
           const { searchStocks } = await import('./api/_search')
           const results = await searchStocks(q, krOnly)
           res.setHeader('Content-Type', 'application/json')

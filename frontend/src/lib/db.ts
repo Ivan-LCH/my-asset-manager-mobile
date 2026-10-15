@@ -9,6 +9,7 @@ import { fetchStockHistory } from './stockPrice'
 import { validateBackup } from '@/planner/backup'
 import { fingerprint } from '@/planner/model'
 import {backupSummary,backupReplacementWarnings} from './backupInfo'
+import { diffBackup } from './backupDiff'
 import { backupWarnings, seoulToday } from './validation'
 
 // ──────────────────────────────────────────────────────────────
@@ -651,17 +652,19 @@ export async function beginQuoteRequest(assetIds: string[], requestId: string) {
     for (const id of assetIds) await db.settings.put({key:'quote-request:'+id,value:requestId})
   })
 }
-export async function applyQuoteObservation(assetId:string,ticker:string,price:number|null,date:string,requestId:string):Promise<boolean> {
+/** failure: 시세 조회 실패 사유(stockPrice.fetchStockQuote 의 error/status)와 라벨 — quote-status 에 함께 기록 */
+export async function applyQuoteObservation(assetId:string,ticker:string,price:number|null,date:string,requestId:string,failure?:{error:string;status?:number;label:string}):Promise<boolean> {
   return db.transaction('rw', db.assets, db.stockDetails, db.assetHistory, db.settings, async () => {
     if ((await db.settings.get('quote-request:'+assetId))?.value !== requestId) return false
     const a=await db.assets.get(assetId), stock=await db.stockDetails.get(assetId)
-    let reason=''
+    let reason='',fetchFailed=false
     if (!a || a.type!=='STOCK' || a.disposalDate) reason='처분되었거나 존재하지 않는 종목'
     else if(stock?.ticker!==ticker || stock?.isAccountLevel) reason='티커/계좌 입력이 변경되어 재조회 필요'
-    else if(price===null || !Number.isFinite(price) || price<=0) reason='시세 조회 실패 — 기존 평가액 유지'
+    else if(price===null || !Number.isFinite(price) || price<=0) {fetchFailed=true;reason=`시세 조회 실패${failure?` (${failure.label})`:''} — 기존 평가액 유지`}
     else if((await db.assetHistory.where('assetId').equals(assetId).toArray()).some(h=>h.date>date)) reason='미래 이력이 있어 확인 필요'
     const observedAt=new Date().toISOString()
-    await db.settings.put({key:'quote-status:'+assetId,value:JSON.stringify({observedAt,ok:!reason,reason,marketTimestamp:null})})
+    const error=fetchFailed?failure?.error??'no_price':undefined,status=fetchFailed?failure?.status:undefined
+    await db.settings.put({key:'quote-status:'+assetId,value:JSON.stringify({observedAt,ok:!reason,reason,error,status,marketTimestamp:null})})
     if(reason || !a || price===null)return false
     const rate=await getExchangeRate(stock?.currency??'KRW'),value=price*a.quantity*rate
     const existing=await db.assetHistory.where('[assetId+date]').equals([assetId,date]).first()
@@ -814,7 +817,11 @@ export async function previewBackup(data: unknown) {
   // 입력값 경고(날짜 범위·0원 미처분·계좌/티커 중복)는 가져오기를 막지 않고 확인 창에 목록으로만 보여준다
   const inputWarnings=backupWarnings(validated.tables,seoulToday())
   const warnings=[...backupReplacementWarnings(current,validated),...inputWarnings]
-  return { data: validated, expected: fingerprint(current.tables), warnings, inputWarnings, summary: backupSummary(validated)+(warnings.length?'\n\n확인 필요:\n'+warnings.join('\n'):'') }
+  // 변경 미리보기 — 같은 스키마 정규화를 거친 현재 데이터와 비교(검증 실패 시 원본 그대로)
+  let normalized:BackupData=current
+  try{normalized=validateBackup(current)}catch{/* 현재 데이터가 검증을 통과하지 못해도 미리보기는 계속 */}
+  const diff=diffBackup(normalized,validated)
+  return { data: validated, expected: fingerprint(current.tables), warnings, inputWarnings, diff, summary:backupSummary(validated)+(warnings.length?'\n\n확인 필요:\n'+warnings.join('\n'):'') }
 }
 export async function importBackup(data: BackupData, expected?: string, sourceName?:string): Promise<void> {
   const validated = validateBackup(data)
