@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Asset, Settings } from '@/types';
+import { linkedAccountOf, accountName, pensionAccountNames, stockAccounts } from './accounts';
 export const PLAN_VERSION = 2 as const;
 export const ENGINE_VERSION = 'monthly-ledger-3';
 export const RULE_VERSION = 'user-estimates-1';
@@ -76,6 +77,8 @@ export interface Position extends AssetPolicy {
     name: string;
     balance: number;
     source: Asset;
+    /** PENSION linkedStockId 가 가리키는 주식 계좌명(해석된 경우). 잔액은 계좌 종목에 있으므로 balance 0 */
+    linkedAccount?: string;
 }
 export interface Snapshot {
     id: string;
@@ -100,14 +103,23 @@ export function blankPlan(date = today()): PlannerPlan {
         policies: [], flows: [], events: [], debts: [], scenarios: [], reviewedLegacy: false };
 }
 export const fixedDate = (value: string): DateSpec => ({ value, precision: 'day', offsetMonths: 0 });
-export function defaultPolicy(asset: Asset): AssetPolicy {
+/**
+ * 자산의 기본 분석 분류 — 저장된 정책이 항상 우선(A안)이며 이 기본값은 미저장 자산에만 적용된다.
+ * pensionAccounts(IRP 계좌 ∪ 연결 연금이 가리키는 계좌, pensionAccountNames) 소속 주식은
+ * 인출형 연금 계좌(role 'pension')가 기본. 문맥을 생략하면 종전대로 'investment'.
+ */
+export function defaultPolicy(asset: Asset, pensionAccounts?: Set<string>): AssetPolicy {
     const pensionType = (asset.detail as {
         pensionType?: string;
     })?.pensionType?.toLowerCase() ?? '';
-    const role = asset.type === 'REAL_ESTATE' ? 'property' : asset.type === 'STOCK' ? 'investment'
+    const role = asset.type === 'REAL_ESTATE' ? 'property' : asset.type === 'STOCK' ? (pensionAccounts?.has(accountName(asset)) ? 'pension' : 'investment')
         : asset.type === 'SAVINGS' ? ((asset.detail as any)?.isPensionLike ? 'pension' : 'cash') : asset.type === 'PENSION'
             ? (/national|국민/.test(pensionType) ? 'entitlement' : 'pension') : 'other';
     return policySchema.parse({ assetId: asset.id, role });
+}
+/** 스냅샷과 정책 편집기가 같은 기본값을 쓰도록 한 곳에서 해석 — 저장 정책 우선, 없으면 계좌 문맥 포함 기본값 */
+export function resolvePolicy(source: Asset, policies: AssetPolicy[], pensionAccounts?: Set<string>): AssetPolicy {
+    return policies.find(p => p.assetId === source.id) ?? defaultPolicy(source, pensionAccounts);
 }
 /** Deterministic content fingerprint, not a cryptographic signature. */
 export function fingerprint(value: unknown): string {
@@ -125,8 +137,14 @@ export function buildSnapshot(assets: Asset[], settings: Settings, plan: Planner
     const issues: Issue[] = [];
     if (plan.asOfDate !== capturedAt.slice(0, 10) && plan.asOfDate !== today())
         issues.push({ code: 'VALUATION_DATE', severity: 'missing', message: '현재 평가액을 출발 잔액으로 사용합니다. 기준일이 다른 경우 해당 날짜 잔액과 일치하는지 확인하세요. 과거 실적을 재구성한 결과가 아닙니다.', sourceId: 'asOfDate' });
+    const accounts = stockAccounts(assets);
+    const pensionAccounts = pensionAccountNames(assets);
     const positions = assets.filter(a => !a.disposalDate || a.disposalDate > plan.asOfDate).map(source => {
-        const policy = plan.policies.find(p => p.assetId === source.id) ?? defaultPolicy(source);
+        const policy = resolvePolicy(source, plan.policies, pensionAccounts);
+        // 연결 연금(linkedStockId)은 linkedTo 와 같게 취급 — 계좌 종목이 이미 합산되므로 래퍼 평가액·옛 이력은 합산하지 않음
+        const account = source.type === 'PENSION' ? linkedAccountOf(source, accounts) : undefined;
+        if (account && Math.round(source.currentValue || 0) !== 0)
+            issues.push({ code: 'LINKED_BALANCE', severity: 'warning', sourceId: source.id, message: `${source.name}: 연결 계좌(${account.name}) 종목 합계를 사용하고, 이 항목의 평가액 ${Math.round(source.currentValue).toLocaleString('ko-KR')}원은 합산하지 않습니다. 실제 잔액이 다르면 계좌 종목을 확인하세요.` });
         if(source.history?.some(h=>h.date>plan.asOfDate))issues.push({code:'FUTURE_OBSERVATION',severity:'error',sourceId:source.id,message:`${source.name}: 기준일 뒤의 관측 이력이 현재 평가액에 섞일 수 있습니다. 미래 가정은 일정으로 옮기고 실제 이력 날짜를 확인하세요.`});
         if (source.acquisitionDate && source.acquisitionDate > plan.asOfDate)
             issues.push({ code: 'FUTURE_ACQUISITION', severity: 'error', message: `${source.name}: 기준일 뒤 취득 자산입니다. 현재 보유 기록과 계획 기준일을 확인하세요.`, sourceId: source.id });
@@ -136,7 +154,7 @@ export function buildSnapshot(assets: Asset[], settings: Settings, plan: Planner
             issues.push({ code: 'FUTURE_SALE', severity: 'missing', message: `${source.name}: 기존 미래 처분일을 매각 사건으로 확인해 주세요.`, sourceId: source.id });
         if (source.type === 'REAL_ESTATE' && (source.detail as any)?.futureYear && policy.role!=='excluded' && !plan.events.some(e => e.assetId === source.id && e.kind==='valuation' && e.status!=='cancelled'))
             issues.push({ code: 'LEGACY_DATE', severity: 'missing', message: `${source.name}: 기존 미래연도의 의미를 확인하세요. 준공으로 자동 변환하지 않았습니다.`, sourceId: source.id });
-        return { ...policy, name: source.name, balance: (source.acquisitionDate && source.acquisitionDate > plan.asOfDate) || policy.role === 'entitlement' || policy.role === 'excluded' || policy.linkedTo ? 0 : Math.round(source.currentValue), source };
+        return { ...policy, name: source.name, balance: (source.acquisitionDate && source.acquisitionDate > plan.asOfDate) || policy.role === 'entitlement' || policy.role === 'excluded' || policy.linkedTo || account ? 0 : Math.round(source.currentValue), source, ...(account ? { linkedAccount: account.name } : {}) };
     });
     const debts = [...plan.debts];
     for (const a of assets.filter(a => a.type === 'REAL_ESTATE')) {
@@ -168,10 +186,15 @@ export function availability(snapshot: Snapshot) {
         events: snapshot.plan.events.some(e => e.status !== 'cancelled'),
     };
 }
+/** 월 지급액을 등록할 수 있는 자산(연금 계약·연금형 자산) */
+export function isPensionPayoutAsset(asset?: Asset): boolean {
+    return !!asset && (asset.type === 'PENSION' || !!(asset.detail as any)?.isPensionLike);
+}
+/** 등록 월 지급액. 0 이하는 미입력(null) — 저장된 0과 빈칸을 구분할 수 없으므로 0원 확정 수입으로 보지 않는다 */
 export function assetPensionAmount(asset?: Asset): number | null {
     if (!asset)
         return null;
     const detail = asset.detail as any;
     const amount = asset.type === 'PENSION' ? detail?.expectedMonthlyPayout : detail?.isPensionLike ? detail?.pensionMonthly : null;
-    return typeof amount === 'number' && Number.isFinite(amount) && amount >= 0 ? amount : null;
+    return typeof amount === 'number' && Number.isFinite(amount) && amount > 0 ? amount : null;
 }

@@ -13,7 +13,8 @@ import KpiCard from '@/components/common/KpiCard'
 import { useStockAccountOwnership, useSaveStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { beginQuoteRequest, applyQuoteObservation, getAllAssets, FALLBACK_RATES } from '@/lib/db'
 import { fetchPrices } from '@/lib/stockPrice'
-import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice, cn } from '@/lib/utils'
+import { formatEok, formatManwon, formatPnlEok, formatPnl, formatPnlManwon, formatAvgPrice, formatPrice, fmtPct, fmtQty, cn } from '@/lib/utils'
+import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { Asset, Settings, StockDetail } from '@/types'
 import { usePlanner } from '@/planner/context'
 import type { Position } from '@/planner/model'
@@ -101,7 +102,7 @@ export default function StockPage() {
       .reduce((s, a) => s + a.currentValue, 0)
     const diff = totalAfter - totalBefore
     const diffStr = cnt > 0 && Math.abs(diff) > 0
-      ? ` (${diff > 0 ? '+' : ''}${formatManwon(diff)})`
+      ? ` (${Math.round(diff / 10000) !== 0 ? formatPnlManwon(diff) : formatPnl(diff)})`
       : ''
     setUpdating(false)
     setUpdMsg(cnt > 0 ? `갱신 완료 ${cnt}/${items.length}${diffStr}` : '갱신 실패')
@@ -235,13 +236,13 @@ export default function StockPage() {
       <details className="rounded-xl border border-gray-700 p-3 text-xs text-gray-300"><summary className="cursor-pointer py-2">종목별 시세 조회 상태 · 거래소 기준시각은 제공되지 않습니다</summary>{active.map(a=>{const raw=settings?.['quote-status:'+a.id];let status:any=null;try{status=raw?JSON.parse(String(raw)):null}catch{}return <p key={a.id} className="py-2">{a.name} · {status?`${status.ok?'조회 반영':'기존 가격 유지'} · ${new Date(status.observedAt).toLocaleString('ko-KR')} ${status.reason??''}`:'아직 조회하지 않음 / 수동 입력'}{(a.detail as StockDetail)?.currency!=='KRW'&&!settings?.['exchange_rate_'+(a.detail as StockDetail)?.currency]?' · 환율 기본 가정 사용 중':''}</p>})}</details>
       {/* KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard label={activeAccount ? `평가 총액 (${activeAccount})` : '평가 총액'} value={formatMoney(totalVal)} color="default" />
+        <KpiCard label={activeAccount ? `평가 총액 (${activeAccount})` : '평가 총액'} value={formatEok(totalVal)} color="default" />
         <KpiCard
           label={activeAccount ? `평가 손익 (${activeAccount})` : '평가 손익'}
-          value={`${formatPnl(pnl)} (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`}
+          value={`${formatPnlEok(pnl)} (${fmtPct(roi, 1, { sign: true })})`}
           color={pnl >= 0 ? 'green' : 'red'}
         />
-        <KpiCard label="투자 원금" value={formatMoney(totalCost)} color="default" />
+        <KpiCard label="투자 원금" value={formatEok(totalCost)} color="default" />
         <KpiCard
           label="연간 예상 배당"
           value={aggregateDividend!=null ? formatManwon(aggregateDividend) : '-'}
@@ -392,12 +393,12 @@ function AccountCard({
             ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
             : <TrendingDown className="w-3.5 h-3.5 text-red-400" />}
           <span className={`text-sm font-semibold ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {pnl >= 0 ? '+' : ''}{formatManwon(pnl)}
+            {formatPnlManwon(pnl)}
           </span>
           <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
             pnl >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
           }`}>
-            {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+            {fmtPct(roi, 1, { sign: true })}
           </span>
         </div>
       </div>
@@ -413,13 +414,13 @@ function AccountCard({
               <span className="text-gray-400 truncate flex items-center gap-1.5">
                 {a.name}
                 <span className="text-gray-600 shrink-0">
-                  {(a.quantity ?? 0).toLocaleString()}주 · 평단 {formatAvgPrice(a.acquisitionPrice ?? 0, (a.detail as StockDetail | undefined)?.currency ?? 'KRW')}
+                  {fmtQty(a.quantity, '주')} · 평단 {formatAvgPrice(a.acquisitionPrice, (a.detail as StockDetail | undefined)?.currency ?? 'KRW')}
                 </span>
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-gray-300">{formatManwon(a.currentValue)}</span>
                 <span className={aRoi >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                  {aRoi >= 0 ? '+' : ''}{aRoi.toFixed(1)}%
+                  {fmtPct(aRoi, 1, { sign: true })}
                 </span>
               </div>
             </div>
@@ -500,12 +501,12 @@ function AccountSummaryBanner({
           <p className="text-lg font-bold text-gray-100">{formatManwon(val)}</p>
           <div className="flex items-center justify-end gap-1.5 mt-0.5">
             <span className={`text-sm font-semibold ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {pnl >= 0 ? '+' : ''}{formatManwon(pnl)}
+              {formatPnlManwon(pnl)}
             </span>
             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
               pnl >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
             }`}>
-              {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+              {fmtPct(roi, 1, { sign: true })}
             </span>
           </div>
         </div>
@@ -524,7 +525,9 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
   const {data:planner}=usePlanner()
   const included=inAggregate(asset,planner?.current.positions??[])
   const isSold   = !!asset.disposalDate
-  const valKrw   = isSold ? (asset.disposalPrice ?? 0) : asset.currentValue
+  // 매각가 미입력(빈 값·0)은 0만원·전액 손실로 보이지 않게 '—' / "매각가 미입력"
+  const priceMissing = disposalPriceMissing(asset)
+  const valKrw   = isSold ? (priceMissing ? 0 : asset.disposalPrice!) : asset.currentValue
   const d        = asset.detail as StockDetail | undefined
   const isAcct   = !!d?.isAccountLevel   // 계좌 통합 모드 — 단가·수량 대신 계좌 총액 표시
   const currency = d?.currency ?? 'KRW'
@@ -537,9 +540,9 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
   const costFx  = avgPrice * qty                      // 외화 매입원가
   const costKrw_ = costFx * rate                      // KRW 환산 매입원가
   const cost    = isFx ? costKrw_ : costFx            // KRW 기준 cost
-  const pnlKrw  = valKrw - cost
+  const pnlKrw  = priceMissing ? 0 : valKrw - cost
   const valFx   = isFx ? valKrw / rate : 0            // 외화 평가액
-  const pnlFx   = isFx ? valFx - costFx : 0          // 외화 손익
+  const pnlFx   = isFx && !priceMissing ? valFx - costFx : 0          // 외화 손익
   const roi     = cost > 0 ? (pnlKrw / cost) * 100 : 0
   // 현재가(주당) — 외화는 KRW 평가액을 환율·수량으로 역산해 네이티브 통화 표기
   const currentPrice = qty > 0 ? (isFx ? valKrw / qty / rate : valKrw / qty) : 0
@@ -594,14 +597,14 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
               {!included && <span className="text-xs text-amber-300">합산 제외</span>}
               {weight != null && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-medium">
-                  {weight.toFixed(1)}%
+                  {fmtPct(weight, 1)}
                 </span>
               )}
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(valKrw)}</p>
-            {isFx && rate > 1 && (
+            <p className="text-base font-bold text-gray-100 tracking-tight">{priceMissing ? '—' : formatManwon(valKrw)}</p>
+            {isFx && rate > 1 && !priceMissing && (
               <p className="text-xs text-blue-400 font-mono mt-0.5">{formatPrice(valFx, currency)}</p>
             )}
           </div>
@@ -613,26 +616,26 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
             {!isSold && !isAcct && (
               <div className="flex items-center gap-1.5 flex-wrap text-xs">
                 <span className="text-gray-500">현재가</span>
-                <span className="text-gray-200 font-mono">{formatAvgPrice(currentPrice, currency)}</span>
+                <span className="text-gray-200 font-mono">{formatAvgPrice(qty > 0 ? currentPrice : null, currency)}</span>
                 {hasDaily && (
                   <span className={`font-medium ${
                     priceChange > 0 ? 'text-emerald-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-500'
                   }`}>
-                    {priceChange >= 0 ? '+' : ''}{priceChangePct.toFixed(2)}%
+                    {fmtPct(priceChangePct, 2, { sign: true })}
                   </span>
                 )}
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs">
               {isAcct ? (
-                <span className="text-gray-500">원금 {formatManwon(avgPrice)}</span>
+                <span className="text-gray-500">원금 {formatManwon(asset.acquisitionPrice)}</span>
               ) : (
                 <>
                   <span className="text-gray-500">평단가</span>
-                  <span className="text-gray-300 font-mono">{formatAvgPrice(avgPrice, currency)}</span>
+                  <span className="text-gray-300 font-mono">{formatAvgPrice(asset.acquisitionPrice, currency)}</span>
                   <span className="text-gray-400">·</span>
                   <span className="text-gray-500">수량</span>
-                  <span className="text-gray-300 font-mono">{qty.toLocaleString()}주</span>
+                  <span className="text-gray-300 font-mono">{fmtQty(asset.quantity, '주')}</span>
                 </>
               )}
             </div>
@@ -647,21 +650,21 @@ function StockTile({ asset, settings, accountTotal, onClick }: {
               <span className={`text-sm font-bold ${
                 pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'
               }`}>
-                {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+                {priceMissing ? DISPOSAL_PRICE_MISSING : fmtPct(roi, 1, { sign: true })}
               </span>
             </div>
-            {isFx && rate > 1 ? (
+            {priceMissing ? null : isFx && rate > 1 ? (
               <>
                 <p className={`text-xs font-mono ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                  {pnlFx >= 0 ? '+' : ''}{formatPrice(pnlFx, currency)}
+                  {formatPrice(pnlFx, currency, { sign: true })}
                 </p>
                 <p className={`text-xs ${pnlKrw > 0 ? 'text-emerald-400/70' : pnlKrw < 0 ? 'text-red-400/70' : 'text-gray-500'}`}>
-                  {pnlKrw >= 0 ? '+' : ''}{formatManwon(pnlKrw)}
+                  {formatPnlManwon(pnlKrw)}
                 </p>
               </>
             ) : (
               <p className={`text-xs ${pnlKrw > 0 ? 'text-emerald-400' : pnlKrw < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                {pnlKrw >= 0 ? '+' : ''}{formatManwon(pnlKrw)}
+                {formatPnlManwon(pnlKrw)}
               </p>
             )}
           </div>

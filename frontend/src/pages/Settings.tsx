@@ -8,6 +8,7 @@ import { useSettings, useSaveSettings } from '@/hooks/useSettings'
 import { exportBackup, importBackup, previewBackup, restorePreviousImport, clearAllData, previewStockPriceCorrection, applyStockPriceCorrection, undoStockPriceCorrection, getLastBackupImport, type BackupData } from '@/lib/db'
 import {backupFileName,backupSummary} from '@/lib/backupInfo'
 import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
+import { fmtQty } from '@/lib/utils'
 import { googleSignIn, logout, isLoggedIn, saveToDrive, listBackupFiles, loadFromDrive, pickFolder } from '@/lib/googleDrive'
 
 export default function Settings() {
@@ -64,7 +65,7 @@ export default function Settings() {
       if (!preview.changes.length && !additions.length) {
         setPriceBackfill({running:false,done:true,ok:preview.failed.length===0,msg:preview.failed.length ? `시세 조회 실패 ${preview.failed.length}종목 · ${summary}. 다시 시도해 주세요.` : `조회 완료 — ${summary}. ${preview.checked ? '새로 추가하거나 보정할 시세가 없습니다.' : '과거 수량 기록이 없어 채울 수 있는 날짜가 없습니다.'}`}); return;
       }
-      if (!window.confirm(`최근 3개월의 빈 거래일을 채우고 기존 시세를 보정합니다. 현재 평가액·수량은 변경하지 않습니다.\n범위: ${preview.from} ~ ${preview.to} 전날\n${summary}\n조회 실패: ${preview.failed.join(', ') || '없음'}\n\n추가 날짜의 수량은 직전 기록 유지 가정이며 이력에 추정으로 표시됩니다. 취득 전·수량 근거 없는 날·휴장일은 만들지 않습니다.\n${additions.slice(0,6).map(h=>`${h.date}: 추가 · 수량 ${h.quantity} (${h.quantitySourceDate} 기준)`).join('\n')}\n${preview.changes.slice(0,6).map(c=>`${c.before.date}: 단가 ${c.before.price} → ${c.after.price}`).join('\n')}\n\n반영할까요? 이번 추가와 보정은 함께 되돌릴 수 있습니다.`)) {setPriceBackfill({running:false,done:true,ok:true,msg:'미리보기 취소 — 변경 없음'});return}
+      if (!window.confirm(`최근 3개월의 빈 거래일을 채우고 기존 시세를 보정합니다. 현재 평가액·수량은 변경하지 않습니다.\n범위: ${preview.from} ~ ${preview.to} 전날\n${summary}\n조회 실패: ${preview.failed.join(', ') || '없음'}\n\n추가 날짜의 수량은 직전 기록 유지 가정이며 이력에 추정으로 표시됩니다. 취득 전·수량 근거 없는 날·휴장일은 만들지 않습니다.\n${additions.slice(0,6).map(h=>`${h.date}: 추가 · 수량 ${fmtQty(h.quantity)} (${h.quantitySourceDate} 기준)`).join('\n')}\n${preview.changes.slice(0,6).map(c=>`${c.before.date}: 단가 ${c.before.price} → ${c.after.price}`).join('\n')}\n\n반영할까요? 이번 추가와 보정은 함께 되돌릴 수 있습니다.`)) {setPriceBackfill({running:false,done:true,ok:true,msg:'미리보기 취소 — 변경 없음'});return}
       await applyStockPriceCorrection(preview)
       const r = {assets:preview.assets,failed:preview.failed,updated:preview.changes.length+additions.length}
       await qc.invalidateQueries()

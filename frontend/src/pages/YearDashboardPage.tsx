@@ -16,7 +16,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { useAnalysisEngine } from '@/hooks/useAnalysisEngine'
 import { EMPTY_PLAN, normalizeSavedPlan, fmtM, pnlColor } from '@/lib/retirementPlan'
 import { SIM_START_YEAR } from '@/lib/pensionCalc'
-import { formatManwon, formatMoney } from '@/lib/utils'
+import { formatManwon, formatPnlManwon } from '@/lib/utils'
 import { estimateHoldingTax, toHoldingTaxAssets } from '@/lib/holdingTax'
 import { hasSpouse } from '@/lib/people'
 
@@ -111,7 +111,7 @@ export default function YearDashboardPage() {
             <div className="bg-gray-900/40 border border-gray-700 rounded-xl p-3">
               <p className="text-xs text-gray-500 mb-1">월 여유/부족 (세전)</p>
               <p className={`text-lg font-bold ${pnlColor(row.balance)}`}>
-                {row.balance >= 0 ? '+' : ''}{formatManwon(row.balance)}
+                {formatPnlManwon(row.balance)}
               </p>
             </div>
             <div className="bg-blue-950/20 border border-blue-900/40 rounded-xl p-3">
@@ -180,7 +180,7 @@ export default function YearDashboardPage() {
           <details id="analysis-health" className="bg-gray-800 border border-gray-700 rounded-xl p-4">
             <summary className="cursor-pointer text-sm font-semibold text-gray-200" data-health-summary data-monthly-health={row.healthInsuranceMonthly}>
               🏥 건강보험 · 월 예상
-              <span className="block mt-1 text-lg tabular-nums">{formatMoney(row.healthInsuranceMonthly)}<span className="text-xs font-normal text-gray-400"> /월</span></span>
+              <span className="block mt-1 text-lg tabular-nums">{formatManwon(row.healthInsuranceMonthly)}<span className="text-xs font-normal text-gray-400"> /월</span></span>
               <span className={`block mt-1 text-xs font-normal ${healthDetail?.assumed ? 'text-amber-300' : 'text-gray-400'}`}>
                 {healthDetail
                   ? healthDetail.assumed ? '가입 형태 미확인 · 같은 지역가입 세대로 합산 가정'
@@ -189,8 +189,8 @@ export default function YearDashboardPage() {
                 {healthDetail && ' · 장기요양 포함'}
               </span>
               {healthDetail?.mode === 'separate' && <span className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs font-normal text-gray-200">
-                <span data-health-person-summary={healthDetail.husbandSeparate.grandTotal}>남편 {formatMoney(healthDetail.husbandSeparate.grandTotal)}/월</span>
-                <span data-health-person-summary={healthDetail.wifeSeparate.grandTotal}>아내 {formatMoney(healthDetail.wifeSeparate.grandTotal)}/월</span>
+                <span data-health-person-summary={healthDetail.husbandSeparate.grandTotal}>남편 {formatManwon(healthDetail.husbandSeparate.grandTotal)}/월</span>
+                <span data-health-person-summary={healthDetail.wifeSeparate.grandTotal}>아내 {formatManwon(healthDetail.wifeSeparate.grandTotal)}/월</span>
               </span>}
             </summary><div className="mt-3">
             {healthDetail ? <HealthBreakdown value={healthDetail} summaryShown/> : eng.pensionLinked ? (

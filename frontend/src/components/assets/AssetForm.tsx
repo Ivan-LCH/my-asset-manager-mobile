@@ -3,8 +3,9 @@ import { useUpdateAsset, useAssetsByType } from '@/hooks/useAssets'
 import type { Asset, AssetType, Currency, Ownership, OwnershipPreset } from '@/types'
 import { ownershipFromPreset, presetFromOwnership } from '@/types'
 import RealEstateFutureValueFields from '@/components/assets/RealEstateFutureValueFields'
-import { cn } from '@/lib/utils'
-import { MIN_DATE, checkAsset, isNationalPension, seoulToday, toCheckInput } from '@/lib/validation'
+import { cn, formatKoreanDate, isKrwPriceInput } from '@/lib/utils'
+import AmountInput from '@/components/common/AmountInput'
+import { MIN_DATE, accountModeError, checkAsset, isNationalPension, seoulToday, toCheckInput } from '@/lib/validation'
 
 interface Props {
   asset: Asset
@@ -27,7 +28,7 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [acquisitionPrice, setAcquisitionPrice] = useState(asset.acquisitionPrice ?? 0)
   const [quantity,         setQuantity]         = useState(asset.quantity ?? 0)
   const [disposalDate,     setDisposalDate]     = useState(asset.disposalDate ?? '')
-  const [disposalPrice,    setDisposalPrice]    = useState(asset.disposalPrice ?? 0)
+  const [disposalPrice,    setDisposalPrice]    = useState<number | undefined>(asset.disposalPrice || undefined)  // 0 = 미입력 → 빈칸
 
   // 부동산
   const [address,       setAddress]       = useState((d?.address       as string)  ?? '')
@@ -48,13 +49,13 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [isPensionLike, setIsPensionLike] = useState((d?.isPensionLike as boolean) ?? false)
   const [isAccountLevel, setIsAccountLevel] = useState(!!(d?.isAccountLevel as boolean | undefined))
   const [pensionStartYearStock, setPensionStartYearStock] = useState((d?.pensionStartYear as number) ?? 0)
-  const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState((d?.pensionMonthly   as number) ?? 0)
+  const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState<number | undefined>((d?.pensionMonthly as number) || undefined)  // 0 = 미입력 → 빈칸
 
   // 연금
   const [pensionType,            setPensionType]            = useState((d?.pensionType            as string) ?? '')
   const [expectedStartYear,      setExpectedStartYear]      = useState((d?.expectedStartYear      as number) ?? 0)
   const [expectedEndYear,        setExpectedEndYear]        = useState((d?.expectedEndYear        as number) ?? 0)
-  const [expectedMonthlyPayout,  setExpectedMonthlyPayout]  = useState((d?.expectedMonthlyPayout  as number) ?? 0)
+  const [expectedMonthlyPayout,  setExpectedMonthlyPayout]  = useState<number | undefined>((d?.expectedMonthlyPayout as number) || undefined)  // 0 = 미입력 → 빈칸
   const [annualGrowthRate,       setAnnualGrowthRate]       = useState((d?.annualGrowthRate       as number) ?? 0)
   const [hideInChart,            setHideInChart]            = useState((d?.hideInChart            as boolean) ?? false)
   const [linkedStockId,          setLinkedStockId]          = useState((d?.linkedStockId          as string)  ?? '')
@@ -62,19 +63,19 @@ export default function AssetForm({ asset, onClose }: Props) {
   // 예적금
   const [isPensionLikeSav, setIsPensionLikeSav] = useState((d?.isPensionLike  as boolean) ?? false)
   const [pensionStartYearSav, setPensionStartYearSav] = useState((d?.pensionStartYear as number) ?? 0)
-  const [pensionMonthlySav,   setPensionMonthlySav]   = useState((d?.pensionMonthly   as number) ?? 0)
+  const [pensionMonthlySav,   setPensionMonthlySav]   = useState<number | undefined>((d?.pensionMonthly as number) || undefined)
 
   const buildDetail = (type: AssetType) => {
     if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined, housingTaxStartDate: housingTaxStartDate || undefined, constructionHoldingTaxAnnual }
     if (type === 'STOCK') return {
       accountName, currency, ticker: ticker || undefined,
       isPensionLike, isAccountLevel,
-      ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
+      ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock || undefined } : {}),
     }
-    if (type === 'PENSION') return { pensionType: pensionType || undefined, expectedStartYear, expectedEndYear, expectedMonthlyPayout, annualGrowthRate, hideInChart, linkedStockId: linkedStockId || undefined }
+    if (type === 'PENSION') return { pensionType: pensionType || undefined, expectedStartYear, expectedEndYear, expectedMonthlyPayout: expectedMonthlyPayout || undefined, annualGrowthRate, hideInChart, linkedStockId: linkedStockId || undefined }
     if (type === 'SAVINGS') return {
       isPensionLike: isPensionLikeSav,
-      ...(isPensionLikeSav ? { pensionStartYear: pensionStartYearSav, pensionMonthly: pensionMonthlySav } : {}),
+      ...(isPensionLikeSav ? { pensionStartYear: pensionStartYearSav, pensionMonthly: pensionMonthlySav || undefined } : {}),
     }
     return undefined
   }
@@ -91,15 +92,21 @@ export default function AssetForm({ asset, onClose }: Props) {
       accountName, ticker: isAccountLevel ? undefined : ticker,
       entitlement: isNationalPension(asset.type, pensionType), linked: !!linkedStockId,
     }, stockAssets.map(toCheckInput), today)
-    setFormErrors(check.errors)
-    if (check.errors.length) return
+    // 계좌 통합(총액)·종목별 혼용 금지 — 계좌를 옮기거나 매각을 취소해 계좌에 다시 들어올 때만 검사(기존 데이터는 그대로 저장 가능)
+    const joins = asset.type === 'STOCK' && !disposalDate
+      && (accountName.trim() !== ((d?.accountName as string) ?? '').trim() || !!asset.disposalDate)
+    const modeError = joins ? accountModeError({ id: asset.id, type: asset.type, name, accountName, isAccountLevel }, stockAssets.map(toCheckInput)) : null
+    const errors = modeError ? [...check.errors, modeError] : check.errors
+    setFormErrors(errors)
+    if (errors.length) return
     if (check.warnings.length && !window.confirm(check.warnings.join('\n') + '\n\n그래도 저장할까요?')) return
     const payload: Record<string, unknown> = {
       name,
       acquisitionDate: acquisitionDate || undefined,
       acquisitionPrice,
       disposalDate: disposalDate || undefined,
-      disposalPrice: disposalDate ? disposalPrice : undefined,
+      // 빈칸·0 = 미입력 → undefined (실제 0원 매각은 미입력과 구분되지 않음)
+      disposalPrice: disposalDate ? (disposalPrice || undefined) : undefined,
       ownership,
       detail: buildDetail(asset.type),
     }
@@ -133,10 +140,14 @@ export default function AssetForm({ asset, onClose }: Props) {
         <div>
           <label className={labelCls}>취득일</label>
           <input type="date" min={MIN_DATE} max={today} className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
+          {acquisitionDate && <p className="text-xs text-gray-500 mt-1">{formatKoreanDate(acquisitionDate)}</p>}
         </div>
         <div>
           <label className={labelCls}>{(asset.type === 'STOCK' && isAccountLevel) ? '총 원금 (원)' : (asset.type === 'STOCK' || asset.type === 'PHYSICAL') ? '취득단가' : '취득가'}</label>
-          <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
+          {/* 원화 금액은 천단위 콤마 입력, 외화·실물 단가는 소수 가능 → number 입력 */}
+          {isKrwPriceInput(asset.type, currency, isAccountLevel)
+            ? <AmountInput className={inputCls} value={acquisitionPrice} onChange={setAcquisitionPrice} />
+            : <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />}
         </div>
         {(asset.type === 'STOCK' || asset.type === 'PHYSICAL') && !isAccountLevel && (
           <div>
@@ -147,11 +158,12 @@ export default function AssetForm({ asset, onClose }: Props) {
         <div>
           <label className={labelCls}>매각일</label>
           <input type="date" min={MIN_DATE} className={inputCls} value={disposalDate} onChange={(e) => setDisposalDate(e.target.value)} />
+          {disposalDate && <p className="text-xs text-gray-500 mt-1">{formatKoreanDate(disposalDate)}</p>}
         </div>
         {disposalDate && (
           <div>
             <label className={labelCls}>매각가 (총액, 원)</label>
-            <input type="number" inputMode="decimal" className={inputCls} value={disposalPrice} onChange={(e) => setDisposalPrice(+e.target.value)} />
+            <AmountInput className={inputCls} value={disposalPrice} onChange={setDisposalPrice} placeholder="미입력" />
           </div>
         )}
       </div>
@@ -167,11 +179,11 @@ export default function AssetForm({ asset, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>대출금</label>
-              <input type="text" inputMode="numeric" className={inputCls} value={loanAmount > 0 ? loanAmount.toLocaleString() : ''} onChange={(e) => setLoanAmount(Number(e.target.value.replace(/,/g, '')) || 0)} placeholder="0" />
+              <AmountInput className={inputCls} value={loanAmount} onChange={setLoanAmount} />
             </div>
             <div>
               <label className={labelCls}>보증금</label>
-              <input type="text" inputMode="numeric" className={inputCls} value={tenantDeposit > 0 ? tenantDeposit.toLocaleString() : ''} onChange={(e) => setTenantDeposit(Number(e.target.value.replace(/,/g, '')) || 0)} placeholder="0" />
+              <AmountInput className={inputCls} value={tenantDeposit} onChange={setTenantDeposit} />
             </div>
           </div>
           <div className="flex gap-5">
@@ -232,7 +244,7 @@ export default function AssetForm({ asset, onClose }: Props) {
               </div>
               <div>
                 <label className={labelCls}>월 수령액</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlyStock} onChange={(e) => setPensionMonthlyStock(+e.target.value)} />
+                <AmountInput className={inputCls} value={pensionMonthlyStock} onChange={setPensionMonthlyStock} placeholder="미입력" />
               </div>
             </div>
           )}
@@ -258,7 +270,7 @@ export default function AssetForm({ asset, onClose }: Props) {
             </div>
             <div>
               <label className={labelCls}>월 수령 예상액</label>
-              <input type="number" inputMode="decimal" className={inputCls} value={expectedMonthlyPayout} onChange={(e) => setExpectedMonthlyPayout(+e.target.value)} />
+              <AmountInput className={inputCls} value={expectedMonthlyPayout} onChange={setExpectedMonthlyPayout} placeholder="미입력" />
             </div>
             <div>
               <label className={labelCls}>연 증가율 (%)</label>
@@ -269,6 +281,7 @@ export default function AssetForm({ asset, onClose }: Props) {
             <input type="checkbox" checked={hideInChart} onChange={(e) => setHideInChart(e.target.checked)} className="accent-yellow-500" />
             대시보드 차트 제외 (주식으로 이미 집계됨)
           </label>
+          {linkedStockId && <p className="text-xs text-gray-600">연동 계좌가 있으면 이 항목의 평가액·이력은 체크와 관계없이 총액·차트에 합산하지 않습니다 (계좌 종목만 합산).</p>}
           {/* 연동할 주식계좌 — 계좌(accountName) 단위, 현재가치 연동 */}
           <div>
             <label className={labelCls}>연동할 주식계좌 (현재가치 연동)</label>
@@ -276,7 +289,8 @@ export default function AssetForm({ asset, onClose }: Props) {
               // 계좌(accountName)별로 그룹화 — 총액 합산
               const accountMap = new Map<string, { total: number; count: number }>()
               for (const s of stockAssets) {
-                const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? '미분류'
+                if (s.disposalDate) continue
+                const acct = (s.detail as { accountName?: string } | undefined)?.accountName?.trim() || '미분류'
                 const cur = accountMap.get(acct) ?? { total: 0, count: 0 }
                 accountMap.set(acct, { total: cur.total + s.currentValue, count: cur.count + 1 })
               }
@@ -288,6 +302,10 @@ export default function AssetForm({ asset, onClose }: Props) {
                   onChange={(e) => setLinkedStockId(e.target.value)}
                 >
                   <option value="">연동 안 함 (자체 원금 기준)</option>
+                  {/* 저장된 연동값이 목록(trim 계좌명)에 없으면 그대로 보존 — 저장 시 연동이 끊기지 않게 */}
+                  {linkedStockId && !accounts.some(([acct]) => acct === linkedStockId) && (
+                    <option value={linkedStockId}>{linkedStockId} (저장된 연동값)</option>
+                  )}
                   {accounts.map(([acct, info]) => (
                     <option key={acct} value={acct}>
                       {acct} ({info.count}종목 · {info.total.toLocaleString()}원)
@@ -319,7 +337,7 @@ export default function AssetForm({ asset, onClose }: Props) {
               </div>
               <div>
                 <label className={labelCls}>월 수령액</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlySav} onChange={(e) => setPensionMonthlySav(+e.target.value)} />
+                <AmountInput className={inputCls} value={pensionMonthlySav} onChange={setPensionMonthlySav} placeholder="미입력" />
               </div>
             </div>
           )}

@@ -6,7 +6,8 @@ import AssetChart from '@/components/common/AssetChart'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
-import { formatMoney, formatManwon } from '@/lib/utils'
+import { formatEok, formatManwon, fmtPct } from '@/lib/utils'
+import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { Asset, RealEstateDetail } from '@/types'
 
 export default function RealEstatePage() {
@@ -49,9 +50,9 @@ export default function RealEstatePage() {
 
       {/* KPI */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <KpiCard label="시세 총액"       value={formatMoney(totalVal)}    color="default" />
-        <KpiCard label="부채 총계"       value={formatMoney(totalLiab)}   color="red"     />
-        <KpiCard label="순자산 (Equity)" value={formatMoney(netEquity)}   color="blue"    />
+        <KpiCard label="시세 총액"       value={formatEok(totalVal)}    color="default" />
+        <KpiCard label="부채 총계"       value={formatEok(totalLiab)}   color="red"     />
+        <KpiCard label="순자산 (Equity)" value={formatEok(netEquity)}   color="blue"    />
       </div>
 
       {/* 성장 추이 */}
@@ -101,12 +102,14 @@ export default function RealEstatePage() {
 function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void }) {
   const d      = asset.detail as RealEstateDetail | undefined
   const isSold = !!asset.disposalDate
-  const val    = isSold ? (asset.disposalPrice ?? 0) : asset.currentValue
+  // 매각가 미입력(빈 값·0)은 0만원·전액 손실로 보이지 않게 '—' / "매각가 미입력"
+  const priceMissing = disposalPriceMissing(asset)
+  const val    = isSold ? (priceMissing ? null : asset.disposalPrice!) : asset.currentValue
   const liab   = (d?.loanAmount ?? 0) + (d?.tenantDeposit ?? 0)
-  const equity = val - liab
-  const cost   = asset.acquisitionPrice ?? 0
-  const pnl    = val - cost
-  const roi    = cost > 0 ? (pnl / cost) * 100 : 0
+  const equity = val == null ? null : val - liab
+  const cost   = asset.acquisitionPrice
+  const pnl    = val == null || cost == null ? 0 : val - cost
+  const roi    = cost != null && cost > 0 ? (pnl / cost) * 100 : 0
 
   return (
     <button
@@ -169,7 +172,7 @@ function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void 
                 : pnl < 0 ? <TrendingDown className="w-3 h-3 text-red-400" />
                 : <Minus className="w-3 h-3 text-gray-500" />}
               <span className={pnl > 0 ? 'text-emerald-400 font-semibold' : pnl < 0 ? 'text-red-400 font-semibold' : 'text-gray-500'}>
-                {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+                {priceMissing ? DISPOSAL_PRICE_MISSING : cost == null ? '—' : fmtPct(roi, 1, { sign: true })}
               </span>
             </div>
           </div>

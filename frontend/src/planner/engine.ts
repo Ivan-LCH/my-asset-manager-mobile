@@ -378,7 +378,8 @@ export function simulate(snapshot: Snapshot, scenario: Scenario = baseScenario):
             eventByDay.set(d, [...(eventByDay.get(d) ?? []), e]);
     }
     // Market shock changes only this run; the source snapshot and real records stay untouched.
-    for (const p of positions.filter(p => p.role === 'investment' && !p.linkedTo))
+    // 대상은 시장가 자산(주식·ETF, IRP 계좌 포함). 연금 계약·국민연금·연결 래퍼·금·부동산·예적금은 제외하고, 사용자가 현금성·보증금·제외로 지정한 주식도 제외.
+    for (const p of positions.filter(p => p.source.type === 'STOCK' && !p.linkedTo && !['excluded', 'cash', 'deposit'].includes(p.role)))
         balances[p.assetId] = Math.round(balances[p.assetId] * (1 + scenario.marketShock / 100));
     date.setUTCDate(date.getUTCDate() + 1);
     while (iso(date) <= plan.endDate) {

@@ -306,6 +306,7 @@ export interface PensionScheduleRow {
   taxableAnnual:   number   // drawdown과세 + 국민연금
   exemptAnnual:    number   // drawdown 비과세
   totalAnnual:     number   // 연금 + 배당 합계
+  nationalMissing?: boolean // 수령 기간인 국민연금의 월수령액 미입력(0 이하) — 0원으로 확정하지 않음
 }
 export function pensionSchedule(
   plan: PensionSimPlan,
@@ -392,11 +393,13 @@ export function pensionSchedule(
     const allow = allowanceAnnualAt(year)
     const flat = flatAnnualAt(year)
 
-    let national = 0
+    let national = 0, nationalMissing = false
     for (const n of nationals) {
       // 국민연금은 종신 → 수령개시연도부터 스케줄 끝(toYear, 사망)까지 지급.
       // (endYear가 짧아 현금흐름 중간에 끊기는 버그 방지 — 와이프 자동생성 endYear=start+50 등)
       if (year >= n.expectedStartYear && year <= toYear) {
+        // 0 = 미입력 → 지급 0으로 두되 미입력 표시(annualPension 과 동일 규칙)
+        if (!(n.expectedMonthlyPayout > 0)) { nationalMissing = true; continue }
         const natElapsed = year - n.expectedStartYear
         national += n.expectedMonthlyPayout * 12 * Math.pow(1 + (n.annualGrowthRate || 0) / 100, natElapsed)
       }
@@ -414,6 +417,7 @@ export function pensionSchedule(
       taxableAnnual: Math.round(taxable),
       exemptAnnual: Math.round(drawExempt),
       totalAnnual: Math.round(taxable + drawExempt + financial),
+      ...(nationalMissing ? { nationalMissing } : {}),
     })
   }
   return rows
@@ -639,7 +643,8 @@ export function sourcesFromAssets(
       yieldRate: existingSrc?.yieldRate ?? 4,
       owner: existingSrc?.owner ?? 'husband',
       // 수령 모델 필드 (자산 detail에서 자동 채움) — 비과세·과세 연금저축의 등록 월수령액
-      expectedMonthlyPayout: a.detail?.expectedMonthlyPayout ?? existingSrc?.expectedMonthlyPayout,
+      // 자산의 0은 미입력 → 저장된 값을 덮어쓰지 않는다
+      expectedMonthlyPayout: (a.detail?.expectedMonthlyPayout ?? 0) > 0 ? a.detail!.expectedMonthlyPayout : existingSrc?.expectedMonthlyPayout,
       expectedStartYear: a.detail?.expectedStartYear ?? existingSrc?.expectedStartYear,
       expectedEndYear: a.detail?.expectedEndYear ?? existingSrc?.expectedEndYear,
       annualGrowthRate: a.detail?.annualGrowthRate ?? existingSrc?.annualGrowthRate,

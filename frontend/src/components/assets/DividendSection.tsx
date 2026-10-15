@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useDividends, useAddDividend, useDeleteDividend, useUpdateDividendSettings } from '@/hooks/useDividends'
-import { formatMoney, formatManwon } from '@/lib/utils'
+import { formatWon, formatManwon, fmtQty } from '@/lib/utils'
 import KpiCard from '@/components/common/KpiCard'
 import type { Asset, StockDetail } from '@/types'
 
@@ -177,7 +177,7 @@ export default function DividendSection({ asset }: Props) {
         <div className="flex items-center justify-between pt-1">
           <div className="text-xs text-gray-500">
             {dpsNum > 0
-              ? <span>주당 {formatMoney(dpsNum)} × {qty.toLocaleString()}주 × {times}회/년</span>
+              ? <span>주당 {formatWon(dpsNum)} × {fmtQty(qty, '주')} × {times}회/년</span>
               : yldNum > 0
               ? <span>평가액 {formatManwon(val)} × {yldNum}%</span>
               : <span className="text-gray-600">배당수익률 또는 주당 배당금을 입력하세요</span>

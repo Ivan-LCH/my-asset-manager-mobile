@@ -41,6 +41,8 @@ export interface AssetCheckInput {
   entitlement?: boolean
   /** linkedStockId / linkedTo 연결 항목 — 잔액은 연결 계좌에 있으므로 0이 정상 */
   linked?: boolean
+  /** 주식 계좌 통합(총액) 행 */
+  isAccountLevel?: boolean
 }
 export interface AssetCheckResult { errors: string[]; warnings: string[] }
 
@@ -53,12 +55,29 @@ export function toCheckInput(a: {
   id: string; type: string; name: string; acquisitionDate?: string | null; disposalDate?: string | null
   quantity?: number | null; currentValue?: number | null; detail?: unknown
 }): AssetCheckInput {
-  const d = a.detail as { accountName?: string; ticker?: string; pensionType?: string; linkedStockId?: string } | undefined
+  const d = a.detail as { accountName?: string; ticker?: string; pensionType?: string; linkedStockId?: string; isAccountLevel?: boolean } | undefined
   return {
     id: a.id, type: a.type, name: a.name, acquisitionDate: a.acquisitionDate, disposalDate: a.disposalDate,
     quantity: a.quantity, currentValue: a.currentValue, accountName: d?.accountName, ticker: d?.ticker,
-    entitlement: isNationalPension(a.type, d?.pensionType), linked: !!d?.linkedStockId,
+    entitlement: isNationalPension(a.type, d?.pensionType), linked: !!d?.linkedStockId, isAccountLevel: !!d?.isAccountLevel,
   }
+}
+
+/**
+ * 계좌 입력 방식 혼용 차단(폼 전용, 저장 차단 오류): 같은 계좌에 계좌 통합(총액) 행과 종목별 행을 함께 두면
+ * 홈 합계·차트는 둘 다 더하고 연금 분석은 총액만 써서 이중 계산이 생긴다. 이미 저장된 데이터는 바꾸지 않는다.
+ * linkedStockId 연금 래퍼는 계좌를 가리키는 포인터라 혼용이 아니다(PENSION 이라 여기서 검사 안 함).
+ */
+export function accountModeError(input: AssetCheckInput, others: AssetCheckInput[]): string | null {
+  if (input.type !== 'STOCK' || input.disposalDate) return null
+  const key = accountKey(input.accountName)
+  const same = others.filter(o => o.id !== input.id && o.type === 'STOCK' && !o.disposalDate && accountKey(o.accountName) === key)
+  if (input.isAccountLevel) {
+    const n = same.filter(o => !o.isAccountLevel).length
+    return n ? `같은 계좌(${key})에 종목별 기록 ${n}건이 있어 계좌 통합(총액) 행을 둘 수 없습니다 — 이중 합산됩니다. 계좌명을 바꾸거나 종목별로 입력하세요.` : null
+  }
+  const n = same.filter(o => o.isAccountLevel).length
+  return n ? `같은 계좌(${key})에 계좌 통합(총액) 행이 있어 종목별 기록을 둘 수 없습니다 — 이중 합산됩니다. 다른 계좌명을 쓰거나 계좌 통합 행의 평가액을 수정하세요.` : null
 }
 
 const norm = (v?: string | null) => (v ?? '').trim().toUpperCase()

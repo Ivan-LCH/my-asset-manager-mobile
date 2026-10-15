@@ -365,7 +365,8 @@ export async function updateAsset(id: string, data: Record<string, any>): Promis
       acquisitionDate:  data.acquisitionDate  ?? row.acquisitionDate,
       acquisitionPrice: data.acquisitionPrice ?? row.acquisitionPrice,
       disposalDate:     data.disposalDate     ?? row.disposalDate,
-      disposalPrice:    data.disposalPrice    ?? row.disposalPrice,
+      // 매각일과 함께 저장하면 매각가는 그대로 반영 — 빈칸(undefined)도 "미입력"으로 비운다(기존 값 유지 X)
+      disposalPrice:    data.disposalDate && 'disposalPrice' in data ? data.disposalPrice : data.disposalPrice ?? row.disposalPrice,
       quantity:         data.quantity         ?? row.quantity,
       ownership:        data.ownership        ?? row.ownership ?? { husband: 50, wife: 50 },
       updatedAt:        new Date().toISOString(),

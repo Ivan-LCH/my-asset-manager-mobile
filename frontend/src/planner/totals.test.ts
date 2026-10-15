@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 import type { Asset } from '@/types'
 import { blankPlan, buildSnapshot, defaultPolicy, type PlannerPlan } from './model'
 import { simulate } from './engine'
-import { excludedSummary, formatEok, snapshotTotals } from './totals'
+import { excludedSummary, formatEok, reviewCounts, snapshotTotals } from './totals'
 
 const asset = (id: string, type: Asset['type'], value: number, extra: Partial<Asset> = {}): Asset => ({
   id, type, name: id, currentValue: value, acquisitionDate: '2020-01-01', acquisitionPrice: value, quantity: 1,
@@ -86,5 +86,44 @@ describe('snapshotTotals', () => {
     expect(formatEok(200_000_000)).toBe('2억')
     expect(formatEok(39_810_000)).toBe('3,981만원')
     expect(excludedSummary([])).toBe('')
+  })
+})
+
+// 2단계 — 홈 검토 건수 분리: 합계 영향 vs 분석 조건 미확인 (미확인 기본 정책은 합계를 바꾸지 않는다)
+describe('reviewCounts', () => {
+  it('미확인 기본 정책은 "분석 조건 미확인"으로만 센다 (합계 영향 0)', () => {
+    expect(reviewCounts(snap(fixture()))).toEqual({ totalImpact: 0, analysis: 4 })
+  })
+  it('모두 확인하면 0건', () => {
+    const assets = fixture()
+    const plan = blankPlan(AS_OF)
+    plan.policies = assets.map(a => ({ ...defaultPolicy(a), confirmed: true }))
+    expect(reviewCounts(snap(assets, plan))).toEqual({ totalImpact: 0, analysis: 0 })
+  })
+  it('기준일 뒤 취득은 합계 영향 + (미확인이면) 분석 미확인 양쪽에 자산 단위로 센다', () => {
+    const r = reviewCounts(snap([asset('f', 'SAVINGS', 1_000_000, { acquisitionDate: '2027-01-01' })]))
+    expect(r).toEqual({ totalImpact: 1, analysis: 1 })
+  })
+  it('미확인 합산 제외(excluded)는 합계 영향으로 센다', () => {
+    const assets = fixture()
+    const plan = blankPlan(AS_OF)
+    plan.policies = [{ ...defaultPolicy(assets[3]), role: 'excluded' }]
+    expect(reviewCounts(snap(assets, plan)).totalImpact).toBe(1)
+  })
+  it('linkedStockId 연결 연금: balance 0 · 제외 사유 linked · 평가액 있으면 합계 영향 경고', () => {
+    const stockA = asset('s1', 'STOCK', 250_000_000, { detail: { accountName: '퇴직IRP' } as any })
+    const wrapper = asset('퇴직연금', 'PENSION', 300_000_000, { detail: { pensionType: 'IRP', linkedStockId: '퇴직IRP' } as any })
+    const s = snap([stockA, wrapper])
+    const pos = s.positions.find(p => p.assetId === '퇴직연금')!
+    expect(pos.balance).toBe(0)
+    expect(pos.linkedAccount).toBe('퇴직IRP')
+    const t = snapshotTotals(s)
+    expect(t.total).toBe(250_000_000)
+    expect(t.excluded).toEqual([expect.objectContaining({ assetId: '퇴직연금', reason: 'linked', amount: 300_000_000 })])
+    expect(reviewCounts(s).totalImpact).toBe(1)   // LINKED_BALANCE
+    // 래퍼 평가액이 0이면(정상 연결) 합계 영향 경고 없음 (평가액 0인 제외 항목은 목록에 표시하지 않음)
+    const s2 = snap([stockA, { ...wrapper, currentValue: 0 }])
+    expect(snapshotTotals(s2).excluded).toEqual([])
+    expect(reviewCounts(s2).totalImpact).toBe(0)
   })
 })

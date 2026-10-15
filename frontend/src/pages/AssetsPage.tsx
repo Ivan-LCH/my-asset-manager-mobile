@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Plus } from 'lucide-react'
+import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import RealEstatePage from './RealEstatePage'
 import StockPage from './StockPage'
 import PensionPage from './PensionPage'
@@ -42,14 +44,36 @@ export default function AssetsPage() {
       {type === 'PENSION'     && <PensionPage />}
       {type === 'SAVINGS'     && <AssetPage types={['SAVINGS']} />}
       {type === 'ETC'         && <AssetPage types={['PHYSICAL', 'ETC']} />}
-      {type === 'ALL'         && <CurrentAssetsOverview />}
+      {type === 'ALL'         && <><AllCreate /><CurrentAssetsOverview /></>}
+    </div>
+  )
+}
+
+/** 전체 탭 신규 추가 — 유형 선택(defaultType 없이)부터 시작 */
+function AllCreate() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="px-4 md:px-6 pt-4 max-w-7xl mx-auto space-y-3" data-all-create>
+      <div className="flex justify-end">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+        >
+          <Plus className="w-4 h-4" /> 신규 추가
+        </button>
+      </div>
+      {open && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+          <AssetCreateForm onClose={() => setOpen(false)} />
+        </div>
+      )}
     </div>
   )
 }
 
 /** 전체: 유형별 요약 카드 — 각 유형 타일 수와 총액, 탭하면 해당 유형으로 */
 import { useAssets } from '@/hooks/useAssets'
-import { formatManwon, TYPE_LABELS, TYPE_COLORS } from '@/lib/utils'
+import { formatEok, formatManwon, TYPE_LABELS, TYPE_COLORS } from '@/lib/utils'
 
 function AllSummary() {
   const { data: assets = [], isLoading } = useAssets()
@@ -68,7 +92,7 @@ function AllSummary() {
     <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
         <p className="text-xs text-gray-500">총 자산</p>
-        <p className="text-2xl font-bold text-gray-100 mt-1">{formatManwon(grand)}</p>
+        <p className="text-2xl font-bold text-gray-100 mt-1">{formatEok(grand)}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {types.map(([t, v]) => (

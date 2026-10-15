@@ -1,5 +1,5 @@
 import { db, getAllAssets, getSettings, getRetirement } from '@/lib/db';
-import { blankPlan, buildSnapshot, fingerprint, planSchema, today, flowSchema, eventSchema, assetPensionAmount, type PlannerPlan, type Snapshot, type Scenario } from './model';
+import { blankPlan, buildSnapshot, fingerprint, planSchema, today, flowSchema, eventSchema, assetPensionAmount, isPensionPayoutAsset, type PlannerPlan, type Snapshot, type Scenario } from './model';
 import { simulate, type Run } from './engine';
 import { stockAccounts, accountFundingIds } from './accounts';
 export interface Context {
@@ -114,7 +114,10 @@ export function assetFlowPreview(plan: PlannerPlan, snapshot: Snapshot, assetId?
     for (const position of snapshot.positions) {
         if(assetId && position.assetId!==assetId)continue;
         const amount = assetPensionAmount(position.source), detail = position.source.detail as any;
-        if (amount === null || next.flows.some(f => f.id === 'asset-payout:' + position.assetId))
+        if (!isPensionPayoutAsset(position.source) || next.flows.some(f => f.id === 'asset-payout:' + position.assetId))
+            continue;
+        // 월액 미입력: 연결 래퍼는 계좌 잔액에서 인출하므로 정상 → 조용히 건너뜀. 그 외는 amount:null 로 만들어 FLOW_AMOUNT 미입력 경고를 띄운다.
+        if (amount === null && detail?.linkedStockId)
             continue;
         const startYear = detail?.expectedStartYear || detail?.pensionStartYear;
         const endYear = detail?.expectedEndYear;

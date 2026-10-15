@@ -1,5 +1,5 @@
 // 월 현금흐름 요약 카드 (대표 연도 = 은퇴 연도) — RetirementPage 에서 추출 (UI 간소화 ④).
-import { formatManwon } from '@/lib/utils'
+import { formatManwon, formatPnlManwon } from '@/lib/utils'
 import { fmtM, pnlColor } from '@/lib/retirementPlan'
 import type { CashFlowRow } from '@/lib/retirementCashflow'
 
@@ -52,7 +52,7 @@ export function MonthlyCashflowCard({ retirementRow, retirementYear, linkMode }:
           <p className="text-xs text-gray-500 mb-1">월 여유/부족</p>
           <p className={`text-base sm:text-xl font-bold ${pnlColor(retirementRow?.balance ?? 0)}`}>
             {retirementRow
-              ? `${retirementRow.balance >= 0 ? '+' : ''}${formatManwon(retirementRow.balance)}`
+              ? formatPnlManwon(retirementRow.balance)
               : '-'}
           </p>
           <p className="text-xs text-gray-600 mt-1">월 누적 × 12 − 세금(연) = 연 누적</p>

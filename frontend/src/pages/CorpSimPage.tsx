@@ -13,7 +13,7 @@ import {
 } from '@/lib/corpSim'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
 import { resolveAge } from '@/lib/people'
-import { formatManwon } from '@/lib/utils'
+import { formatManwon, formatPnlManwon } from '@/lib/utils'
 import type { CorpSimPlan, CorpTaxParams } from '@/types'
 
 // ── 헬퍼 ───────────────────────────────────────────────────
@@ -134,7 +134,7 @@ export default function CorpSimPage() {
         <Kpi label="아들 수령 배당(연·세후)" value={formatManwon(corp.perShare.son.net)} sub={`지분 ${plan.shareSon}%`} color="text-emerald-400" />
         <Kpi
           label="연간 현금 잔여"
-          value={`${firstNet >= 0 ? '+' : ''}${formatManwon(firstNet)}`}
+          value={formatPnlManwon(firstNet)}
           sub={runway.sustainable ? '지속가능(원금 보존)' : '초과인출 → 원금 매도'}
           color={firstNet >= 0 ? 'text-emerald-400' : 'text-red-400'}
         />
@@ -254,7 +254,7 @@ export default function CorpSimPage() {
                 <Row label="− 법인 유지비"><span className="text-sm text-orange-400 text-right w-full block">− {formatManwon(maint)}</span></Row>
                 <Row label="= 법인 잔여 현금(가수금·배당 원천)"><span className="text-sm text-blue-400 text-right w-full block">{formatManwon(distributable)}</span></Row>
                 <Row label="− 가수금 회수(연)"><span className="text-sm text-cyan-400 text-right w-full block">− {formatManwon(returnAnnual)}</span></Row>
-                <Row label="= 연간 잔여(원금 매도)"><span className={`text-sm font-bold text-right w-full block ${r0.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r0.net >= 0 ? '+' : ''}{formatManwon(r0.net)}</span></Row>
+                <Row label="= 연간 잔여(원금 매도)"><span className={`text-sm font-bold text-right w-full block ${r0.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatPnlManwon(r0.net)}</span></Row>
               </>
             )
           })()}
@@ -292,7 +292,7 @@ export default function CorpSimPage() {
                     <td className="py-2 pr-3 text-gray-300">{r.year}{r.principal <= 0 && <span className="ml-1 text-xs text-red-400">고갈</span>}</td>
                     <td className="text-right py-2 px-2 text-gray-200">{formatManwon(r.principal)}</td>
                     <td className="text-right py-2 px-2 text-gray-400">{formatManwon(r.cashIn)}</td>
-                    <td className={`text-right py-2 pl-2 ${r.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.net >= 0 ? '+' : ''}{formatManwon(r.net)}</td>
+                    <td className={`text-right py-2 pl-2 ${r.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatPnlManwon(r.net)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,6 +1,6 @@
 // 1단계 — 입력 검증 (날짜 범위·0원 미처분·계좌/티커 중복)
 import { describe, it, expect } from 'vitest'
-import { assetDateErrors, assetWarnings, backupWarnings, checkAsset, dateError, findDuplicateStock, seoulToday } from './validation'
+import { accountModeError, assetDateErrors, assetWarnings, backupWarnings, checkAsset, dateError, findDuplicateStock, seoulToday } from './validation'
 
 const TODAY = '2026-10-15'
 
@@ -94,5 +94,33 @@ describe('backupWarnings (가져오기 — 차단 없음)', () => {
     expect(w[1]).toMatch(/^A: 이력 날짜 1건.*0026-02-05/)
     expect(w[2]).toMatch(/^B: 수량·평가액/)
     expect(w[3]).toMatch(/^C: 같은 계좌/)
+  })
+})
+
+// 2단계 — 계좌 입력 방식 혼용 차단: 같은 계좌에 계좌 통합(총액) 행 + 종목별 행 금지 (폼 전용, 저장 데이터 불변)
+describe('accountModeError (계좌 통합/종목별 혼용 차단)', () => {
+  const perStock = (id: string, accountName = '키움') => ({ id, type: 'STOCK', name: id, accountName, isAccountLevel: false })
+  const aggregate = (id: string, accountName = '키움') => ({ id, type: 'STOCK', name: id, accountName, isAccountLevel: true })
+
+  it('종목별이 있는 계좌에 계좌 통합 행을 추가하면 차단', () => {
+    const err = accountModeError(aggregate('new'), [perStock('a'), perStock('b')])
+    expect(err).toMatch(/종목별 기록 2건/)
+    expect(err).toMatch(/이중 합산/)
+  })
+  it('계좌 통합 행이 있는 계좌에 종목별 행을 추가하면 차단', () => {
+    expect(accountModeError(perStock('new'), [aggregate('agg')])).toMatch(/계좌 통합\(총액\) 행이 있어/)
+  })
+  it('같은 모드끼리·다른 계좌·매각 행·자기 자신은 허용', () => {
+    expect(accountModeError(perStock('new'), [perStock('a')])).toBeNull()
+    expect(accountModeError(aggregate('new'), [perStock('a', '다른계좌')])).toBeNull()
+    expect(accountModeError(aggregate('new'), [{ ...perStock('a'), disposalDate: '2025-01-01' }])).toBeNull()
+    expect(accountModeError({ ...aggregate('same'), id: 'same' }, [perStock('same')])).toBeNull()
+  })
+  it('계좌명은 trim 기준으로 비교', () => {
+    expect(accountModeError(aggregate('new', ' 키움 '), [perStock('a', '키움')])).toMatch(/종목별/)
+  })
+  it('주식이 아니거나 매각된 입력은 검사하지 않는다', () => {
+    expect(accountModeError({ ...aggregate('new'), type: 'PENSION' }, [perStock('a')])).toBeNull()
+    expect(accountModeError({ ...aggregate('new'), disposalDate: '2025-01-01' }, [perStock('a')])).toBeNull()
   })
 })

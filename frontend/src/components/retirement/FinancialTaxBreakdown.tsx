@@ -4,7 +4,7 @@ import {useSettings} from '@/hooks/useSettings'
 import type {PensionScheduleRow} from '@/lib/pensionSim'
 import type {PensionSimPlan} from '@/types'
 
-const won=(value:number)=>Math.round(value).toLocaleString('ko-KR')+'원'
+import {formatWon as won} from '@/lib/utils'
 export function FinancialTaxBreakdown({row,plan}:{row:PensionScheduleRow;plan:PensionSimPlan}) {
   const {data:settings}=useSettings()
   const taxes=annualIncomeTax(row,plan,settings)

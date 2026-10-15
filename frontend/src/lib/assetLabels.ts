@@ -9,6 +9,18 @@ export const DISPOSAL_PRICE_MISSING = '매각가 미입력'
 export const disposalPriceMissing = (a: { disposalDate?: string | null; disposalPrice?: number | null }) =>
   !!a.disposalDate && !((a.disposalPrice ?? 0) > 0)
 
+// 월 수령액(expectedMonthlyPayout·pensionMonthly)도 0 = 미입력. 저장값은 그대로 두고 읽을 때만 해석한다.
+export const PAYOUT_MISSING = '미입력'
+export const LINKED_PAYOUT_MISSING = '계좌 인출 (월액 미입력)'
+
+/** 월 수령액이 비었거나 0 이하 */
+export const payoutMissing = (v?: number | null) => !(typeof v === 'number' && Number.isFinite(v) && v > 0)
+
+/** 월 수령액 표시 — 미입력이면 연결 래퍼는 "계좌 인출 (월액 미입력)", 그 외 "미입력". 입력값은 format 으로 표시 */
+export function payoutLabel(v: number | null | undefined, linked: boolean, format: (n: number) => string): string {
+  return payoutMissing(v) ? (linked ? LINKED_PAYOUT_MISSING : PAYOUT_MISSING) : format(v as number)
+}
+
 export interface ValueKpiLabels {
   /** 첫 번째 KPI (평가액 또는 매각가) */
   value: string
