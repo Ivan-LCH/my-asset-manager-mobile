@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Trash2, Pencil, Plus } from 'lucide-react'
 import { useAddHistory, useUpdateHistory, useDeleteHistory } from '@/hooks/useHistory'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
-import { formatMoney, formatPrice, fmtQty, formatKoreanDate } from '@/lib/utils'
+import { formatWon, formatPrice, fmtQty, formatKoreanDate } from '@/lib/utils'
 import { fetchStockPrice } from '@/lib/stockPrice'
 import { MIN_DATE, dateError, seoulToday } from '@/lib/validation'
 import type { Asset, HistoryItem, StockDetail } from '@/types'
@@ -249,7 +249,7 @@ export default function HistoryTable({ asset }: Props) {
                   </>
                 )}
                 <td className="px-3 py-2 text-right text-gray-100 font-medium">
-                  {h.value != null ? formatMoney(h.value) : '—'}
+                  {h.value != null ? formatWon(h.value) : '—'}
                 </td>
                 <td className="px-2 py-2">
                   <div className="flex gap-1 justify-end">

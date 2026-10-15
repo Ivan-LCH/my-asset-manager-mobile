@@ -13,7 +13,7 @@ import KpiCard from '@/components/common/KpiCard'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { EMPTY_PENSION_PLAN, sourcesFromAssets } from '@/lib/pensionSim'
 import { resolveAge, resolveRetirementYear } from '@/lib/people'
-import { formatMoney, formatManwon, formatEok, formatKoreanDate, cn } from '@/lib/utils'
+import { formatManwon, formatEok, formatKoreanDate, cn } from '@/lib/utils'
 import { usePlanner } from '@/planner/context'
 import { linkedWrapperInfo } from '@/planner/accounts'
 import { excludedSummary, snapshotTotals } from '@/planner/totals'
@@ -100,12 +100,12 @@ function SimTooltip({ active, payload, label }: SimTooltipProps) {
         {payload.map((p) => (
           <div key={p.name} className="flex items-center justify-between gap-2">
             <span className="text-xs text-gray-300">{p.name}</span>
-            <span className="text-xs text-gray-100">{formatMoney(p.value)}/월</span>
+            <span className="text-xs text-gray-100">{formatManwon(p.value)}/월</span>
           </div>
         ))}
         <div className="border-t border-gray-700 pt-1">
           <span className="text-xs text-gray-400">합계</span>
-          <span className="text-[12px] text-blue-400 ml-2">{formatMoney(total)}/월</span>
+          <span className="text-[12px] text-blue-400 ml-2">{formatManwon(total)}/월</span>
         </div>
       </div>
     </div>
@@ -204,7 +204,7 @@ export default function PensionPage() {
       {totals && (
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-4" data-pension-total>
           <p className="text-xs text-gray-500">연금 평가 합계 (총 자산 합산 기준)</p>
-          <p className="text-xl font-bold text-gray-100 mt-1">{formatMoney(totals.byType.PENSION ?? 0)}</p>
+          <p className="text-xl font-bold text-gray-100 mt-1">{formatEok(totals.byType.PENSION ?? 0)}</p>
           {pensionExcluded.length > 0 && <p className="text-xs text-gray-500 mt-1">{excludedSummary(pensionExcluded)}</p>}
         </div>
       )}
@@ -243,7 +243,7 @@ export default function PensionPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xs text-gray-500">월 수령</p>
-                    <p className="text-base font-bold text-gray-100 tracking-tight">{formatMoney(monthly)}</p>
+                    <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(monthly)}</p>
                   </div>
                 </div>
 
@@ -274,12 +274,12 @@ export default function PensionPage() {
                 {linked && (
                   <div className="mt-2 text-xs text-gray-500 space-y-0.5" data-linked-wrapper>
                     <p>
-                      계좌 합계 {formatMoney(linked.accountTotal)}
-                      {linked.lastHistory && <> · 원본 이력 {formatEok(linked.lastHistory.value)}({formatKoreanDate(linked.lastHistory.date, { weekday: false })})은 합산 안 함</>}
+                      계좌 합계 {formatManwon(linked.accountTotal)}
+                      {linked.lastHistory && <> · 원본 이력 {formatManwon(linked.lastHistory.value)}({formatKoreanDate(linked.lastHistory.date, { weekday: false })})은 합산 안 함</>}
                     </p>
                     {linked.mismatch && (
                       <p className="text-amber-400" data-linked-mismatch>
-                        이 항목 평가액 {formatMoney(a.currentValue)} ≠ 계좌 합계 — 총액에는 계좌 종목만 반영됩니다. 실제 잔액이 다르면 계좌 종목을 확인하세요.
+                        이 항목 평가액 {formatManwon(a.currentValue)} ≠ 계좌 합계 — 총액에는 계좌 종목만 반영됩니다. 실제 잔액이 다르면 계좌 종목을 확인하세요.
                       </p>
                     )}
                   </div>

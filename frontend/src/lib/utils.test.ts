@@ -1,8 +1,8 @@
 // 2단계 — 금액 표기 통일: fmtAmount 코어 + 기존 포맷터 래핑 + 수량·비율·한국 날짜
 import { describe, it, expect } from 'vitest'
 import {
-  fmtAmount, formatMoney, formatManwon, formatWon, formatEok, formatPnl, formatPnlManwon,
-  formatPrice, formatAvgPrice, fmtQty, fmtPct, formatKoreanDate,
+  fmtAmount, formatMoney, formatManwon, formatWon, formatEok, formatPnl, formatPnlManwon, formatPnlEok,
+  formatAxisAmount, formatPrice, formatAvgPrice, fmtQty, fmtPct, formatKoreanDate,
   formatAmountInput, parseAmountInput, isKrwPriceInput, MISSING,
 } from './utils'
 
@@ -68,6 +68,14 @@ describe('기존 포맷터 (시그니처 유지, 코어 래핑)', () => {
     expect(formatPnlManwon(-12_340_000)).toBe('-1,234만원')
     expect(formatPnlManwon(-3000)).toBe('0만원')
   })
+  it('formatPnlEok — 손익 KPI 부호 억 (1억 미만은 ±만원, 0은 부호 없음)', () => {
+    expect(formatPnlEok(115_000_000)).toBe('+1.15억')
+    expect(formatPnlEok(-115_000_000)).toBe('-1.15억')
+    expect(formatPnlEok(12_340_000)).toBe('+1,234만원')
+    expect(formatPnlEok(-12_340_000)).toBe('-1,234만원')
+    expect(formatPnlEok(0)).toBe('0만원')
+    expect(formatPnlEok(undefined)).toBe('—')
+  })
   it('formatWon / formatEok', () => {
     expect(formatWon(1234)).toBe('1,234원')
     expect(formatWon(undefined)).toBe('—')
@@ -83,6 +91,29 @@ describe('기존 포맷터 (시그니처 유지, 코어 래핑)', () => {
     expect(formatAvgPrice(170000)).toBe('170,000원')
     expect(formatAvgPrice(undefined)).toBe('—')
     expect(formatAvgPrice(170.5, 'USD')).toBe('$170.50')
+  })
+})
+
+describe('formatAxisAmount — 차트 축 자동 억/만원 (백만 금지)', () => {
+  it('won 입력: 1억 이상 억(소수1자리), 미만 만원', () => {
+    expect(formatAxisAmount(250_000_000)).toBe('2.5억')
+    expect(formatAxisAmount(100_000_000)).toBe('1억')
+    expect(formatAxisAmount(99_999_999)).toBe('10,000만원')
+    expect(formatAxisAmount(39_810_000)).toBe('3,981만원')
+    expect(formatAxisAmount(0)).toBe('0만원')
+  })
+  it('음수 축도 같은 규칙', () => {
+    expect(formatAxisAmount(-250_000_000)).toBe('-2.5억')
+    expect(formatAxisAmount(-39_810_000)).toBe('-3,981만원')
+  })
+  it('manwon 입력 스케일 지원 (AssetDetail 미니차트)', () => {
+    expect(formatAxisAmount(3981, { input: 'manwon' })).toBe('3,981만원')
+    expect(formatAxisAmount(25000, { input: 'manwon' })).toBe('2.5억')
+  })
+  it('백만 표기 없음 + 미입력은 —', () => {
+    expect(formatAxisAmount(123_456_789)).not.toContain('백만')
+    expect(formatAxisAmount(undefined)).toBe('—')
+    expect(formatAxisAmount(NaN)).toBe('—')
   })
 })
 

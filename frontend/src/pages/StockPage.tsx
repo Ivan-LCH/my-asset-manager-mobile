@@ -13,7 +13,7 @@ import KpiCard from '@/components/common/KpiCard'
 import { useStockAccountOwnership, useSaveStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { beginQuoteRequest, applyQuoteObservation, getAllAssets, FALLBACK_RATES } from '@/lib/db'
 import { fetchPrices } from '@/lib/stockPrice'
-import { formatMoney, formatManwon, formatPnl, formatPnlManwon, formatAvgPrice, formatPrice, fmtPct, fmtQty, cn } from '@/lib/utils'
+import { formatEok, formatManwon, formatPnlEok, formatPnl, formatPnlManwon, formatAvgPrice, formatPrice, fmtPct, fmtQty, cn } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { Asset, Settings, StockDetail } from '@/types'
 import { usePlanner } from '@/planner/context'
@@ -236,13 +236,13 @@ export default function StockPage() {
       <details className="rounded-xl border border-gray-700 p-3 text-xs text-gray-300"><summary className="cursor-pointer py-2">종목별 시세 조회 상태 · 거래소 기준시각은 제공되지 않습니다</summary>{active.map(a=>{const raw=settings?.['quote-status:'+a.id];let status:any=null;try{status=raw?JSON.parse(String(raw)):null}catch{}return <p key={a.id} className="py-2">{a.name} · {status?`${status.ok?'조회 반영':'기존 가격 유지'} · ${new Date(status.observedAt).toLocaleString('ko-KR')} ${status.reason??''}`:'아직 조회하지 않음 / 수동 입력'}{(a.detail as StockDetail)?.currency!=='KRW'&&!settings?.['exchange_rate_'+(a.detail as StockDetail)?.currency]?' · 환율 기본 가정 사용 중':''}</p>})}</details>
       {/* KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard label={activeAccount ? `평가 총액 (${activeAccount})` : '평가 총액'} value={formatMoney(totalVal)} color="default" />
+        <KpiCard label={activeAccount ? `평가 총액 (${activeAccount})` : '평가 총액'} value={formatEok(totalVal)} color="default" />
         <KpiCard
           label={activeAccount ? `평가 손익 (${activeAccount})` : '평가 손익'}
-          value={`${formatPnl(pnl)} (${fmtPct(roi, 1, { sign: true })})`}
+          value={`${formatPnlEok(pnl)} (${fmtPct(roi, 1, { sign: true })})`}
           color={pnl >= 0 ? 'green' : 'red'}
         />
-        <KpiCard label="투자 원금" value={formatMoney(totalCost)} color="default" />
+        <KpiCard label="투자 원금" value={formatEok(totalCost)} color="default" />
         <KpiCard
           label="연간 예상 배당"
           value={aggregateDividend!=null ? formatManwon(aggregateDividend) : '-'}

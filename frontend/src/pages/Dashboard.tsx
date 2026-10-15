@@ -3,7 +3,7 @@ import KpiCard from '@/components/common/KpiCard'
 import AssetChart from '@/components/common/AssetChart'
 import { usePlanner } from '@/planner/context'
 import { excludedSummary, snapshotTotals } from '@/planner/totals'
-import { formatMoney, formatManwon, TYPE_LABELS, TYPE_COLORS } from '@/lib/utils'
+import { formatEok, formatManwon, TYPE_LABELS, TYPE_COLORS } from '@/lib/utils'
 import type { AssetType } from '@/types'
 
 export default function Dashboard() {
@@ -39,9 +39,9 @@ export default function Dashboard() {
 
       {/* KPI 카드 */}
       <div className="grid grid-cols-3 gap-3 md:gap-4">
-        <KpiCard label="💰 총 자산"  value={formatMoney(totalAsset)} color="default" />
-        <KpiCard label="📉 총 부채"  value={formatMoney(totalLiab)}  color="red"     />
-        <KpiCard label="💎 순 자산"  value={formatMoney(netWorth)}   color="blue"    />
+        <KpiCard label="💰 총 자산"  value={formatEok(totalAsset)} color="default" />
+        <KpiCard label="📉 총 부채"  value={formatEok(totalLiab)}  color="red"     />
+        <KpiCard label="💎 순 자산"  value={formatEok(netWorth)}   color="blue"    />
       </div>
       {excluded.length > 0 && (
         <p className="text-xs text-gray-500" data-excluded-summary>{excludedSummary(excluded)}</p>

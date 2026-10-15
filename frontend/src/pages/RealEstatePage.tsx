@@ -6,7 +6,7 @@ import AssetChart from '@/components/common/AssetChart'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
-import { formatMoney, formatManwon, fmtPct } from '@/lib/utils'
+import { formatEok, formatManwon, fmtPct } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { Asset, RealEstateDetail } from '@/types'
 
@@ -50,9 +50,9 @@ export default function RealEstatePage() {
 
       {/* KPI */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <KpiCard label="시세 총액"       value={formatMoney(totalVal)}    color="default" />
-        <KpiCard label="부채 총계"       value={formatMoney(totalLiab)}   color="red"     />
-        <KpiCard label="순자산 (Equity)" value={formatMoney(netEquity)}   color="blue"    />
+        <KpiCard label="시세 총액"       value={formatEok(totalVal)}    color="default" />
+        <KpiCard label="부채 총계"       value={formatEok(totalLiab)}   color="red"     />
+        <KpiCard label="순자산 (Equity)" value={formatEok(netEquity)}   color="blue"    />
       </div>
 
       {/* 성장 추이 */}

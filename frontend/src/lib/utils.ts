@@ -66,6 +66,21 @@ export const formatWon = (val: number | null | undefined): string => fmtAmount(v
 /** 1.15억 / 3,981만원 — 합계 보조 표시용 */
 export const formatEok = (val: number | null | undefined): string => fmtAmount(val, { unit: 'eok' })
 
+/** +/- 부호 포함 억 포맷 — 손익 KPI용 (1억 미만은 ±만원). 옆에 % 병기 유지. */
+export const formatPnlEok = (pnl: number | null | undefined): string => fmtAmount(pnl, { unit: 'eok', sign: true })
+
+/** 차트 축 자동 포맷 — 크기에 따라 억(≥1억)/만원. 백만/M 표기 금지.
+ *  input: 값 스케일 명시 ('won' | 'manwon') — 호출부에서 /1e6 같은 임의 나눗셈 대신 사용. */
+export function formatAxisAmount(v: number | null | undefined, { input = 'won' }: { input?: 'won' | 'manwon' } = {}): string {
+  if (v == null || !Number.isFinite(v)) return MISSING
+  const won = input === 'manwon' ? v * 10000 : v
+  if (Math.abs(won) >= 1e8) {
+    const eok = noNegZero(Number((won / 1e8).toFixed(1)))
+    return `${eok.toFixed(1).replace(/\.0$/, '')}억`
+  }
+  return `${noNegZero(Math.round(won / 10000)).toLocaleString('ko-KR')}만원`
+}
+
 /** 수익/손실 색상 */
 export const getPnlColor = (pnl: number) =>
   pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-400'

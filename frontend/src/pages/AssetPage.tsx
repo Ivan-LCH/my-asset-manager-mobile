@@ -6,7 +6,7 @@ import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
-import { formatMoney, formatManwon, formatPnl, formatPnlManwon, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
+import { formatEok, formatManwon, formatPnlEok, formatPnlManwon, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { AssetType, Asset } from '@/types'
 
@@ -60,11 +60,11 @@ export default function AssetPage({ types }: Props) {
 
       {/* KPI */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <KpiCard label="평가 총액" value={formatMoney(totalVal)} color="default" />
-        <KpiCard label="투자 원금" value={formatMoney(totalCost)} color="default" />
+        <KpiCard label="평가 총액" value={formatEok(totalVal)} color="default" />
+        <KpiCard label="투자 원금" value={formatEok(totalCost)} color="default" />
         <KpiCard
           label="평가 손익"
-          value={`${formatPnl(pnl)} (${fmtPct(roi, 1, { sign: true })})`}
+          value={`${formatPnlEok(pnl)} (${fmtPct(roi, 1, { sign: true })})`}
           color={pnl >= 0 ? 'green' : 'red'}
         />
       </div>

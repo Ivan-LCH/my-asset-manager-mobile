@@ -8,7 +8,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { useDeleteAsset, useUpdateAsset } from '@/hooks/useAssets'
 import { useUpdateHistory } from '@/hooks/useHistory'
 import { useSettings } from '@/hooks/useSettings'
-import { formatMoney, formatManwon, formatPnl, formatPrice, formatAvgPrice, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
+import { fmtAmount, formatWon, formatPrice, formatAvgPrice, formatAxisAmount, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing, valueKpiLabels } from '@/lib/assetLabels'
 import type { Asset, RealEstateDetail, Settings, StockDetail, PensionDetail } from '@/types'
 import {
@@ -76,9 +76,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
   if (a.type === 'REAL_ESTATE') {
     const liab   = (d?.loanAmount ?? 0) + (d?.tenantDeposit ?? 0)
     const equity = displayVal - liab
-    k1 = labels.value; v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
-    k2 = '부채 총계';                          v2 = formatMoney(liab);     c2 = 'red'
-    k3 = labels.change;                       v3 = priceMissing ? '-' : formatMoney(equity);   c3 = 'blue'
+    k1 = labels.value; v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatWon(displayVal)
+    k2 = '부채 총계';                          v2 = formatWon(liab);     c2 = 'red'
+    k3 = labels.change;                       v3 = priceMissing ? '-' : formatWon(equity);   c3 = 'blue'
   } else if (a.type === 'STOCK' || a.type === 'PHYSICAL') {
     // acquisitionPrice = 네이티브 통화 기준 (USD 주식 → USD, KRW → KRW)
     const currency = (d as StockDetail | undefined)?.currency ?? 'KRW'
@@ -92,11 +92,11 @@ export default function AssetDetail({ asset, chartData }: Props) {
     const roi      = costKrw > 0 ? (pnlKrw / costKrw) * 100 : 0
 
     k1 = labels.value
-    v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
+    v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatWon(displayVal)
     c1 = priceMissing ? 'default' : pnlKrw >= 0 ? 'green' : 'red'
     pnlSub = priceMissing ? '' : (isFx && rate > 1)
-      ? `${formatPrice(displayVal / rate - costFx, currency, { sign: true })} / ${formatPnl(pnlKrw)} (${fmtPct(roi, 1, { sign: true })})`
-      : `${formatPnl(pnlKrw)} (${fmtPct(roi, 1, { sign: true })})`
+      ? `${formatPrice(displayVal / rate - costFx, currency, { sign: true })} / ${fmtAmount(pnlKrw, { sign: true })} (${fmtPct(roi, 1, { sign: true })})`
+      : `${fmtAmount(pnlKrw, { sign: true })} (${fmtPct(roi, 1, { sign: true })})`
 
     k2 = '평단가'
     v2 = formatAvgPrice(a.acquisitionPrice, currency)   // 네이티브 통화 표시
@@ -107,7 +107,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
     // 계좌 통합 모드 — 단가·수량 대신 원금 표시
     if ((d as StockDetail | undefined)?.isAccountLevel) {
       k2 = '총 원금'
-      v2 = formatMoney(costKrw)
+      v2 = formatWon(costKrw)
       k3 = '계좌 통합'; v3 = '-'; c3 = 'default'
     } else if (a.type === 'STOCK') {
       // 일반 종목 — 현재 가격(네이티브 통화) 계산: 현재가치 ÷ 수량, 외화는 환율 역산
@@ -116,9 +116,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
       curPrice = qty > 0 ? (isFx ? displayVal / rate / qty : displayVal / qty) : 0
     }
   } else {
-    k1 = labels.value;  v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
-    k2 = '취득가';      v2 = formatMoney(a.acquisitionPrice)
-    k3 = labels.change; v3 = priceMissing ? '-' : a.acquisitionPrice == null ? '—' : formatMoney(displayVal - a.acquisitionPrice)
+    k1 = labels.value;  v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatWon(displayVal)
+    k2 = '취득가';      v2 = formatWon(a.acquisitionPrice)
+    k3 = labels.change; v3 = priceMissing ? '-' : a.acquisitionPrice == null ? '—' : formatWon(displayVal - a.acquisitionPrice)
     c3 = priceMissing || a.acquisitionPrice == null ? 'default' : displayVal >= a.acquisitionPrice ? 'green' : 'red'
   }
 
@@ -247,8 +247,8 @@ export default function AssetDetail({ asset, chartData }: Props) {
             label={a.type === 'PHYSICAL' ? '투자원금' : '취득가'}
             value={
               a.type === 'PHYSICAL'
-                ? a.acquisitionPrice == null || a.quantity == null ? '—' : formatMoney(a.acquisitionPrice * a.quantity)
-                : formatMoney(a.acquisitionPrice)
+                ? a.acquisitionPrice == null || a.quantity == null ? '—' : formatWon(a.acquisitionPrice * a.quantity)
+                : formatWon(a.acquisitionPrice)
             }
           />
         )}
@@ -260,8 +260,8 @@ export default function AssetDetail({ asset, chartData }: Props) {
 
         {a.type === 'REAL_ESTATE' && (
           <>
-            <InfoCell label="대출금" value={formatMoney(d?.loanAmount)} valueClass="text-red-300" />
-            <InfoCell label="보증금" value={formatMoney(d?.tenantDeposit)} valueClass="text-orange-300" />
+            <InfoCell label="대출금" value={formatWon(d?.loanAmount)} valueClass="text-red-300" />
+            <InfoCell label="보증금" value={formatWon(d?.tenantDeposit)} valueClass="text-orange-300" />
             <div className="bg-gray-700/40 rounded-lg px-3 py-2.5">
               <p className="text-xs text-gray-500 mb-1.5">구분</p>
               <div className="flex gap-1.5 flex-wrap">
@@ -341,7 +341,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
             ) : (
               <button onClick={() => { setValInput(String(a.currentValue)); setEditingVal(true) }}
                 className="flex items-center gap-1.5 group/val">
-                <span className="text-sm font-semibold text-gray-100">{formatMoney(a.currentValue)}</span>
+                <span className="text-sm font-semibold text-gray-100">{formatWon(a.currentValue)}</span>
                 <Pencil className="w-3 h-3 text-gray-600 group-hover/val:text-blue-400 transition-colors" />
                 <span className="text-xs text-gray-500">평가액 갱신</span>
                 {lastUpdate && <span className="text-xs text-gray-600">· {lastUpdate}</span>}
@@ -374,12 +374,12 @@ export default function AssetDetail({ asset, chartData }: Props) {
               <YAxis
                 tick={{ fill: '#6b7280', fontSize: 10 }}
                 tickLine={false} axisLine={false}
-                tickFormatter={(v: number) => `${Math.round(v).toLocaleString()}만`}
+                tickFormatter={(v: number) => formatAxisAmount(v, { input: 'manwon' })}
                 width={52}
               />
               <Tooltip
                 contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
-                formatter={(v: number) => [`${v.toLocaleString()}만원`]}
+                formatter={(v: number) => [formatAxisAmount(v, { input: 'manwon' })]}
                 labelStyle={{ color: '#9ca3af', fontSize: 11 }}
               />
               <Area
