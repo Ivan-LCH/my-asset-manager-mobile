@@ -3,7 +3,7 @@ import { stockAccounts, stockAccountUrl } from './accounts';
 import type { Snapshot } from './model';
 import { excludedSummary, snapshotTotals } from './totals';
 
-const won = (v: number) => Math.round(v).toLocaleString('ko-KR') + '원';
+import { formatWon as won } from '@/lib/utils';
 const labels: Record<string, string> = { STOCK: '주식·투자 계좌', REAL_ESTATE: '부동산', PENSION: '연금', SAVINGS: '예적금', PHYSICAL: '실물', ETC: '기타' };
 export default function CurrentOverview({ snapshot }: { snapshot: Snapshot }) {
     const { total, debt, byType, excluded } = snapshotTotals(snapshot);

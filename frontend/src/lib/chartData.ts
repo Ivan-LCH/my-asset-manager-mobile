@@ -110,12 +110,16 @@ export function generateChartData(
     ? todayNum - PERIOD_DAYS[period]
     : toDayNum('2015-01-01')
 
-  // 레코드 수집 (hideInChart 자산 제외)
+  // 레코드 수집 (hideInChart 자산, 주식 계좌에 연결된 연금 래퍼 제외)
+  // 연결 연금(linkedStockId)은 잔액이 계좌 종목에 이미 있으므로 hideInChart 체크와 무관하게 항상 제외 —
+  // 래퍼의 옛 이력값(예: 퇴직연금 3억)이 ffill 로 이중 계산되지 않게 한다.
   const metaById = new Map<string, Asset>()
   const records: Record_[] = []
   for (const asset of assets) {
     metaById.set(asset.id, asset)
-    if ((asset.detail as { hideInChart?: boolean } | undefined)?.hideInChart) continue
+    const detail = asset.detail as { hideInChart?: boolean; linkedStockId?: string } | undefined
+    if (detail?.hideInChart) continue
+    if (asset.type === 'PENSION' && detail?.linkedStockId?.trim()) continue
     records.push(...assetToRecords(asset, today))
   }
   if (records.length === 0) return []

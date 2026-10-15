@@ -2,11 +2,16 @@ import { useState, useEffect } from 'react'
 import { useCreateAsset, useAssetsByType } from '@/hooks/useAssets'
 import type { Asset, AssetType, Currency, StockDetail, Ownership, OwnershipPreset } from '@/types'
 import { ownershipFromPreset, presetFromOwnership } from '@/types'
-import { TYPE_LABELS, ASSET_TYPES, cn } from '@/lib/utils'
+import { TYPE_LABELS, ASSET_TYPES, cn, formatKoreanDate, isKrwPriceInput } from '@/lib/utils'
 import RealEstateFutureValueFields from '@/components/assets/RealEstateFutureValueFields'
 import StockSearch from '@/components/common/StockSearch'
+import AmountInput from '@/components/common/AmountInput'
 import { fetchStockPrice } from '@/lib/stockPrice'
-import { MIN_DATE, checkAsset, isNationalPension, seoulToday, toCheckInput } from '@/lib/validation'
+import { MIN_DATE, accountModeError, checkAsset, isNationalPension, seoulToday, toCheckInput } from '@/lib/validation'
+import { useSettings } from '@/hooks/useSettings'
+import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
+import { hasSpouse } from '@/lib/people'
+import { accountOwnerOf, defaultOwnership } from '@/lib/ownershipDefaults'
 
 interface Props {
   defaultType?: AssetType
@@ -27,7 +32,8 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
 
   const [type,             setType]             = useState<AssetType>(defaultType ?? 'STOCK')
   const [name,             setName]             = useState('')
-  const [acquisitionDate,  setAcquisitionDate]  = useState(new Date().toISOString().slice(0, 10))
+  // Asia/Seoul 기준 오늘 (UTC toISOString 은 00~09시 KST 에 어제가 됨)
+  const [acquisitionDate,  setAcquisitionDate]  = useState(() => seoulToday())
   const [acquisitionPrice, setAcquisitionPrice] = useState(0)
   const [quantity,         setQuantity]         = useState(0)
 
@@ -39,7 +45,9 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   const [hasTenant,     setHasTenant]     = useState(false)
   const [futureValue,   setFutureValue]   = useState(0)
   const [futureYear,    setFutureYear]    = useState(0)
-  const [ownership,     setOwnership]     = useState<Ownership>({ husband: 50, wife: 50 })
+  // 명의: 사용자가 고르기 전에는 유형·배우자 유무·계좌 기존 명의로 정한 기본값을 따른다
+  const [ownershipPick, setOwnershipPick] = useState<Ownership | null>(null)
+  const setOwnership = (o: Ownership) => setOwnershipPick(o)
 
   // 주식
   const [housingTaxStartDate,setHousingTaxStartDate]=useState('')
@@ -130,6 +138,15 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
     return undefined
   }
 
+  const { data: settings } = useSettings()
+  const { data: accountOwners } = useStockAccountOwnership()
+  const stockAccountName = type === 'STOCK' && stockMode === 'account' ? (accountName || name) : accountName
+  const ownershipDefault = defaultOwnership(type, {
+    hasSpouse: hasSpouse(settings),
+    accountOwner: type === 'STOCK' ? accountOwnerOf(accountOwners, stockAccountName) : undefined,
+  })
+  const ownership = ownershipPick ?? ownershipDefault.ownership
+
   const [formErrors, setFormErrors] = useState<string[]>([])
   const today = seoulToday()
 
@@ -145,8 +162,13 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
       accountName: accountMode ? (accountName || name) : accountName, ticker: accountMode ? undefined : ticker,
       entitlement: isNationalPension(type, pensionType),
     }, existingStocks.map(toCheckInput), today)
-    setFormErrors(check.errors)
-    if (check.errors.length) return
+    // 같은 계좌에 계좌 통합(총액) 행과 종목별 행 혼용 금지 — 이중 합산 방지
+    const modeError = type === 'STOCK'
+      ? accountModeError({ type, name, accountName: stockAccountName, isAccountLevel: accountMode }, existingStocks.map(toCheckInput))
+      : null
+    const errors = modeError ? [...check.errors, modeError] : check.errors
+    setFormErrors(errors)
+    if (errors.length) return
     if (check.warnings.length && !window.confirm(check.warnings.join('\n') + '\n\n그래도 추가할까요?')) return
     // 계좌 통합 모드 — 평가액 직접 입력, 수량=1, 취득단가=총 원금
     if (type === 'STOCK' && stockMode === 'account') {
@@ -197,7 +219,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
             {ASSET_TYPES.map((t) => (
               <button
                 key={t}
-                onClick={() => setType(t)}
+                onClick={() => { setType(t); setOwnershipPick(null) }}
                 className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                   type === t
                     ? 'bg-blue-600 text-white'
@@ -246,13 +268,17 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
         <div>
           <label className={labelCls}>취득일</label>
           <input type="date" min={MIN_DATE} max={today} className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
+          {acquisitionDate && <p className="text-xs text-gray-500 mt-1" data-korean-date>{formatKoreanDate(acquisitionDate)}</p>}
         </div>
         <div>
           <label className={labelCls}>
             {type === 'STOCK' && stockMode === 'account' ? '총 원금 (만원 아님, 원)' : (type === 'STOCK' || type === 'PHYSICAL') ? '취득단가' : '취득가'}
             {type === 'STOCK' && stockMode === 'stock' && priceLoading && <span className="text-blue-400"> (조회 중...)</span>}
           </label>
-          <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />
+          {/* 원화 금액은 천단위 콤마 입력, 외화·실물 단가는 소수 가능 → number 입력 */}
+          {isKrwPriceInput(type, currency, stockMode === 'account')
+            ? <AmountInput className={inputCls} value={acquisitionPrice} onChange={setAcquisitionPrice} />
+            : <input type="number" inputMode="decimal" className={inputCls} value={acquisitionPrice} onChange={(e) => setAcquisitionPrice(+e.target.value)} />}
           {type === 'STOCK' && stockMode === 'stock' && priceHint && (
             <p className="text-xs text-blue-400/80 mt-1">{priceHint}</p>
           )}
@@ -260,7 +286,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
         {type === 'STOCK' && stockMode === 'account' && (
           <div className="col-span-2">
             <label className={labelCls}>현재 평가액 (원)</label>
-            <input type="number" inputMode="decimal" className={inputCls} value={accountValue} onChange={(e) => setAccountValue(+e.target.value)} placeholder="계좌 전체 현재 가치" />
+            <AmountInput className={inputCls} value={accountValue} onChange={setAccountValue} placeholder="계좌 전체 현재 가치" />
           </div>
         )}
         {(type === 'STOCK' || type === 'PHYSICAL') && stockMode !== 'account' && (
@@ -284,11 +310,11 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>대출금</label>
-                  <input type="number" inputMode="decimal" className={inputCls} value={loanAmount} onChange={(e) => setLoanAmount(+e.target.value)} />
+                  <AmountInput className={inputCls} value={loanAmount} onChange={setLoanAmount} />
                 </div>
                 <div>
                   <label className={labelCls}>보증금</label>
-                  <input type="number" inputMode="decimal" className={inputCls} value={tenantDeposit} onChange={(e) => setTenantDeposit(+e.target.value)} />
+                  <AmountInput className={inputCls} value={tenantDeposit} onChange={setTenantDeposit} />
                 </div>
               </div>
               <div className="flex gap-5">
@@ -353,7 +379,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
           {stockMode === 'account' && (
             <div>
               <label className={labelCls}>연간 배당금 (원, 선택)</label>
-              <input type="number" inputMode="decimal" className={inputCls} value={annualDividend} onChange={(e) => setAnnualDividend(+e.target.value)} placeholder="예: 1200000" />
+              <AmountInput className={inputCls} value={annualDividend} onChange={setAnnualDividend} placeholder="예: 1,200,000" />
             </div>
           )}
           {detailToggle}
@@ -385,7 +411,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
                   </div>
                   <div>
                     <label className={labelCls}>월 수령액</label>
-                    <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlyStock} onChange={(e) => setPensionMonthlyStock(+e.target.value)} />
+                    <AmountInput className={inputCls} value={pensionMonthlyStock} onChange={setPensionMonthlyStock} />
                   </div>
                 </div>
               )}
@@ -413,7 +439,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
             </div>
             <div className="col-span-2">
               <label className={labelCls}>월 수령 예상액</label>
-              <input type="number" inputMode="decimal" className={inputCls} value={expectedMonthlyPayout} onChange={(e) => setExpectedMonthlyPayout(+e.target.value)} />
+              <AmountInput className={inputCls} value={expectedMonthlyPayout} onChange={setExpectedMonthlyPayout} />
             </div>
           </div>
           {detailToggle}
@@ -444,7 +470,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
                   </div>
                   <div>
                     <label className={labelCls}>월 수령액</label>
-                    <input type="number" inputMode="decimal" className={inputCls} value={pensionMonthlySav} onChange={(e) => setPensionMonthlySav(+e.target.value)} />
+                    <AmountInput className={inputCls} value={pensionMonthlySav} onChange={setPensionMonthlySav} />
                   </div>
                 </div>
               )}
@@ -455,7 +481,10 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
 
       {/* 공용 명의 (전 자산 공통) — 주식은 계좌 단위 명의 관리를 사용하므로 폼에서 제외 */}
       {type !== 'STOCK' && <div className="space-y-2 pt-2 border-t border-gray-700">
-        <p className="text-xs text-gray-500 font-medium uppercase">명의 지분 (전 자산 공통)</p>
+        <p className="text-xs text-gray-500 font-medium uppercase">
+          명의 지분 (전 자산 공통)
+          {!ownershipPick && ownershipDefault.review && <span className="ml-1.5 normal-case text-amber-400" data-ownership-review>기본값 · 확인하세요</span>}
+        </p>
         <p className="text-xs text-gray-600">부부 가정 시 보통 50:50. 퇴직연금·국민연금 등 본인 자산은 '내 100%'. 1인별 건보·세금 산정에 활용.</p>
         <div className="flex gap-1">
           {(['mine', 'half', 'wife', 'custom'] as OwnershipPreset[]).map((p) => (

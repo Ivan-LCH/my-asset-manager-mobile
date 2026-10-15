@@ -88,6 +88,22 @@ describe('generateChartData — forward fill', () => {
     expect(generateChartData([p], 'all', 'type')).toEqual([])
   })
 
+  // 2단계 — linkedStockId 연금 래퍼는 hideInChart 체크와 무관하게 항상 제외 (옛 이력 3억 ffill 이중 계산 방지)
+  it('linkedStockId 연금 래퍼는 hideInChart=false·평가액 3억이어도 차트에 합산되지 않는다', () => {
+    const stock = asset({ id: 's', acquisitionPrice: 100, quantity: 10, currentValue: 1500 })
+    const wrapper = asset({
+      id: 'w', type: 'PENSION', name: '퇴직연금',
+      acquisitionDate: '2020-01-01', acquisitionPrice: 300_000_000, quantity: 1,
+      currentValue: 300_000_000,
+      detail: { expectedStartYear: 2050, expectedEndYear: 2070, expectedMonthlyPayout: 0, annualGrowthRate: 0, pensionType: 'IRP', linkedStockId: '퇴직IRP', hideInChart: false } as never,
+      history: [{ date: '2026-04-22', value: 300_000_000 }],
+    })
+    const rows = generateChartData([stock, wrapper], 'all', 'type')
+    expect(rows.some((r) => r.label === '🛡️ 연금' && r.value > 0)).toBe(false)
+    expect(valueAt(rows, STOCK_LABEL, '2026-04-22')).toBe(1000)
+    expect(valueAt(rows, STOCK_LABEL, today())).toBe(1500)
+  })
+
   it('group_by=name 이면 이름별로 분리된다', () => {
     const a = asset({ id: 'a', name: '삼성', currentValue: 1000, acquisitionPrice: 100, quantity: 10 })
     const b = asset({ id: 'b', name: 'TSLA', currentValue: 500, acquisitionPrice: 100, quantity: 5 })

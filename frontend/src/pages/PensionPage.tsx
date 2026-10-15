@@ -13,8 +13,9 @@ import KpiCard from '@/components/common/KpiCard'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { EMPTY_PENSION_PLAN, sourcesFromAssets } from '@/lib/pensionSim'
 import { resolveAge, resolveRetirementYear } from '@/lib/people'
-import { formatMoney, formatManwon, cn } from '@/lib/utils'
+import { formatMoney, formatManwon, formatEok, formatKoreanDate, cn } from '@/lib/utils'
 import { usePlanner } from '@/planner/context'
+import { linkedWrapperInfo } from '@/planner/accounts'
 import { excludedSummary, snapshotTotals } from '@/planner/totals'
 import type { Asset, PensionDetail, StockDetail, SavingsDetail, PensionSimPlan, PensionTaxType } from '@/types'
 
@@ -114,15 +115,6 @@ function SimTooltip({ active, payload, label }: SimTooltipProps) {
 // ── 메인 ───────────────────────────────────────────────────
 export default function PensionPage() {
   const pensionAssets = useAssetsByType('PENSION')
-  const stockAssets = useAssetsByType('STOCK')
-  const stockByAccount = new Map<string, { total: number; name: string }>()
-  for (const s of stockAssets) {
-    const acct = (s.detail as { accountName?: string } | undefined)?.accountName ?? ''
-    if (acct) {
-      const cur = stockByAccount.get(acct) ?? { total: 0, name: s.name }
-      stockByAccount.set(acct, { total: cur.total + s.currentValue, name: s.name })
-    }
-  }
   const { data: allAssets = [], isLoading: loadPension } = useAssets()
   const { data: settings } = useSettings()
   const { data: savedSim } = usePensionSim()
@@ -231,8 +223,10 @@ export default function PensionPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {active.map((a) => {
             const d = a.detail as PensionDetail | undefined
-            const monthly = d?.expectedMonthlyPayout ?? 0
-            const growth = d?.annualGrowthRate ?? 0
+            const monthly = d?.expectedMonthlyPayout
+            const growth = d?.annualGrowthRate
+            // 연결 계좌(accountName trim·종목 id 해석) — 계좌 종목 합계가 현재가치, 래퍼 자체 평가액·옛 이력은 합산 안 함
+            const linked = linkedWrapperInfo(a, allAssets)
             const simSrc = simPlan.sources.find((s) => s.id === a.id)
             const taxType = simSrc?.taxType ?? 'taxable'
 
@@ -263,24 +257,33 @@ export default function PensionPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-gray-500 mb-0.5">현재 가치</p>
-                    {(() => {
-                      const acct = (d as { linkedStockId?: string } | undefined)?.linkedStockId
-                      const linked = acct ? stockByAccount.get(acct) : undefined
-                      return linked ? (
-                        <>
-                          <p className="text-emerald-400 truncate">{formatManwon(linked.total)}</p>
-                          <p className="text-xs text-emerald-500/80 truncate">연동: {acct}</p>
-                        </>
-                      ) : (
-                        <p className="text-gray-300 truncate">{formatManwon(a.currentValue)}</p>
-                      )
-                    })()}
+                    {linked ? (
+                      <>
+                        <p className="text-emerald-400 truncate">{formatManwon(linked.accountTotal)}</p>
+                        <p className="text-xs text-emerald-500/80 truncate">연동: {linked.accountName}</p>
+                      </>
+                    ) : (
+                      <p className="text-gray-300 truncate">{formatManwon(a.currentValue)}</p>
+                    )}
                   </div>
                   <div>
                     <p className="text-gray-500 mb-0.5">연 증가율</p>
-                    <p className="text-blue-400 font-semibold">{growth}%</p>
+                    <p className="text-blue-400 font-semibold">{growth == null ? '—' : `${growth}%`}</p>
                   </div>
                 </div>
+                {linked && (
+                  <div className="mt-2 text-xs text-gray-500 space-y-0.5" data-linked-wrapper>
+                    <p>
+                      계좌 합계 {formatMoney(linked.accountTotal)}
+                      {linked.lastHistory && <> · 원본 이력 {formatEok(linked.lastHistory.value)}({formatKoreanDate(linked.lastHistory.date, { weekday: false })})은 합산 안 함</>}
+                    </p>
+                    {linked.mismatch && (
+                      <p className="text-amber-400" data-linked-mismatch>
+                        이 항목 평가액 {formatMoney(a.currentValue)} ≠ 계좌 합계 — 총액에는 계좌 종목만 반영됩니다. 실제 잔액이 다르면 계좌 종목을 확인하세요.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* 과세 구분 */}
                 <div className="pt-2 mt-2 border-t border-gray-700/60" onClick={(e) => e.stopPropagation()}>

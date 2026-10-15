@@ -6,7 +6,8 @@ import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
-import { formatMoney, formatManwon, formatPnl, TYPE_LABELS } from '@/lib/utils'
+import { formatMoney, formatManwon, formatPnl, formatPnlManwon, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
+import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { AssetType, Asset } from '@/types'
 
 interface Props { types: AssetType[] }
@@ -63,7 +64,7 @@ export default function AssetPage({ types }: Props) {
         <KpiCard label="투자 원금" value={formatMoney(totalCost)} color="default" />
         <KpiCard
           label="평가 손익"
-          value={`${formatPnl(pnl)} (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`}
+          value={`${formatPnl(pnl)} (${fmtPct(roi, 1, { sign: true })})`}
           color={pnl >= 0 ? 'green' : 'red'}
         />
       </div>
@@ -123,9 +124,11 @@ function AssetTile({
   onClick: () => void
 }) {
   const isSold = !!asset.disposalDate
-  const val    = isSold ? (asset.disposalPrice ?? 0) : asset.currentValue
+  // 매각가 미입력(빈 값·0)은 0만원·전액 손실로 보이지 않게 '—' / "매각가 미입력"
+  const priceMissing = disposalPriceMissing(asset)
+  const val    = isSold ? (priceMissing ? null : asset.disposalPrice!) : asset.currentValue
   const cost   = (asset.acquisitionPrice ?? 0) * (isQtyBased(asset) ? (asset.quantity ?? 0) : 1)
-  const pnl = val - cost
+  const pnl = val == null ? 0 : val - cost
   const roi = cost > 0 ? (pnl / cost) * 100 : 0
 
   return (
@@ -147,7 +150,7 @@ function AssetTile({
               {asset.name}
             </p>
             <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
-              <span>{asset.acquisitionDate ?? '-'} 취득</span>
+              <span>{asset.acquisitionDate ? formatKoreanDate(asset.acquisitionDate, { weekday: false }) : '—'} 취득</span>
               {isSold && <span className="text-red-400">· 매각</span>}
               <OwnershipBadge ownership={asset.ownership} />
             </p>
@@ -155,7 +158,7 @@ function AssetTile({
           <div className="text-right shrink-0">
             <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(val)}</p>
             {isQtyBased(asset) && (
-              <p className="text-xs text-gray-500 mt-0.5">{(asset.quantity ?? 0).toLocaleString()} 보유</p>
+              <p className="text-xs text-gray-500 mt-0.5">{fmtQty(asset.quantity)} 보유</p>
             )}
           </div>
         </div>
@@ -176,11 +179,11 @@ function AssetTile({
               <span className={`text-sm font-bold ${
                 pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'
               }`}>
-                {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+                {priceMissing ? DISPOSAL_PRICE_MISSING : fmtPct(roi, 1, { sign: true })}
               </span>
             </div>
             <p className={`text-xs ${pnl > 0 ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-              {pnl >= 0 ? '+' : ''}{formatManwon(pnl)}
+              {priceMissing ? '—' : formatPnlManwon(pnl)}
             </p>
           </div>
         </div>

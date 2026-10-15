@@ -8,7 +8,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { useDeleteAsset, useUpdateAsset } from '@/hooks/useAssets'
 import { useUpdateHistory } from '@/hooks/useHistory'
 import { useSettings } from '@/hooks/useSettings'
-import { formatMoney, formatManwon, formatPnl, formatPrice, formatAvgPrice, TYPE_LABELS } from '@/lib/utils'
+import { formatMoney, formatManwon, formatPnl, formatPrice, formatAvgPrice, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing, valueKpiLabels } from '@/lib/assetLabels'
 import type { Asset, RealEstateDetail, Settings, StockDetail, PensionDetail } from '@/types'
 import {
@@ -95,14 +95,14 @@ export default function AssetDetail({ asset, chartData }: Props) {
     v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
     c1 = priceMissing ? 'default' : pnlKrw >= 0 ? 'green' : 'red'
     pnlSub = priceMissing ? '' : (isFx && rate > 1)
-      ? `${pnlKrw >= 0 ? '+' : ''}${formatPrice(displayVal / rate - costFx, currency)} / ${formatPnl(pnlKrw)} (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`
-      : `${formatPnl(pnlKrw)} (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`
+      ? `${formatPrice(displayVal / rate - costFx, currency, { sign: true })} / ${formatPnl(pnlKrw)} (${fmtPct(roi, 1, { sign: true })})`
+      : `${formatPnl(pnlKrw)} (${fmtPct(roi, 1, { sign: true })})`
 
     k2 = '평단가'
-    v2 = formatAvgPrice(avgPrice, currency)   // 네이티브 통화 표시
+    v2 = formatAvgPrice(a.acquisitionPrice, currency)   // 네이티브 통화 표시
     c2 = 'default'
 
-    k3 = '보유 수량'; v3 = `${qty.toLocaleString()}`; c3 = 'default'
+    k3 = '보유 수량'; v3 = fmtQty(a.quantity); c3 = 'default'
 
     // 계좌 통합 모드 — 단가·수량 대신 원금 표시
     if ((d as StockDetail | undefined)?.isAccountLevel) {
@@ -117,9 +117,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
     }
   } else {
     k1 = labels.value;  v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
-    k2 = '취득가';      v2 = formatMoney(a.acquisitionPrice ?? 0)
-    k3 = labels.change; v3 = priceMissing ? '-' : formatMoney(displayVal - (a.acquisitionPrice ?? 0))
-    c3 = priceMissing ? 'default' : displayVal >= (a.acquisitionPrice ?? 0) ? 'green' : 'red'
+    k2 = '취득가';      v2 = formatMoney(a.acquisitionPrice)
+    k3 = labels.change; v3 = priceMissing ? '-' : a.acquisitionPrice == null ? '—' : formatMoney(displayVal - a.acquisitionPrice)
+    c3 = priceMissing || a.acquisitionPrice == null ? 'default' : displayVal >= a.acquisitionPrice ? 'green' : 'red'
   }
 
   const miniChart = chartData
@@ -216,7 +216,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
             )
           })()}
           {d?.ticker && <span className="text-gray-600 shrink-0">· {d.ticker}</span>}
-          {isSold && <span className="text-red-400 font-semibold shrink-0">매각 ({a.disposalDate})</span>}
+          {isSold && <span className="text-red-400 font-semibold shrink-0">매각 ({a.disposalDate ? formatKoreanDate(a.disposalDate, { weekday: false }) : ''})</span>}
           {!isSold && lastUpdate && (
             <span className="text-gray-500 shrink-0" title="이력 마지막 기록일">· 갱신 {lastUpdate}</span>
           )}
@@ -233,7 +233,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
             : TYPE_LABELS[a.type]
           }
         />
-        <InfoCell label="취득일" value={a.acquisitionDate ?? '-'} />
+        <InfoCell label="취득일" value={a.acquisitionDate ? formatKoreanDate(a.acquisitionDate, { weekday: false }) : '—'} />
         {a.type === 'STOCK' ? (
           // 현재 가격 (현재가치 ÷ 수량) — 계좌 통합 모드에선 단가가 없으므로 미표시
           isStockItem ? (
@@ -247,21 +247,21 @@ export default function AssetDetail({ asset, chartData }: Props) {
             label={a.type === 'PHYSICAL' ? '투자원금' : '취득가'}
             value={
               a.type === 'PHYSICAL'
-                ? formatMoney((a.acquisitionPrice ?? 0) * (a.quantity ?? 0))
-                : formatMoney(a.acquisitionPrice ?? 0)
+                ? a.acquisitionPrice == null || a.quantity == null ? '—' : formatMoney(a.acquisitionPrice * a.quantity)
+                : formatMoney(a.acquisitionPrice)
             }
           />
         )}
         <InfoCell
           label="상태"
-          value={isSold ? `매각 (${a.disposalDate})` : '보유중'}
+          value={isSold ? `매각 (${a.disposalDate ? formatKoreanDate(a.disposalDate, { weekday: false }) : ''})` : '보유중'}
           valueClass={isSold ? 'text-red-400 font-semibold' : 'text-emerald-400 font-semibold'}
         />
 
         {a.type === 'REAL_ESTATE' && (
           <>
-            <InfoCell label="대출금" value={formatMoney(d?.loanAmount ?? 0)} valueClass="text-red-300" />
-            <InfoCell label="보증금" value={formatMoney(d?.tenantDeposit ?? 0)} valueClass="text-orange-300" />
+            <InfoCell label="대출금" value={formatMoney(d?.loanAmount)} valueClass="text-red-300" />
+            <InfoCell label="보증금" value={formatMoney(d?.tenantDeposit)} valueClass="text-orange-300" />
             <div className="bg-gray-700/40 rounded-lg px-3 py-2.5">
               <p className="text-xs text-gray-500 mb-1.5">구분</p>
               <div className="flex gap-1.5 flex-wrap">

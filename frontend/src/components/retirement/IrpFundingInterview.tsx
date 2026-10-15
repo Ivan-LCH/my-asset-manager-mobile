@@ -25,7 +25,7 @@ export function irpFundingQuestions(plan:PensionSimPlan,value:IncomeTaxSettings)
   })
 }
 
-const won=(n:number)=>`${Math.round(n).toLocaleString('ko-KR')}원`
+import {formatWon as won} from '@/lib/utils'
 const button='rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-left text-xs hover:border-blue-400 hover:bg-gray-700'
 const input='w-full rounded border border-gray-600 bg-gray-950 p-2 text-sm text-gray-100'
 

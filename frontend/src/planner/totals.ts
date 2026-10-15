@@ -1,5 +1,6 @@
 import type { AssetType } from '@/types';
-import type { Position, Snapshot } from './model';
+import { formatEok } from '@/lib/utils';
+import type { Issue, Position, Snapshot } from './model';
 
 // 화면 공통 합계 기준 — 홈(/)·전체 자산(CurrentOverview)·통합 대시보드(/history)·연금 탭이 모두 이 함수만 사용한다.
 // buildSnapshot 의 balance(합산 제외·연결 잔액·기준일 뒤 취득은 0)를 합산하고,
@@ -27,8 +28,18 @@ export const EXCLUDED_REASON_LABELS: Record<ExcludedReason, string> = {
 function excludedReason(p: Position, asOfDate: string): ExcludedReason | null {
     if (p.source.acquisitionDate && p.source.acquisitionDate > asOfDate) return 'future';
     if (p.role === 'excluded') return 'excluded';
-    if (p.linkedTo) return 'linked';
+    if (p.linkedTo || p.linkedAccount) return 'linked';
     return null;
+}
+// 홈 "검토" 건수 분리 — 합계에 영향을 주는 확인(기준일 뒤 취득·처분·관측, 연결 잔액, 원본 없는 부채, 미확인 합산 제외·동일 잔액 연결)과
+// 합계와 무관한 분석 조건 미확인(분류·수익·인출 가정, 옛 미래연도 등). 건수는 각각 자산(sourceId) 단위로 중복 제거(두 쪽에 모두 셀 수 있음).
+const TOTAL_IMPACT_CODES = new Set(['FUTURE_ACQUISITION', 'FUTURE_SALE', 'FUTURE_OBSERVATION', 'LINKED_BALANCE', 'ORPHAN_DEBT']);
+export interface ReviewCounts { totalImpact: number; analysis: number }
+export function reviewCounts(snapshot: Snapshot): ReviewCounts {
+    const impact = new Set<string>(), analysis = new Set<string>();
+    for (const i of snapshot.issues as Issue[]) (TOTAL_IMPACT_CODES.has(i.code) ? impact : analysis).add(i.sourceId);
+    for (const p of snapshot.positions) if (!p.confirmed && (p.role === 'excluded' || p.linkedTo)) impact.add(p.assetId);
+    return { totalImpact: impact.size, analysis: analysis.size };
 }
 export function snapshotTotals(snapshot: Snapshot): SnapshotTotals {
     const byType: Partial<Record<AssetType, number>> = {}, excluded: ExcludedItem[] = [];
@@ -43,11 +54,8 @@ export function snapshotTotals(snapshot: Snapshot): SnapshotTotals {
     const debt = snapshot.debts.reduce((s, d) => s + d.balance, 0);
     return { total, debt, net: total - debt, byType, excluded: excluded.sort((a, b) => b.amount - a.amount) };
 }
-/** 1.15억 / 3,981만원 — 합계 보조 표시용 */
-export function formatEok(v: number): string {
-    if (Math.abs(v) >= 1e8) return `${(v / 1e8).toFixed(2).replace(/\.?0+$/, '')}억`;
-    return `${Math.round(v / 10000).toLocaleString('ko-KR')}만원`;
-}
+/** 1.15억 / 3,981만원 — 합계 보조 표시용 (lib/utils fmtAmount 코어) */
+export { formatEok };
 /** "제외 항목: OO 합산 제외 1.15억, …" (없으면 빈 문자열) */
 export function excludedSummary(items: ExcludedItem[]): string {
     if (!items.length) return '';

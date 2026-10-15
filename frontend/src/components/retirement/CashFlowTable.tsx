@@ -82,19 +82,19 @@ export function CashFlowTable({ rows, retirementYear, linkMode }: {
                     {fmtM(row.totalExpense)}
                   </td>
                   <td className={`text-right py-2 px-1 font-bold ${pnlColor(row.balance)}`}>
-                    {row.balance >= 0 ? '+' : ''}{fmtM(row.balance)}
+                    {fmtM(row.balance, { sign: true })}
                   </td>
                   <td className={`text-right py-2 px-1 ${row.taxAnnual < 0 ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
                     {row.taxAnnual < 0 ? fmtM(row.taxAnnual) : '—'}
                   </td>
                   <td className={`hidden landscape:table-cell text-right py-2 px-1 ${row.lumpsumReceived > 0 ? 'text-emerald-400 font-semibold' : 'text-gray-600'}`}>
-                    {row.lumpsumReceived > 0 ? '+' : ''}{row.lumpsumReceived > 0 ? fmtM(row.lumpsumReceived) : '—'}
+                    {row.lumpsumReceived > 0 ? fmtM(row.lumpsumReceived, { sign: true }) : '—'}
                   </td>
                   <td className={`hidden landscape:table-cell text-right py-2 px-1 ${hasEmergency ? 'text-orange-400 font-semibold' : 'text-gray-600'}`}>
                     {hasEmergency ? fmtM(row.emergencyAnnual) : '—'}
                   </td>
                   <td className={`text-right py-2 pl-1 font-semibold ${pnlColor(row.cumulative)}`}>
-                    {row.cumulative >= 0 ? '+' : ''}{fmtM(row.cumulative)}
+                    {fmtM(row.cumulative, { sign: true })}
                   </td>
                 </tr>
               )

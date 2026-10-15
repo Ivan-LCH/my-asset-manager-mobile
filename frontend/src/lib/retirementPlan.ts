@@ -74,9 +74,13 @@ export const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0
 }
 
-/** 만원 단위 숫자만(표 셀용 — '만원' 접미사 없음). 단위는 표 상단에 표시. */
-export const fmtM = (v: number): string =>
-  Number.isFinite(v) ? Math.round(v / 10000).toLocaleString('ko-KR') : '—'
+/** 만원 단위 숫자만(표 셀용 — '만원' 접미사 없음). 단위는 표 상단에 표시. 반올림 후 -0 → 0, sign 이면 양수에 '+' */
+export const fmtM = (v: number, { sign }: { sign?: boolean } = {}): string => {
+  if (!Number.isFinite(v)) return '—'
+  const n = Math.round(v / 10000)
+  const z = Object.is(n, -0) ? 0 : n
+  return (z > 0 && sign ? '+' : '') + z.toLocaleString('ko-KR')
+}
 
 export function pnlColor(v: number) {
   if (v > 0) return 'text-emerald-400'

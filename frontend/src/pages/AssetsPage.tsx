@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Plus } from 'lucide-react'
+import AssetCreateForm from '@/components/assets/AssetCreateForm'
 import RealEstatePage from './RealEstatePage'
 import StockPage from './StockPage'
 import PensionPage from './PensionPage'
@@ -42,7 +44,29 @@ export default function AssetsPage() {
       {type === 'PENSION'     && <PensionPage />}
       {type === 'SAVINGS'     && <AssetPage types={['SAVINGS']} />}
       {type === 'ETC'         && <AssetPage types={['PHYSICAL', 'ETC']} />}
-      {type === 'ALL'         && <CurrentAssetsOverview />}
+      {type === 'ALL'         && <><AllCreate /><CurrentAssetsOverview /></>}
+    </div>
+  )
+}
+
+/** 전체 탭 신규 추가 — 유형 선택(defaultType 없이)부터 시작 */
+function AllCreate() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="px-4 md:px-6 pt-4 max-w-7xl mx-auto space-y-3" data-all-create>
+      <div className="flex justify-end">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+        >
+          <Plus className="w-4 h-4" /> 신규 추가
+        </button>
+      </div>
+      {open && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+          <AssetCreateForm onClose={() => setOpen(false)} />
+        </div>
+      )}
     </div>
   )
 }

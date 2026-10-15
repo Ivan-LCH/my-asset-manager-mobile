@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Trash2, Pencil, Plus } from 'lucide-react'
 import { useAddHistory, useUpdateHistory, useDeleteHistory } from '@/hooks/useHistory'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
-import { formatMoney, formatPrice } from '@/lib/utils'
+import { formatMoney, formatPrice, fmtQty, formatKoreanDate } from '@/lib/utils'
 import { fetchStockPrice } from '@/lib/stockPrice'
 import { MIN_DATE, dateError, seoulToday } from '@/lib/validation'
 import type { Asset, HistoryItem, StockDetail } from '@/types'
@@ -236,20 +236,20 @@ export default function HistoryTable({ asset }: Props) {
                   h.filled ? 'opacity-45' : 'hover:bg-gray-700/30'
                 }`}
               >
-                <td className={`px-3 py-2 text-gray-300 ${h.filled ? 'italic' : ''}`}>{h.date}</td>
+                <td className={`px-3 py-2 text-gray-300 ${h.filled ? 'italic' : ''}`}>{formatKoreanDate(h.date, { weekday: false })}</td>
                 {qtyBased && (
                   <>
                     <td className="px-3 py-2 text-right text-gray-300 font-mono">
-                      {h.price ? formatPrice(h.price, currency) : '-'}
+                      {h.price != null ? formatPrice(h.price, currency) : '—'}
                     </td>
                     <td className="px-3 py-2 text-right text-gray-300">
-                      {h.quantity?.toLocaleString() ?? '-'}
+                      {h.quantity != null ? fmtQty(h.quantity) : '—'}
                       {!h.filled && h.quantitySourceDate && <small className="block text-amber-300" title={`${h.quantitySourceDate}의 수량 유지 가정 · 실제 거래 수량은 확인 후 수정하세요`}>추정 수량</small>}
                     </td>
                   </>
                 )}
                 <td className="px-3 py-2 text-right text-gray-100 font-medium">
-                  {h.value ? formatMoney(h.value) : '-'}
+                  {h.value != null ? formatMoney(h.value) : '—'}
                 </td>
                 <td className="px-2 py-2">
                   <div className="flex gap-1 justify-end">
