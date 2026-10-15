@@ -186,10 +186,15 @@ export function availability(snapshot: Snapshot) {
         events: snapshot.plan.events.some(e => e.status !== 'cancelled'),
     };
 }
+/** 월 지급액을 등록할 수 있는 자산(연금 계약·연금형 자산) */
+export function isPensionPayoutAsset(asset?: Asset): boolean {
+    return !!asset && (asset.type === 'PENSION' || !!(asset.detail as any)?.isPensionLike);
+}
+/** 등록 월 지급액. 0 이하는 미입력(null) — 저장된 0과 빈칸을 구분할 수 없으므로 0원 확정 수입으로 보지 않는다 */
 export function assetPensionAmount(asset?: Asset): number | null {
     if (!asset)
         return null;
     const detail = asset.detail as any;
     const amount = asset.type === 'PENSION' ? detail?.expectedMonthlyPayout : detail?.isPensionLike ? detail?.pensionMonthly : null;
-    return typeof amount === 'number' && Number.isFinite(amount) && amount >= 0 ? amount : null;
+    return typeof amount === 'number' && Number.isFinite(amount) && amount > 0 ? amount : null;
 }

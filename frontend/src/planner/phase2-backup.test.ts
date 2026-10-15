@@ -10,8 +10,10 @@ import { pensionInputs } from '@/lib/analysisInputs'
 import { annualPension } from '@/lib/annualPension'
 import type { Asset, PensionDetail } from '@/types'
 import { buildSnapshot, defaultPolicy, today } from './model'
-import { simulate } from './engine'
-import { loadContext } from './storage'
+import { calcPensionByYear } from '@/lib/pensionCalc'
+import { resolveAge } from '@/lib/people'
+import { simulate, baseScenario } from './engine'
+import { assetFlowPreview, loadContext } from './storage'
 import { accountName, linkedWrapperInfo, pensionAccountNames } from './accounts'
 import { reviewCounts, snapshotTotals } from './totals'
 
@@ -130,5 +132,66 @@ describe.skipIf(!existsSync(BACKUP))('2단계 실데이터 백업 — 연결 연
     expect(runAfter.months[0].netWorth).toBe(runBefore.months[0].netWorth)
     expect(runAfter.months[0].netWorth).toBe(2_373_608_701)
     expect(pensionOpening).toBe(276_732_045)
+  }, 60_000)
+
+  // 2단계c — 시장가 충격은 주식·ETF 전체(IRP 포함). 2b 의 role 전환으로 IRP 278,282,045 가 충격에서 빠졌던 것을 되돌린다.
+  it('시장가 충격 −10%: IRP 포함 주식 전체 → 첫달 순자산 2,329,983,834', async () => {
+    await importBackup(load())
+    const ctx = await loadContext(), settings = await getSettings()
+    const plan = { ...ctx.plan, asOfDate: today(), endDate: ctx.plan.endDate || '2056-12-31' }
+    const snap = buildSnapshot(await getAllAssets(), settings, plan, new Date().toISOString())
+    const base = simulate(snap).months[0].netWorth
+    const shocked = simulate(snap, { ...baseScenario, id: 'shock', name: '−10%', marketShock: -10 }).months[0].netWorth
+    // 종전(role==='investment') 대상만 −10% 했을 때의 값 — 산술로 재현
+    const roleSum = snap.positions.filter(p => p.role === 'investment' && !p.linkedTo).reduce((s, p) => s + p.balance, 0)
+    const roleBased = base - roleSum + snap.positions.filter(p => p.role === 'investment' && !p.linkedTo).reduce((s, p) => s + Math.round(p.balance * 0.9), 0)
+    const marketSet = snap.positions.filter(p => p.source.type === 'STOCK' && !p.linkedTo && !['excluded', 'cash', 'deposit'].includes(p.role))
+    console.log(`[phase2c] 충격 대상 ${marketSet.length}행 합계=${won(marketSet.reduce((s, p) => s + p.balance, 0))} · 기본=${won(base)} · 종전 role 기준 −10%=${won(roleBased)} · 시장가 −10%=${won(shocked)}`)
+    expect(base).toBe(2_373_608_701)
+    expect(roleBased).toBe(2_357_812_037)
+    expect(shocked).toBe(2_329_983_834)
+    expect(marketSet.reduce((s, p) => s + p.balance, 0)).toBe(436_248_701)
+    expect(marketSet.every(p => p.source.type === 'STOCK')).toBe(true)
+  }, 60_000)
+
+  // 2단계c — 0 = 미입력: 저장 데이터는 그대로, 읽는 쪽 해석만 바뀐다. 홈·분석·연금 시뮬 숫자는 불변.
+  it('0 = 미입력 — 홈·분석·연금 숫자 불변, 미리보기는 연결 래퍼 건너뛰고 TIGER 는 미입력 표시', async () => {
+    await importBackup(load())
+    const ctx = await loadContext(), settings = await getSettings(), sim = await getPensionSim()
+    const assets = await getAllAssets()
+    const plan = { ...ctx.plan, asOfDate: today(), endDate: ctx.plan.endDate || '2056-12-31' }
+    const snap = buildSnapshot(assets, settings, plan, new Date().toISOString())
+    const totals = snapshotTotals(snap)
+    const year = Number(today().slice(0, 4))
+    const analysis = annualPension(pensionInputs(sim, assets), assets, year, 2070, { simulation: false, currentYear: year })
+    const benefit = (y: number) => Math.round(analysis.rows.find(r => r.year === y)?.benefitAnnual ?? NaN)
+    const calcMap = calcPensionByYear(assets, resolveAge(settings)), calc = { get: (y: number) => Math.round(calcMap.get(y) ?? NaN) }
+    const preview = assetFlowPreview(plan, snap)
+    const flows = preview.plan.flows.map(f => `${f.name.replace(' 지급 계획', '')}=${f.amount === null ? '미입력' : won(f.amount)}`)
+    // 저장값 자체는 그대로(0) — 읽을 때만 미입력으로 해석
+    const zeroPayout = assets.filter(a => a.type === 'PENSION' && (a.detail as PensionDetail)?.expectedMonthlyPayout === 0).map(a => a.name)
+    const zeroDisposal = assets.filter(a => a.disposalDate && a.disposalPrice === 0).map(a => a.name)
+
+    console.log(`[phase2c] 홈 총자산=${won(totals.total)} 순자산=${won(totals.net)} · 분석 연금 시작 잔액=${won(analysis.rows[0]?.opening ?? 0)} · 2031 수령=${won(benefit(2031) ?? 0)} · 2041 수령=${won(benefit(2041) ?? 0)}`)
+    console.log(`[phase2c] 은퇴/법인 등록 연금(월) 2030=${won(calc.get(2030) ?? 0)} 2040=${won(calc.get(2040) ?? 0)}`)
+    console.log(`[phase2c] 미리보기 ${preview.plan.flows.length}건: ${flows.join(', ')}`)
+    console.log(`[phase2c] 저장 0 유지 — 월액 0: ${zeroPayout.join(', ')} · 매각가 0: ${zeroDisposal.join(', ')}`)
+
+    expect(totals.total).toBe(2_648_608_701)
+    expect(totals.net).toBe(2_488_608_701)
+    expect(analysis.rows[0]?.opening).toBe(276_732_045)
+    expect(benefit(2031)).toBe(15_120_000)
+    expect(benefit(2041)).toBe(58_823_351)
+    expect(calc.get(2030)).toBe(1_160_000)
+    expect(calc.get(2040)).toBe(4_803_151)
+    // 9건(0원 3건) → 7건: 연결 래퍼 2건 건너뜀, TIGER 는 amount null(FLOW_AMOUNT 미입력 경고 대상)
+    expect(preview.plan.flows).toHaveLength(7)
+    expect(preview.names).not.toContain('이창호-퇴직IRP-미래에셋')
+    expect(preview.names).not.toContain(WRAPPER)
+    expect(preview.plan.flows.find(f => f.name.startsWith('TIGER 미국나스닥100'))?.amount).toBeNull()
+    expect(preview.plan.flows.filter(f => f.amount === 0)).toHaveLength(0)
+    expect(preview.plan.flows.filter(f => f.amount !== null).map(f => f.amount)).toEqual([1_160_000, 100_000, 150_000, 1_906_250, 100_000, 1_107_450])
+    expect(zeroPayout).toEqual(expect.arrayContaining(['이창호-퇴직IRP-미래에셋', WRAPPER]))
+    expect(zeroDisposal).toEqual(['최진숙-새마을적금'])
   }, 60_000)
 })

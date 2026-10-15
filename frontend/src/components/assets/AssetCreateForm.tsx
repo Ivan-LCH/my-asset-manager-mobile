@@ -60,7 +60,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   const [ticker,        setTicker]        = useState('')
   const [isPensionLike, setIsPensionLike] = useState(false)
   const [pensionStartYearStock, setPensionStartYearStock] = useState(0)
-  const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState(0)
+  const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState<number | undefined>()  // 빈칸 = 미입력
   const [accountValue,    setAccountValue]    = useState(0)  // 계좌 통합: 현재 평가액
   const [annualDividend,  setAnnualDividend]  = useState(0)  // 계좌 통합: 연간 배당금
 
@@ -68,13 +68,13 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
   const [pensionType,            setPensionType]           = useState('')
   const [expectedStartYear,      setExpectedStartYear]     = useState(new Date().getFullYear() + 20)
   const [expectedEndYear,        setExpectedEndYear]       = useState(new Date().getFullYear() + 40)
-  const [expectedMonthlyPayout,  setExpectedMonthlyPayout] = useState(0)
+  const [expectedMonthlyPayout,  setExpectedMonthlyPayout] = useState<number | undefined>()  // 빈칸 = 미입력
   const [annualGrowthRate,       setAnnualGrowthRate]      = useState(3)
 
   // 예적금
   const [isPensionLikeSav,    setIsPensionLikeSav]    = useState(false)
   const [pensionStartYearSav, setPensionStartYearSav] = useState(0)
-  const [pensionMonthlySav,   setPensionMonthlySav]   = useState(0)
+  const [pensionMonthlySav,   setPensionMonthlySav]   = useState<number | undefined>()
 
   // 동일 이름의 기존 종목이 있으면 티커/통화/계좌 자동 채움
   useEffect(() => {
@@ -120,20 +120,20 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
       if (stockMode === 'account') return {
         accountName: accountName || name, currency: 'KRW', isAccountLevel: true, isPensionLike,
         dividendDps: annualDividend || undefined, dividendCycle: '연간',
-        ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
+        ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock || undefined } : {}),
       }
       return {
         accountName, currency, ticker: ticker || undefined, isPensionLike,
-        ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
+        ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock || undefined } : {}),
       }
     }
     if (type === 'PENSION') return {
       pensionType: pensionType || undefined,
-      expectedStartYear, expectedEndYear, expectedMonthlyPayout, annualGrowthRate,
+      expectedStartYear, expectedEndYear, expectedMonthlyPayout: expectedMonthlyPayout || undefined, annualGrowthRate,
     }
     if (type === 'SAVINGS') return {
       isPensionLike: isPensionLikeSav,
-      ...(isPensionLikeSav ? { pensionStartYear: pensionStartYearSav, pensionMonthly: pensionMonthlySav } : {}),
+      ...(isPensionLikeSav ? { pensionStartYear: pensionStartYearSav, pensionMonthly: pensionMonthlySav || undefined } : {}),
     }
     return undefined
   }
@@ -411,7 +411,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
                   </div>
                   <div>
                     <label className={labelCls}>월 수령액</label>
-                    <AmountInput className={inputCls} value={pensionMonthlyStock} onChange={setPensionMonthlyStock} />
+                    <AmountInput className={inputCls} value={pensionMonthlyStock} onChange={setPensionMonthlyStock} placeholder="미입력" />
                   </div>
                 </div>
               )}
@@ -439,7 +439,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
             </div>
             <div className="col-span-2">
               <label className={labelCls}>월 수령 예상액</label>
-              <AmountInput className={inputCls} value={expectedMonthlyPayout} onChange={setExpectedMonthlyPayout} />
+              <AmountInput className={inputCls} value={expectedMonthlyPayout} onChange={setExpectedMonthlyPayout} placeholder="미입력" />
             </div>
           </div>
           {detailToggle}
@@ -470,7 +470,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
                   </div>
                   <div>
                     <label className={labelCls}>월 수령액</label>
-                    <AmountInput className={inputCls} value={pensionMonthlySav} onChange={setPensionMonthlySav} />
+                    <AmountInput className={inputCls} value={pensionMonthlySav} onChange={setPensionMonthlySav} placeholder="미입력" />
                   </div>
                 </div>
               )}

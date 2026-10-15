@@ -14,6 +14,7 @@ import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { EMPTY_PENSION_PLAN, sourcesFromAssets } from '@/lib/pensionSim'
 import { resolveAge, resolveRetirementYear } from '@/lib/people'
 import { formatManwon, formatEok, formatKoreanDate, cn } from '@/lib/utils'
+import { payoutLabel, payoutMissing } from '@/lib/assetLabels'
 import { usePlanner } from '@/planner/context'
 import { linkedWrapperInfo } from '@/planner/accounts'
 import { excludedSummary, snapshotTotals } from '@/planner/totals'
@@ -243,7 +244,7 @@ export default function PensionPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xs text-gray-500">월 수령</p>
-                    <p className="text-base font-bold text-gray-100 tracking-tight">{formatManwon(monthly)}</p>
+                    <p className={payoutMissing(monthly) ? 'text-xs font-medium text-amber-400 mt-1' : 'text-base font-bold text-gray-100 tracking-tight'}>{payoutLabel(monthly, !!d?.linkedStockId, formatManwon)}</p>
                   </div>
                 </div>
 

@@ -28,7 +28,7 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [acquisitionPrice, setAcquisitionPrice] = useState(asset.acquisitionPrice ?? 0)
   const [quantity,         setQuantity]         = useState(asset.quantity ?? 0)
   const [disposalDate,     setDisposalDate]     = useState(asset.disposalDate ?? '')
-  const [disposalPrice,    setDisposalPrice]    = useState(asset.disposalPrice ?? 0)
+  const [disposalPrice,    setDisposalPrice]    = useState<number | undefined>(asset.disposalPrice || undefined)  // 0 = 미입력 → 빈칸
 
   // 부동산
   const [address,       setAddress]       = useState((d?.address       as string)  ?? '')
@@ -49,13 +49,13 @@ export default function AssetForm({ asset, onClose }: Props) {
   const [isPensionLike, setIsPensionLike] = useState((d?.isPensionLike as boolean) ?? false)
   const [isAccountLevel, setIsAccountLevel] = useState(!!(d?.isAccountLevel as boolean | undefined))
   const [pensionStartYearStock, setPensionStartYearStock] = useState((d?.pensionStartYear as number) ?? 0)
-  const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState((d?.pensionMonthly   as number) ?? 0)
+  const [pensionMonthlyStock,   setPensionMonthlyStock]   = useState<number | undefined>((d?.pensionMonthly as number) || undefined)  // 0 = 미입력 → 빈칸
 
   // 연금
   const [pensionType,            setPensionType]            = useState((d?.pensionType            as string) ?? '')
   const [expectedStartYear,      setExpectedStartYear]      = useState((d?.expectedStartYear      as number) ?? 0)
   const [expectedEndYear,        setExpectedEndYear]        = useState((d?.expectedEndYear        as number) ?? 0)
-  const [expectedMonthlyPayout,  setExpectedMonthlyPayout]  = useState((d?.expectedMonthlyPayout  as number) ?? 0)
+  const [expectedMonthlyPayout,  setExpectedMonthlyPayout]  = useState<number | undefined>((d?.expectedMonthlyPayout as number) || undefined)  // 0 = 미입력 → 빈칸
   const [annualGrowthRate,       setAnnualGrowthRate]       = useState((d?.annualGrowthRate       as number) ?? 0)
   const [hideInChart,            setHideInChart]            = useState((d?.hideInChart            as boolean) ?? false)
   const [linkedStockId,          setLinkedStockId]          = useState((d?.linkedStockId          as string)  ?? '')
@@ -63,19 +63,19 @@ export default function AssetForm({ asset, onClose }: Props) {
   // 예적금
   const [isPensionLikeSav, setIsPensionLikeSav] = useState((d?.isPensionLike  as boolean) ?? false)
   const [pensionStartYearSav, setPensionStartYearSav] = useState((d?.pensionStartYear as number) ?? 0)
-  const [pensionMonthlySav,   setPensionMonthlySav]   = useState((d?.pensionMonthly   as number) ?? 0)
+  const [pensionMonthlySav,   setPensionMonthlySav]   = useState<number | undefined>((d?.pensionMonthly as number) || undefined)
 
   const buildDetail = (type: AssetType) => {
     if (type === 'REAL_ESTATE') return { address, loanAmount, tenantDeposit, isOwned, hasTenant, futureValue: futureValue || undefined, futureYear: futureYear || undefined, housingTaxStartDate: housingTaxStartDate || undefined, constructionHoldingTaxAnnual }
     if (type === 'STOCK') return {
       accountName, currency, ticker: ticker || undefined,
       isPensionLike, isAccountLevel,
-      ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock } : {}),
+      ...(isPensionLike ? { pensionStartYear: pensionStartYearStock, pensionMonthly: pensionMonthlyStock || undefined } : {}),
     }
-    if (type === 'PENSION') return { pensionType: pensionType || undefined, expectedStartYear, expectedEndYear, expectedMonthlyPayout, annualGrowthRate, hideInChart, linkedStockId: linkedStockId || undefined }
+    if (type === 'PENSION') return { pensionType: pensionType || undefined, expectedStartYear, expectedEndYear, expectedMonthlyPayout: expectedMonthlyPayout || undefined, annualGrowthRate, hideInChart, linkedStockId: linkedStockId || undefined }
     if (type === 'SAVINGS') return {
       isPensionLike: isPensionLikeSav,
-      ...(isPensionLikeSav ? { pensionStartYear: pensionStartYearSav, pensionMonthly: pensionMonthlySav } : {}),
+      ...(isPensionLikeSav ? { pensionStartYear: pensionStartYearSav, pensionMonthly: pensionMonthlySav || undefined } : {}),
     }
     return undefined
   }
@@ -105,7 +105,8 @@ export default function AssetForm({ asset, onClose }: Props) {
       acquisitionDate: acquisitionDate || undefined,
       acquisitionPrice,
       disposalDate: disposalDate || undefined,
-      disposalPrice: disposalDate ? disposalPrice : undefined,
+      // 빈칸·0 = 미입력 → undefined (실제 0원 매각은 미입력과 구분되지 않음)
+      disposalPrice: disposalDate ? (disposalPrice || undefined) : undefined,
       ownership,
       detail: buildDetail(asset.type),
     }
@@ -162,7 +163,7 @@ export default function AssetForm({ asset, onClose }: Props) {
         {disposalDate && (
           <div>
             <label className={labelCls}>매각가 (총액, 원)</label>
-            <AmountInput className={inputCls} value={disposalPrice} onChange={setDisposalPrice} />
+            <AmountInput className={inputCls} value={disposalPrice} onChange={setDisposalPrice} placeholder="미입력" />
           </div>
         )}
       </div>
@@ -243,7 +244,7 @@ export default function AssetForm({ asset, onClose }: Props) {
               </div>
               <div>
                 <label className={labelCls}>월 수령액</label>
-                <AmountInput className={inputCls} value={pensionMonthlyStock} onChange={setPensionMonthlyStock} />
+                <AmountInput className={inputCls} value={pensionMonthlyStock} onChange={setPensionMonthlyStock} placeholder="미입력" />
               </div>
             </div>
           )}
@@ -269,7 +270,7 @@ export default function AssetForm({ asset, onClose }: Props) {
             </div>
             <div>
               <label className={labelCls}>월 수령 예상액</label>
-              <AmountInput className={inputCls} value={expectedMonthlyPayout} onChange={setExpectedMonthlyPayout} />
+              <AmountInput className={inputCls} value={expectedMonthlyPayout} onChange={setExpectedMonthlyPayout} placeholder="미입력" />
             </div>
             <div>
               <label className={labelCls}>연 증가율 (%)</label>
@@ -336,7 +337,7 @@ export default function AssetForm({ asset, onClose }: Props) {
               </div>
               <div>
                 <label className={labelCls}>월 수령액</label>
-                <AmountInput className={inputCls} value={pensionMonthlySav} onChange={setPensionMonthlySav} />
+                <AmountInput className={inputCls} value={pensionMonthlySav} onChange={setPensionMonthlySav} placeholder="미입력" />
               </div>
             </div>
           )}
