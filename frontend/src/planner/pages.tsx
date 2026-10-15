@@ -6,6 +6,7 @@ import PlanEntry from './PlanEntry';
 import BulkPolicy from './BulkPolicy';
 import './review.css';
 import CurrentOverview from './CurrentOverview';
+import { excludedSummary, snapshotTotals } from './totals';
 import FundingEditor from './FundingEditor';
 import { stockAccounts, stockAccountUrl, safeAssetReturn } from './accounts';
 import AssetDetail from '@/components/assets/AssetDetail';
@@ -81,10 +82,10 @@ export function PlannerHome() {
     const { data } = usePlanner(), { record } = useSavedRun(data?.activeRunId ?? null);
     if (!data)
         return <Shell title="내 자산과 은퇴 준비"><Loading /></Shell>;
-    const snapshot = data.current, total = snapshot.positions.reduce((s, p) => s + p.balance, 0), debt = snapshot.debts.reduce((s, d) => s + d.balance, 0);
+    const snapshot = data.current, { total, debt, excluded } = snapshotTotals(snapshot);
     const stale = record && (record.snapshot.assetRevision !== snapshot.assetRevision || record.snapshot.plan.revision !== data.plan.revision || record.run.engineVersion !== ENGINE_VERSION || record.run.ruleVersion !== RULE_VERSION);
     return <Shell title="내 자산과 은퇴 준비" subtitle="평소에는 자산 확인과 시세 갱신만 하세요. 은퇴계획은 나중에 시작해도 됩니다.">
-    <section className="panel"><h2>현재 자산</h2><div className="actions primary-task"><Link className="button" to="/assets?type=STOCK">주식 계좌 확인·시세 갱신 →</Link><Link to="/assets?type=ALL">전체 자산 보기 →</Link></div><div className="kpis"><Link to="/assets?type=ALL"><small>총 자산</small><strong>{won(total)}</strong></Link><Link to="/assets?type=REAL_ESTATE"><small>부채 · 대출 + 받은 보증금</small><strong>{won(debt)}</strong></Link><Link to="/assets?type=ALL"><small>입력 기준 순자산</small><strong>{won(total - debt)}</strong></Link></div><p className="muted">평가액은 마지막 저장 값입니다. 수급권·동일 잔액 연결·합산 제외는 중복 합산하지 않습니다.</p>{snapshot.issues.length > 0 && <details className="compact-audit"><summary>합계는 잠정치 · 분류·기준일 확인 {snapshot.issues.length}건</summary><p>중복 연결 등 합산 기준을 확인하면 더 정확한 합계를 볼 수 있습니다.</p><Link to="/plan?tab=policies">합산 분류 확인 →</Link></details>}</section>
+    <section className="panel"><h2>현재 자산</h2><div className="actions primary-task"><Link className="button" to="/assets?type=STOCK">주식 계좌 확인·시세 갱신 →</Link><Link to="/assets?type=ALL">전체 자산 보기 →</Link></div><div className="kpis"><Link to="/assets?type=ALL"><small>총 자산</small><strong>{won(total)}</strong></Link><Link to="/assets?type=REAL_ESTATE"><small>부채 · 대출 + 받은 보증금</small><strong>{won(debt)}</strong></Link><Link to="/assets?type=ALL"><small>입력 기준 순자산</small><strong>{won(total - debt)}</strong></Link></div>{excluded.length > 0 && <p className="muted" data-excluded-summary>{excludedSummary(excluded)}</p>}<p className="muted">평가액은 마지막 저장 값입니다. 수급권·동일 잔액 연결·합산 제외는 중복 합산하지 않습니다.</p>{snapshot.issues.length > 0 && <details className="compact-audit"><summary>합계는 잠정치 · 분류·기준일 확인 {snapshot.issues.length}건</summary><p>중복 연결 등 합산 기준을 확인하면 더 정확한 합계를 볼 수 있습니다.</p><Link to="/plan?tab=policies">합산 분류 확인 →</Link></details>}</section>
     {!snapshot.positions.length && <section className="panel"><h2>먼저 현재 자산을 등록하세요</h2><p>가상 자산이나 배우자가 자동으로 추가되지 않습니다. 자산 관리만 사용해도 됩니다.</p><Link className="button" to="/assets?type=ALL">자산 등록으로 이동</Link></section>}
     <section className="panel"><h2>자산 관리</h2><div className="actions"><Link to="/assets?type=REAL_ESTATE">부동산</Link><Link to="/assets?type=PENSION">연금</Link><Link to="/assets?type=SAVINGS">예적금</Link><Link to="/history">자산 변동 이력</Link></div></section>
     <section className="panel"><h2>은퇴 분석</h2><p>등록한 자산·연금·생활비를 연결해 결과를 바로 확인합니다.</p><div className="actions"><Link className="button" to="/analysis">기존 입력으로 분석 보기 →</Link><Link to="/analysis?tab=prep">생활비·목돈 수정 →</Link></div><details><summary>고급 · 별도 월별 계획과 저장 분석</summary><Link to="/plan">월별 계획 편집 →</Link>{record&&<p><Link to={'/analysis?run='+record.id}>저장한 월별 분석 보기 →</Link>{stale&&' · 현재 입력과 다른 조건의 저장 결과'}</p>}</details></section>

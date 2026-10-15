@@ -9,6 +9,7 @@ import { useDeleteAsset, useUpdateAsset } from '@/hooks/useAssets'
 import { useUpdateHistory } from '@/hooks/useHistory'
 import { useSettings } from '@/hooks/useSettings'
 import { formatMoney, formatManwon, formatPnl, formatPrice, formatAvgPrice, TYPE_LABELS } from '@/lib/utils'
+import { DISPOSAL_PRICE_MISSING, disposalPriceMissing, valueKpiLabels } from '@/lib/assetLabels'
 import type { Asset, RealEstateDetail, Settings, StockDetail, PensionDetail } from '@/types'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -51,6 +52,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
   const isSold = !!a.disposalDate
   const isAccountLevel = a.type === 'STOCK' && !!(d as StockDetail | undefined)?.isAccountLevel
   const displayVal = isSold ? (a.disposalPrice ?? 0) : a.currentValue
+  // 매각가 미입력(null/0)이면 손실처럼 보이지 않게 금액·손익 대신 "매각가 미입력" 표시
+  const priceMissing = disposalPriceMissing(a)
+  const labels = valueKpiLabels(a.type, isSold, isAccountLevel)
   // 최근 갱신일 — 이력의 마지막 기록 날짜 (asset.history 또는 chartData prop)
   const lastUpdate = a.history
     ?.map((h) => h.date)
@@ -72,9 +76,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
   if (a.type === 'REAL_ESTATE') {
     const liab   = (d?.loanAmount ?? 0) + (d?.tenantDeposit ?? 0)
     const equity = displayVal - liab
-    k1 = isSold ? '매각 금액' : '현재 시세'; v1 = formatMoney(displayVal)
+    k1 = labels.value; v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
     k2 = '부채 총계';                          v2 = formatMoney(liab);     c2 = 'red'
-    k3 = '순자산 (Equity)';                   v3 = formatMoney(equity);   c3 = 'blue'
+    k3 = labels.change;                       v3 = priceMissing ? '-' : formatMoney(equity);   c3 = 'blue'
   } else if (a.type === 'STOCK' || a.type === 'PHYSICAL') {
     // acquisitionPrice = 네이티브 통화 기준 (USD 주식 → USD, KRW → KRW)
     const currency = (d as StockDetail | undefined)?.currency ?? 'KRW'
@@ -87,10 +91,10 @@ export default function AssetDetail({ asset, chartData }: Props) {
     const pnlKrw   = displayVal - costKrw
     const roi      = costKrw > 0 ? (pnlKrw / costKrw) * 100 : 0
 
-    k1 = '평가금액/손익'
-    v1 = formatMoney(displayVal)
-    c1 = pnlKrw >= 0 ? 'green' : 'red'
-    pnlSub = (isFx && rate > 1)
+    k1 = labels.value
+    v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
+    c1 = priceMissing ? 'default' : pnlKrw >= 0 ? 'green' : 'red'
+    pnlSub = priceMissing ? '' : (isFx && rate > 1)
       ? `${pnlKrw >= 0 ? '+' : ''}${formatPrice(displayVal / rate - costFx, currency)} / ${formatPnl(pnlKrw)} (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`
       : `${formatPnl(pnlKrw)} (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`
 
@@ -102,7 +106,6 @@ export default function AssetDetail({ asset, chartData }: Props) {
 
     // 계좌 통합 모드 — 단가·수량 대신 원금 표시
     if ((d as StockDetail | undefined)?.isAccountLevel) {
-      k1 = isSold ? '매각 금액/손익' : '평가액/손익'
       k2 = '총 원금'
       v2 = formatMoney(costKrw)
       k3 = '계좌 통합'; v3 = '-'; c3 = 'default'
@@ -113,10 +116,10 @@ export default function AssetDetail({ asset, chartData }: Props) {
       curPrice = qty > 0 ? (isFx ? displayVal / rate / qty : displayVal / qty) : 0
     }
   } else {
-    k1 = '현재 가치';  v1 = formatMoney(displayVal)
-    k2 = '취득가';     v2 = formatMoney(a.acquisitionPrice ?? 0)
-    k3 = '변동액';     v3 = formatMoney(displayVal - (a.acquisitionPrice ?? 0))
-    c3 = displayVal >= (a.acquisitionPrice ?? 0) ? 'green' : 'red'
+    k1 = labels.value;  v1 = priceMissing ? DISPOSAL_PRICE_MISSING : formatMoney(displayVal)
+    k2 = '취득가';      v2 = formatMoney(a.acquisitionPrice ?? 0)
+    k3 = labels.change; v3 = priceMissing ? '-' : formatMoney(displayVal - (a.acquisitionPrice ?? 0))
+    c3 = priceMissing ? 'default' : displayVal >= (a.acquisitionPrice ?? 0) ? 'green' : 'red'
   }
 
   const miniChart = chartData
@@ -204,9 +207,9 @@ export default function AssetDetail({ asset, chartData }: Props) {
                   </button>
                 )}
                 <span className="text-gray-600 shrink-0">→</span>
-                <span className="text-gray-500 shrink-0">현재</span>
+                <span className="text-gray-500 shrink-0">{labels.summaryPrice}</span>
                 <span className={`font-mono font-semibold shrink-0 ${up ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : '-'}
+                  {curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : priceMissing ? DISPOSAL_PRICE_MISSING : '-'}
                   {avg > 0 && curPrice > 0 && ` (${up ? '▲' : '▼'}${Math.abs(chg).toFixed(1)}%)`}
                 </span>
               </>
@@ -235,7 +238,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
           // 현재 가격 (현재가치 ÷ 수량) — 계좌 통합 모드에선 단가가 없으므로 미표시
           isStockItem ? (
             <InfoCell
-              label={`현재 가격${stockCurrency !== 'KRW' ? ` (${stockCurrency})` : ''}`}
+              label={`${labels.unitPrice}${stockCurrency !== 'KRW' ? ` (${stockCurrency})` : ''}`}
               value={curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : '-'}
             />
           ) : <div className="hidden sm:block" />
@@ -292,8 +295,8 @@ export default function AssetDetail({ asset, chartData }: Props) {
         {isStockItem ? (
           // 현재 가격 (평단가는 위 1줄 요약에서 편집)
           <KpiCard
-            label={`현재 가격${stockCurrency !== 'KRW' ? ` (${stockCurrency})` : ''}`}
-            value={curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : '-'}
+            label={`${labels.unitPrice}${stockCurrency !== 'KRW' ? ` (${stockCurrency})` : ''}`}
+            value={curPrice > 0 ? formatAvgPrice(curPrice, stockCurrency) : priceMissing ? DISPOSAL_PRICE_MISSING : '-'}
             color={c2}
           />
         ) : (

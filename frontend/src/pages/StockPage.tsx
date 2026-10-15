@@ -17,9 +17,9 @@ import { formatMoney, formatManwon, formatPnl, formatAvgPrice, formatPrice, cn }
 import type { Asset, Settings, StockDetail } from '@/types'
 import { usePlanner } from '@/planner/context'
 import type { Position } from '@/planner/model'
+import { inAggregate, stockSummary, stockTotals as baseStockTotals } from '@/lib/stockSummary'
 
-function inAggregate(asset:Asset,positions:Position[]) {const p=positions.find(p=>p.assetId===asset.id);return !p||(!p.linkedTo&&!['excluded','entitlement'].includes(p.role))}
-function stockTotals(stocks:Asset[],settings:Settings|undefined,positions:Position[]) {const included=stocks.filter(a=>inAggregate(a,positions));return {val:included.reduce((s,a)=>s+a.currentValue,0),cost:included.reduce((s,a)=>s+costKrw(a,settings),0)}}
+function stockTotals(stocks:Asset[],settings:Settings|undefined,positions:Position[]) {return baseStockTotals(stocks,a=>costKrw(a,settings),positions)}
 
 // settings KV 키는 snake_case (exchange_rate_USD). db.getExchangeRate 와 동일.
 function getRate(settings: Settings | undefined, currency?: string): number {
@@ -124,15 +124,13 @@ export default function StockPage() {
     )
   }
 
-  const {val:totalVal,cost:totalCost}=stockTotals(active,settings,positions)
-  const aggregateDividend=divSummary?.items.filter(item=>{const a=assets.find(a=>a.id===item.assetId);return a&&inAggregate(a,positions)}).reduce((s,item)=>s+item.annualKrw,0)
-  const pnl = totalVal - totalCost
-  const roi = totalCost > 0 ? (pnl / totalCost) * 100 : 0
+  // 요약 카드: 계좌 필터가 있으면 그 계좌 범위만 합산 (배당도 범위 안 종목만)
+  const {val:totalVal,cost:totalCost,pnl,roi,dividend:aggregateDividend}=stockSummary(active,activeAccount,a=>costKrw(a,settings),positions,divSummary?.items)
 
-  // 계좌별 그룹
+  // 계좌별 그룹 — 키는 planner/accounts accountName()(trim, 빈 값 '미분류')과 동일
   const accountMap = new Map<string, Asset[]>()
   for (const a of active) {
-    const acct = (a.detail as StockDetail)?.accountName ?? '미분류'
+    const acct = accountName(a)
     if (!accountMap.has(acct)) accountMap.set(acct, [])
     accountMap.get(acct)!.push(a)
   }
@@ -237,9 +235,9 @@ export default function StockPage() {
       <details className="rounded-xl border border-gray-700 p-3 text-xs text-gray-300"><summary className="cursor-pointer py-2">종목별 시세 조회 상태 · 거래소 기준시각은 제공되지 않습니다</summary>{active.map(a=>{const raw=settings?.['quote-status:'+a.id];let status:any=null;try{status=raw?JSON.parse(String(raw)):null}catch{}return <p key={a.id} className="py-2">{a.name} · {status?`${status.ok?'조회 반영':'기존 가격 유지'} · ${new Date(status.observedAt).toLocaleString('ko-KR')} ${status.reason??''}`:'아직 조회하지 않음 / 수동 입력'}{(a.detail as StockDetail)?.currency!=='KRW'&&!settings?.['exchange_rate_'+(a.detail as StockDetail)?.currency]?' · 환율 기본 가정 사용 중':''}</p>})}</details>
       {/* KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard label="평가 총액" value={formatMoney(totalVal)} color="default" />
+        <KpiCard label={activeAccount ? `평가 총액 (${activeAccount})` : '평가 총액'} value={formatMoney(totalVal)} color="default" />
         <KpiCard
-          label="평가 손익"
+          label={activeAccount ? `평가 손익 (${activeAccount})` : '평가 손익'}
           value={`${formatPnl(pnl)} (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`}
           color={pnl >= 0 ? 'green' : 'red'}
         />

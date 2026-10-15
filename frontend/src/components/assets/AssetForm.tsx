@@ -4,6 +4,7 @@ import type { Asset, AssetType, Currency, Ownership, OwnershipPreset } from '@/t
 import { ownershipFromPreset, presetFromOwnership } from '@/types'
 import RealEstateFutureValueFields from '@/components/assets/RealEstateFutureValueFields'
 import { cn } from '@/lib/utils'
+import { MIN_DATE, checkAsset, isNationalPension, seoulToday, toCheckInput } from '@/lib/validation'
 
 interface Props {
   asset: Asset
@@ -78,7 +79,21 @@ export default function AssetForm({ asset, onClose }: Props) {
     return undefined
   }
 
+  const [formErrors, setFormErrors] = useState<string[]>([])
+  const today = seoulToday()
+
   const handleSubmit = () => {
+    // 날짜 범위 오류는 저장 차단, 0원 미처분·계좌/티커 중복은 확인 후 저장
+    const qtyBased = asset.type === 'STOCK' || asset.type === 'PHYSICAL'
+    const check = checkAsset({
+      id: asset.id, type: asset.type, name, acquisitionDate, disposalDate,
+      quantity: qtyBased && !isAccountLevel ? quantity : asset.quantity, currentValue: asset.currentValue,
+      accountName, ticker: isAccountLevel ? undefined : ticker,
+      entitlement: isNationalPension(asset.type, pensionType), linked: !!linkedStockId,
+    }, stockAssets.map(toCheckInput), today)
+    setFormErrors(check.errors)
+    if (check.errors.length) return
+    if (check.warnings.length && !window.confirm(check.warnings.join('\n') + '\n\n그래도 저장할까요?')) return
     const payload: Record<string, unknown> = {
       name,
       acquisitionDate: acquisitionDate || undefined,
@@ -117,7 +132,7 @@ export default function AssetForm({ asset, onClose }: Props) {
         </div>
         <div>
           <label className={labelCls}>취득일</label>
-          <input type="date" className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
+          <input type="date" min={MIN_DATE} max={today} className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
         </div>
         <div>
           <label className={labelCls}>{(asset.type === 'STOCK' && isAccountLevel) ? '총 원금 (원)' : (asset.type === 'STOCK' || asset.type === 'PHYSICAL') ? '취득단가' : '취득가'}</label>
@@ -131,11 +146,11 @@ export default function AssetForm({ asset, onClose }: Props) {
         )}
         <div>
           <label className={labelCls}>매각일</label>
-          <input type="date" className={inputCls} value={disposalDate} onChange={(e) => setDisposalDate(e.target.value)} />
+          <input type="date" min={MIN_DATE} className={inputCls} value={disposalDate} onChange={(e) => setDisposalDate(e.target.value)} />
         </div>
         {disposalDate && (
           <div>
-            <label className={labelCls}>매각가</label>
+            <label className={labelCls}>매각가 (총액, 원)</label>
             <input type="number" inputMode="decimal" className={inputCls} value={disposalPrice} onChange={(e) => setDisposalPrice(+e.target.value)} />
           </div>
         )}
@@ -333,6 +348,12 @@ export default function AssetForm({ asset, onClose }: Props) {
           </div>
         )}
       </div>
+
+      {formErrors.length > 0 && (
+        <div role="alert" className="text-xs text-red-400 space-y-0.5">
+          {formErrors.map((e) => <p key={e}>{e}</p>)}
+        </div>
+      )}
 
       <div className="flex gap-2 justify-end pt-2">
         <button

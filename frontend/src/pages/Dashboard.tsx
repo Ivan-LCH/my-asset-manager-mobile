@@ -1,29 +1,20 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import KpiCard from '@/components/common/KpiCard'
 import AssetChart from '@/components/common/AssetChart'
-import { useAssets } from '@/hooks/useAssets'
+import { usePlanner } from '@/planner/context'
+import { excludedSummary, snapshotTotals } from '@/planner/totals'
 import { formatMoney, formatManwon, TYPE_LABELS, TYPE_COLORS } from '@/lib/utils'
 import type { AssetType } from '@/types'
 
 export default function Dashboard() {
-  const { data: assets = [], isLoading } = useAssets()
+  // 홈(/)과 같은 buildSnapshot 기준 합계 — 수급권·합산 제외·연결 잔액은 제외 항목으로 별도 표시
+  const { data: planner } = usePlanner()
+  const isLoading = !planner
 
-  const active = assets.filter((a) => !a.disposalDate)
+  const { total: totalAsset, debt: totalLiab, net: netWorth, byType: pieMap, excluded } = planner
+    ? snapshotTotals(planner.current)
+    : { total: 0, debt: 0, net: 0, byType: {} as Partial<Record<AssetType, number>>, excluded: [] }
 
-  let totalAsset = 0, totalLiab = 0
-  for (const a of active) {
-    totalAsset += a.currentValue
-    if (a.type === 'REAL_ESTATE' && a.detail) {
-      const d = a.detail as { loanAmount?: number; tenantDeposit?: number }
-      totalLiab += (d.loanAmount ?? 0) + (d.tenantDeposit ?? 0)
-    }
-  }
-  const netWorth = totalAsset - totalLiab
-
-  const pieMap: Partial<Record<AssetType, number>> = {}
-  for (const a of active) {
-    pieMap[a.type] = (pieMap[a.type] ?? 0) + a.currentValue
-  }
   const pieData = Object.entries(pieMap)
     .filter(([, v]) => v > 0)
     .map(([type, value]) => ({
@@ -52,6 +43,9 @@ export default function Dashboard() {
         <KpiCard label="📉 총 부채"  value={formatMoney(totalLiab)}  color="red"     />
         <KpiCard label="💎 순 자산"  value={formatMoney(netWorth)}   color="blue"    />
       </div>
+      {excluded.length > 0 && (
+        <p className="text-xs text-gray-500" data-excluded-summary>{excludedSummary(excluded)}</p>
+      )}
 
       {/* 자산 비중 — 1줄 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
@@ -112,7 +106,8 @@ export default function Dashboard() {
 
       {/* 자산 성장 추이 — 1줄 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">📈 자산 성장 추이</h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-1">📈 자산 성장 추이</h3>
+        <p className="text-xs text-gray-500 mb-4">차트는 원본 이력 합산입니다. 위 합계에서 뺀 제외 항목(수급권 등)도 포함되어 마지막 값이 총 자산과 다를 수 있습니다.</p>
         <AssetChart groupBy="type" defaultPeriod="10y" height={260} />
       </div>
     </div>
