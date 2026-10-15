@@ -6,6 +6,7 @@ import { TYPE_LABELS, ASSET_TYPES, cn } from '@/lib/utils'
 import RealEstateFutureValueFields from '@/components/assets/RealEstateFutureValueFields'
 import StockSearch from '@/components/common/StockSearch'
 import { fetchStockPrice } from '@/lib/stockPrice'
+import { MIN_DATE, checkAsset, isNationalPension, seoulToday, toCheckInput } from '@/lib/validation'
 
 interface Props {
   defaultType?: AssetType
@@ -129,8 +130,24 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
     return undefined
   }
 
+  const [formErrors, setFormErrors] = useState<string[]>([])
+  const today = seoulToday()
+
   const handleSubmit = () => {
     if (!name.trim()) return
+    // 날짜 범위 오류는 저장 차단, 0원 미처분·계좌/티커 중복은 확인 후 추가
+    const accountMode = type === 'STOCK' && stockMode === 'account'
+    const qtyBased = type === 'STOCK' || type === 'PHYSICAL'
+    const check = checkAsset({
+      type, name, acquisitionDate,
+      quantity: accountMode ? 1 : qtyBased ? quantity : undefined,
+      currentValue: accountMode ? accountValue : acquisitionPrice * (qtyBased ? quantity : 1),
+      accountName: accountMode ? (accountName || name) : accountName, ticker: accountMode ? undefined : ticker,
+      entitlement: isNationalPension(type, pensionType),
+    }, existingStocks.map(toCheckInput), today)
+    setFormErrors(check.errors)
+    if (check.errors.length) return
+    if (check.warnings.length && !window.confirm(check.warnings.join('\n') + '\n\n그래도 추가할까요?')) return
     // 계좌 통합 모드 — 평가액 직접 입력, 수량=1, 취득단가=총 원금
     if (type === 'STOCK' && stockMode === 'account') {
       createMut.mutate({
@@ -228,7 +245,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
         </div>
         <div>
           <label className={labelCls}>취득일</label>
-          <input type="date" className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
+          <input type="date" min={MIN_DATE} max={today} className={inputCls} value={acquisitionDate} onChange={(e) => setAcquisitionDate(e.target.value)} />
         </div>
         <div>
           <label className={labelCls}>
@@ -459,6 +476,12 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
           </div>
         )}
       </div>}
+
+      {formErrors.length > 0 && (
+        <div role="alert" className="text-xs text-red-400 space-y-0.5">
+          {formErrors.map((e) => <p key={e}>{e}</p>)}
+        </div>
+      )}
 
       <div className="flex gap-2 justify-end pt-2">
         <button

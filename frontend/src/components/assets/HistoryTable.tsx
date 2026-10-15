@@ -4,6 +4,7 @@ import { useAddHistory, useUpdateHistory, useDeleteHistory } from '@/hooks/useHi
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { formatMoney, formatPrice } from '@/lib/utils'
 import { fetchStockPrice } from '@/lib/stockPrice'
+import { MIN_DATE, dateError, seoulToday } from '@/lib/validation'
 import type { Asset, HistoryItem, StockDetail } from '@/types'
 
 interface Props { asset: Asset }
@@ -87,7 +88,14 @@ export default function HistoryTable({ asset }: Props) {
     }
   }
 
+  const [dateErr, setDateErr] = useState<string | null>(null)
+  const today = seoulToday()
+
   const handleSave = () => {
+    // 이력 날짜는 1900-01-01 ~ 오늘(Asia/Seoul) 범위만 저장
+    const err = editing ? null : (fDate ? dateError(fDate, today, { label: '이력 날짜' }) : '이력 날짜를 입력하세요')
+    setDateErr(err)
+    if (err) return
     if (editing) {
       updateMut.mutate({
         date: editing.date,
@@ -137,7 +145,7 @@ export default function HistoryTable({ asset }: Props) {
               <div className="col-span-2">
                 <label className="text-xs text-gray-400 mb-1 block">날짜</label>
                 <input
-                  type="date"
+                  type="date" min={MIN_DATE} max={today}
                   value={fDate}
                   onChange={(e) => setFDate(e.target.value)}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
@@ -177,9 +185,10 @@ export default function HistoryTable({ asset }: Props) {
               </div>
             )}
           </div>
+          {dateErr && <p role="alert" className="text-xs text-red-400">{dateErr}</p>}
           <div className="flex gap-2 justify-end">
             <button
-              onClick={() => { setEditing(null); setAddMode(false) }}
+              onClick={() => { setEditing(null); setAddMode(false); setDateErr(null) }}
               className="px-3 py-1.5 text-xs rounded-lg bg-gray-600 text-gray-300 hover:bg-gray-500 transition-colors"
             >
               취소

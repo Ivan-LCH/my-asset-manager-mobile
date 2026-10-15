@@ -14,6 +14,8 @@ import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { EMPTY_PENSION_PLAN, sourcesFromAssets } from '@/lib/pensionSim'
 import { resolveAge, resolveRetirementYear } from '@/lib/people'
 import { formatMoney, formatManwon, cn } from '@/lib/utils'
+import { usePlanner } from '@/planner/context'
+import { excludedSummary, snapshotTotals } from '@/planner/totals'
 import type { Asset, PensionDetail, StockDetail, SavingsDetail, PensionSimPlan, PensionTaxType } from '@/types'
 
 const SIM_START_YEAR = 2029
@@ -169,6 +171,10 @@ export default function PensionPage() {
     return false
   })
   const active = pensionAssets.filter((a) => !a.disposalDate)
+  // 홈·대시보드와 같은 합계 기준(snapshotTotals) — 국민연금 수급권 평가액 포함, 합산 제외 등은 제외 항목으로 표시
+  const { data: planner } = usePlanner()
+  const totals = planner ? snapshotTotals(planner.current) : null
+  const pensionExcluded = totals?.excluded.filter((e) => e.type === 'PENSION') ?? []
 
   if (loadPension) {
     return <div className="flex items-center justify-center h-64 text-gray-400">로딩 중...</div>
@@ -202,6 +208,14 @@ export default function PensionPage() {
       )}
 
       <section className="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-2"><h3 className="font-semibold">현재 연금 계약·등록 지급 목표</h3><p className="text-sm text-gray-400">아래 월 지급액은 등록 목표입니다. 이 입력과 기존 연금 설정은 분석에서 재사용합니다. 실제 수령액은 잔액·지급 조건·세금에 따라 달라집니다.</p><button className="text-blue-300 underline p-2" onClick={()=>navigate('/analysis')}>은퇴 분석 요약 보기 →</button></section>
+
+      {totals && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4" data-pension-total>
+          <p className="text-xs text-gray-500">연금 평가 합계 (총 자산 합산 기준)</p>
+          <p className="text-xl font-bold text-gray-100 mt-1">{formatMoney(totals.byType.PENSION ?? 0)}</p>
+          {pensionExcluded.length > 0 && <p className="text-xs text-gray-500 mt-1">{excludedSummary(pensionExcluded)}</p>}
+        </div>
+      )}
 
       {/* 연금 자산 타일 (과세구분 버튼 포함) */}
       <section className="space-y-3">

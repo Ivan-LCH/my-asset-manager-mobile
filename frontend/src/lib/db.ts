@@ -9,6 +9,7 @@ import { fetchStockHistory } from './stockPrice'
 import { validateBackup } from '@/planner/backup'
 import { fingerprint } from '@/planner/model'
 import {backupSummary,backupReplacementWarnings} from './backupInfo'
+import { backupWarnings, seoulToday } from './validation'
 
 // ──────────────────────────────────────────────────────────────
 // IndexedDB 스키마 (Dexie)
@@ -809,8 +810,10 @@ export async function exportBackup(): Promise<BackupData> {
 /** 백업 객체 → 기존 데이터 전체 교체(모든 테이블 clear 후 bulkAdd) */
 export async function previewBackup(data: unknown) {
   const validated = validateBackup(data), current = await exportBackup()
-  const warnings=backupReplacementWarnings(current,validated)
-  return { data: validated, expected: fingerprint(current.tables), warnings, summary: backupSummary(validated)+(warnings.length?'\n\n확인 필요:\n'+warnings.join('\n'):'') }
+  // 입력값 경고(날짜 범위·0원 미처분·계좌/티커 중복)는 가져오기를 막지 않고 확인 창에 목록으로만 보여준다
+  const inputWarnings=backupWarnings(validated.tables,seoulToday())
+  const warnings=[...backupReplacementWarnings(current,validated),...inputWarnings]
+  return { data: validated, expected: fingerprint(current.tables), warnings, inputWarnings, summary: backupSummary(validated)+(warnings.length?'\n\n확인 필요:\n'+warnings.join('\n'):'') }
 }
 export async function importBackup(data: BackupData, expected?: string, sourceName?:string): Promise<void> {
   const validated = validateBackup(data)
