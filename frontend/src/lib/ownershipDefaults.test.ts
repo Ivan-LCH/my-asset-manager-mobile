@@ -7,9 +7,11 @@ const mine = { husband: 100, wife: 0 }
 const wife = { husband: 0, wife: 100 }
 
 describe('defaultOwnership', () => {
-  it('연금은 배우자가 있어도 본인 100%', () => {
-    expect(defaultOwnership('PENSION', { hasSpouse: true })).toEqual({ ownership: mine, review: false })
-    expect(defaultOwnership('PENSION', { hasSpouse: false })).toEqual({ ownership: mine, review: false })
+  it('연금·예적금은 배우자가 있어도 본인 100%', () => {
+    for (const type of ['PENSION', 'SAVINGS'] as const) {
+      expect(defaultOwnership(type, { hasSpouse: true })).toEqual({ ownership: mine, review: false })
+      expect(defaultOwnership(type, { hasSpouse: false })).toEqual({ ownership: mine, review: false })
+    }
   })
   it('배우자가 없으면 전 유형 본인 100% (50:50 을 자동 저장하지 않음)', () => {
     for (const type of ['REAL_ESTATE', 'SAVINGS', 'PHYSICAL', 'ETC', 'STOCK'] as const) {
@@ -22,8 +24,8 @@ describe('defaultOwnership', () => {
     // 배우자가 없으면 계좌 명의가 있어도 본인 100%
     expect(defaultOwnership('STOCK', { hasSpouse: false, accountOwner: half }).ownership).toEqual(mine)
   })
-  it('부동산·예적금·실물·기타는 50:50 유지하되 확인 요청 (사용자 결정 대기)', () => {
-    for (const type of ['REAL_ESTATE', 'SAVINGS', 'PHYSICAL', 'ETC'] as const) {
+  it('부동산·실물·기타는 50:50 유지하되 확인 요청 (사용자 결정 대기)', () => {
+    for (const type of ['REAL_ESTATE', 'PHYSICAL', 'ETC'] as const) {
       expect(defaultOwnership(type, { hasSpouse: true })).toEqual({ ownership: half, review: true })
     }
   })

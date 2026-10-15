@@ -485,7 +485,7 @@ export default function AssetCreateForm({ defaultType, defaultAccountName, onClo
           명의 지분 (전 자산 공통)
           {!ownershipPick && ownershipDefault.review && <span className="ml-1.5 normal-case text-amber-400" data-ownership-review>기본값 · 확인하세요</span>}
         </p>
-        <p className="text-xs text-gray-600">부부 가정 시 보통 50:50. 퇴직연금·국민연금 등 본인 자산은 '내 100%'. 1인별 건보·세금 산정에 활용.</p>
+        <p className="text-xs text-gray-600">부부 가정 시 부동산 등은 보통 50:50. 예적금·퇴직연금·국민연금 등 본인 자산은 '내 100%'. 1인별 건보·세금 산정에 활용.</p>
         <div className="flex gap-1">
           {(['mine', 'half', 'wife', 'custom'] as OwnershipPreset[]).map((p) => (
             <button key={p} type="button" onClick={() => setOwnership(ownershipFromPreset(p))}

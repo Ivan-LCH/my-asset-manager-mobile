@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Asset, Settings } from '@/types';
-import { linkedAccountOf, stockAccounts } from './accounts';
+import { linkedAccountOf, accountName, pensionAccountNames, stockAccounts } from './accounts';
 export const PLAN_VERSION = 2 as const;
 export const ENGINE_VERSION = 'monthly-ledger-3';
 export const RULE_VERSION = 'user-estimates-1';
@@ -103,14 +103,23 @@ export function blankPlan(date = today()): PlannerPlan {
         policies: [], flows: [], events: [], debts: [], scenarios: [], reviewedLegacy: false };
 }
 export const fixedDate = (value: string): DateSpec => ({ value, precision: 'day', offsetMonths: 0 });
-export function defaultPolicy(asset: Asset): AssetPolicy {
+/**
+ * 자산의 기본 분석 분류 — 저장된 정책이 항상 우선(A안)이며 이 기본값은 미저장 자산에만 적용된다.
+ * pensionAccounts(IRP 계좌 ∪ 연결 연금이 가리키는 계좌, pensionAccountNames) 소속 주식은
+ * 인출형 연금 계좌(role 'pension')가 기본. 문맥을 생략하면 종전대로 'investment'.
+ */
+export function defaultPolicy(asset: Asset, pensionAccounts?: Set<string>): AssetPolicy {
     const pensionType = (asset.detail as {
         pensionType?: string;
     })?.pensionType?.toLowerCase() ?? '';
-    const role = asset.type === 'REAL_ESTATE' ? 'property' : asset.type === 'STOCK' ? 'investment'
+    const role = asset.type === 'REAL_ESTATE' ? 'property' : asset.type === 'STOCK' ? (pensionAccounts?.has(accountName(asset)) ? 'pension' : 'investment')
         : asset.type === 'SAVINGS' ? ((asset.detail as any)?.isPensionLike ? 'pension' : 'cash') : asset.type === 'PENSION'
             ? (/national|국민/.test(pensionType) ? 'entitlement' : 'pension') : 'other';
     return policySchema.parse({ assetId: asset.id, role });
+}
+/** 스냅샷과 정책 편집기가 같은 기본값을 쓰도록 한 곳에서 해석 — 저장 정책 우선, 없으면 계좌 문맥 포함 기본값 */
+export function resolvePolicy(source: Asset, policies: AssetPolicy[], pensionAccounts?: Set<string>): AssetPolicy {
+    return policies.find(p => p.assetId === source.id) ?? defaultPolicy(source, pensionAccounts);
 }
 /** Deterministic content fingerprint, not a cryptographic signature. */
 export function fingerprint(value: unknown): string {
@@ -129,8 +138,9 @@ export function buildSnapshot(assets: Asset[], settings: Settings, plan: Planner
     if (plan.asOfDate !== capturedAt.slice(0, 10) && plan.asOfDate !== today())
         issues.push({ code: 'VALUATION_DATE', severity: 'missing', message: '현재 평가액을 출발 잔액으로 사용합니다. 기준일이 다른 경우 해당 날짜 잔액과 일치하는지 확인하세요. 과거 실적을 재구성한 결과가 아닙니다.', sourceId: 'asOfDate' });
     const accounts = stockAccounts(assets);
+    const pensionAccounts = pensionAccountNames(assets);
     const positions = assets.filter(a => !a.disposalDate || a.disposalDate > plan.asOfDate).map(source => {
-        const policy = plan.policies.find(p => p.assetId === source.id) ?? defaultPolicy(source);
+        const policy = resolvePolicy(source, plan.policies, pensionAccounts);
         // 연결 연금(linkedStockId)은 linkedTo 와 같게 취급 — 계좌 종목이 이미 합산되므로 래퍼 평가액·옛 이력은 합산하지 않음
         const account = source.type === 'PENSION' ? linkedAccountOf(source, accounts) : undefined;
         if (account && Math.round(source.currentValue || 0) !== 0)

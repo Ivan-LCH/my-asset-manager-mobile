@@ -9,9 +9,10 @@ import { generateChartData } from '@/lib/chartData'
 import { pensionInputs } from '@/lib/analysisInputs'
 import { annualPension } from '@/lib/annualPension'
 import type { Asset, PensionDetail } from '@/types'
-import { buildSnapshot, today } from './model'
+import { buildSnapshot, defaultPolicy, today } from './model'
+import { simulate } from './engine'
 import { loadContext } from './storage'
-import { linkedWrapperInfo } from './accounts'
+import { accountName, linkedWrapperInfo, pensionAccountNames } from './accounts'
 import { reviewCounts, snapshotTotals } from './totals'
 
 const { existsSync, readFileSync } = (await import('node:fs' as string)) as {
@@ -84,5 +85,50 @@ describe.skipIf(!existsSync(BACKUP))('2단계 실데이터 백업 — 연결 연
     // 원본 데이터: 합계 영향 0건, 분석 미확인 = 미확인 자산 56건 (+LEGACY_DATE 는 같은 부동산이라 중복 제거)
     expect(reviewCounts(ctx.current)).toEqual({ totalImpact: 0, analysis: 56 })
     expect(review.totalImpact).toBe(1)
+  }, 60_000)
+
+  // 2단계b — IRP 계좌 주식 기본 role 'pension': 저장 정책이 없는 이 백업에서는 21종목이 전환되지만
+  // byType 은 source.type 기준·엔진 분기는 ['investment','pension'] 공통이라 합계·엔진·분석은 전부 불변이어야 한다.
+  it('IRP 계좌 주식 21종목 기본 role pension — 홈·주식·엔진·분석 숫자 불변', async () => {
+    await importBackup(load())
+    const ctx = await loadContext(), settings = await getSettings(), sim = await getPensionSim()
+    const assets = await getAllAssets()
+    // blank 계획은 endDate 가 비어 엔진이 HORIZON 오류로 중단 — 첫달 순자산만 볼 것이므로 유효 기간만 채운다
+    const plan = { ...ctx.plan, asOfDate: today(), endDate: ctx.plan.endDate || '2056-12-31' }
+    const now = new Date().toISOString()
+
+    const pensionAccts = pensionAccountNames(assets)
+    const irpStocks = assets.filter(a => a.type === 'STOCK' && !a.disposalDate && pensionAccts.has(accountName(a)))
+    const irpSum = irpStocks.reduce((s, a) => s + Math.round(a.currentValue || 0), 0)
+
+    // 새 기본값(저장 정책 없음 → defaultPolicy+계좌 문맥) vs 옛 기본값(IRP 종목을 investment 로 실체화한 것과 동일)
+    const after = snapshotTotals(buildSnapshot(assets, settings, plan, now))
+    const legacyPlan = { ...plan, policies: irpStocks.map(a => ({ ...defaultPolicy(a), confirmed: true })) }
+    const beforeSnap = buildSnapshot(assets, settings, legacyPlan, now)
+    const before = snapshotTotals(beforeSnap)
+
+    const afterSnap = buildSnapshot(assets, settings, plan, now)
+    const irpRoles = afterSnap.positions.filter(p => irpStocks.some(a => a.id === p.assetId)).map(p => p.role)
+    const runBefore = simulate(beforeSnap), runAfter = simulate(afterSnap)
+
+    const year = Number(today().slice(0, 4))
+    const pensionOpening = annualPension(pensionInputs(sim, assets), assets, year, year, { simulation: false, currentYear: year }).rows[0]?.opening ?? 0
+
+    console.log(`[phase2b] 연금 취급 계좌: ${[...pensionAccts].join(', ')}`)
+    console.log(`[phase2b] IRP 주식 ${irpStocks.length}종목 합계=${won(irpSum)} · role 전환 ${irpRoles.filter(r => r === 'pension').length}건`)
+    console.log(`[phase2b] 홈 총자산 전=${won(before.total)} 후=${won(after.total)} · 순자산 후=${won(after.net)} · 연금 탭 후=${won(after.byType.PENSION ?? 0)} · STOCK 전=${won(before.byType.STOCK ?? 0)} 후=${won(after.byType.STOCK ?? 0)}`)
+    console.log(`[phase2b] 엔진 첫달 순자산 전=${won(runBefore.months[0].netWorth)} 후=${won(runAfter.months[0].netWorth)} · 분석 연금 시작 잔액=${won(pensionOpening)}`)
+
+    expect(irpStocks).toHaveLength(21)
+    expect(irpSum).toBe(278_282_045)
+    expect(irpRoles.every(r => r === 'pension')).toBe(true)
+    expect(after.total).toBe(2_648_608_701)
+    expect(after.net).toBe(2_488_608_701)
+    expect(after.byType.PENSION).toBe(154_810_000)
+    expect(after.byType.STOCK).toBe(before.byType.STOCK)
+    expect(after.byType).toEqual(before.byType)
+    expect(runAfter.months[0].netWorth).toBe(runBefore.months[0].netWorth)
+    expect(runAfter.months[0].netWorth).toBe(2_373_608_701)
+    expect(pensionOpening).toBe(276_732_045)
   }, 60_000)
 })

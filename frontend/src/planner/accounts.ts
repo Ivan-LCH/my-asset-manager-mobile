@@ -28,6 +28,13 @@ export function linkedAccountNames(assets: Asset[]): Set<string> {
     const groups = stockAccounts(assets);
     return new Set(assets.filter(a => !a.disposalDate).map(a => linkedAccountOf(a, groups)?.name).filter((n): n is string => !!n));
 }
+/** 연금 취급 주식 계좌명 집합 — 연결 연금(linkedStockId)이 가리키는 계좌 ∪ 이름에 IRP 가 들어간 계좌(trim 기준).
+ *  planner 기본 분류(defaultPolicy)·정책 그룹 라벨('연금 계좌 ·')·일괄 확인 차단이 모두 이 기준 하나를 사용한다. */
+export function pensionAccountNames(assets: Asset[]): Set<string> {
+    const names = linkedAccountNames(assets);
+    for (const g of stockAccounts(assets)) if (/irp/i.test(g.name)) names.add(g.name);
+    return names;
+}
 /** 계좌 평가 합계 — 계좌 통합 행이 있으면 그 행만(종목 중복 합산 방지, linkedStocks/monthlyPension 과 같은 규칙) */
 export function accountTotal(group: AccountGroup): number {
     const aggregates = group.assets.filter(a => (a.detail as StockDetail | undefined)?.isAccountLevel);

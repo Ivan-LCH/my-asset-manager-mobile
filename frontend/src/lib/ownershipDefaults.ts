@@ -19,13 +19,13 @@ export function accountOwnerOf(map: Record<string, Ownership> | undefined, accou
 }
 
 /**
- * - 배우자 없음(설정에 배우자 생년월 없음) 또는 연금 → 본인 100%
+ * - 배우자 없음(설정에 배우자 생년월 없음) 또는 연금·예적금 → 본인 100%
  * - 주식 → 같은 계좌의 기존 명의, 없으면 본인 100%
- * - 부동산·예적금·실물·기타 → 50:50 유지하되 확인 요청 (사용자 결정 대기)
+ * - 부동산·실물·기타 → 50:50 유지하되 확인 요청 (사용자 결정 대기)
  */
 export function defaultOwnership(type: AssetType, { hasSpouse, accountOwner }: { hasSpouse: boolean; accountOwner?: Ownership }): OwnershipDefault {
   const mine = { husband: 100, wife: 0 }
   if (type === 'STOCK') return { ownership: hasSpouse && valid(accountOwner) ? { ...accountOwner } : mine, review: false }
-  if (!hasSpouse || type === 'PENSION') return { ownership: mine, review: false }
+  if (!hasSpouse || type === 'PENSION' || type === 'SAVINGS') return { ownership: mine, review: false }
   return { ownership: { husband: 50, wife: 50 }, review: true }
 }

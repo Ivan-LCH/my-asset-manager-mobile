@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { Asset } from '@/types';
-import { accountName, stockAccounts, stockAccountUrl, safeAssetReturn, linkedAccountOf, linkedAccountNames, accountTotal, linkedWrapperInfo, assetLabel, pensionKind } from './accounts';
+import { accountName, stockAccounts, stockAccountUrl, safeAssetReturn, linkedAccountOf, linkedAccountNames, pensionAccountNames, accountTotal, linkedWrapperInfo, assetLabel, pensionKind } from './accounts';
 import { assetFlowPreview } from './storage';
-import { blankPlan, buildSnapshot } from './model';
+import { blankPlan, buildSnapshot, defaultPolicy, resolvePolicy } from './model';
 const stock=(id:string,name='account',extra={})=>({id,type:'STOCK',name:id,currentValue:100,quantity:1,acquisitionDate:'2020-01-01',acquisitionPrice:100,createdAt:'',updatedAt:'',ownership:{husband:100,wife:0},history:[],detail:{accountName:name,currency:'KRW',isPensionLike:false},...extra} as Asset);
 describe('계좌 요약·이전 원천',()=>{
     it('종목 원본을 바꾸지 않고 계좌별로 묶으며 매각 종목은 현재 요약에서 제외',()=>{
@@ -67,5 +67,32 @@ describe('연결 연금 래퍼 해석·표시',()=>{
         expect(pensionKind(pension('irp',{detail:{pensionType:'IRP'}}))).toBe('pension');
         expect(pensionKind(pension('화재연금보험',{detail:{pensionType:'PERSONAL'}}))).toBe('insurance');
         expect(pensionKind(pension('연금저축',{detail:{pensionType:'PERSONAL'}}))).toBe('pension');
+    });
+});
+
+// 2단계b — IRP 계좌 주식 기본 role 'pension' (저장 정책 우선, 스냅샷·정책 편집기 같은 기본값)
+describe('IRP 계좌 주식 기본 분류',()=>{
+    const pension=(id:string,extra={})=>({id,type:'PENSION',name:id,currentValue:0,quantity:1,acquisitionDate:'2020-01-01',acquisitionPrice:0,createdAt:'',updatedAt:'',ownership:{husband:100,wife:0},history:[],detail:{pensionType:'IRP'} as never,...extra} as Asset);
+    const irp=[stock('a','미래에셋-퇴직IRP'),stock('b','미래에셋-퇴직IRP')],normal=stock('c','토스증권');
+    it('pensionAccountNames — 계좌명 /irp/i ∪ 연결 연금이 가리키는 계좌 (이름에 IRP 없어도 연결 대상이면 포함)',()=>{
+        expect([...pensionAccountNames([...irp,normal])]).toEqual(['미래에셋-퇴직IRP']);
+        expect([...pensionAccountNames([normal,pension('w',{detail:{pensionType:'IRP',linkedStockId:'토스증권'}})])]).toEqual(['토스증권']);
+        expect(pensionAccountNames([stock('d',' 일반IRP '),stock('e','irp-개인')]).size).toBe(2); // trim·대소문자 무관
+    });
+    it('defaultPolicy — 연금 계좌 주식은 pension, 일반 계좌는 investment, 문맥 생략 시 종전대로 investment',()=>{
+        const ctx=pensionAccountNames([...irp,normal]);
+        expect(defaultPolicy(irp[0],ctx).role).toBe('pension');
+        expect(defaultPolicy(normal,ctx).role).toBe('investment');
+        expect(defaultPolicy(irp[0]).role).toBe('investment');
+    });
+    it('resolvePolicy — 저장 정책이 항상 우선 (저장된 investment 는 investment 유지, A안)',()=>{
+        const ctx=pensionAccountNames(irp),saved={...defaultPolicy(irp[0]),role:'investment' as const};
+        expect(resolvePolicy(irp[0],[saved],ctx).role).toBe('investment');
+        expect(resolvePolicy(irp[0],[],ctx).role).toBe('pension');
+    });
+    it('buildSnapshot 도 같은 기본값 — 정책 편집기(policyList 의 resolvePolicy)와 스냅샷이 어긋나지 않음',()=>{
+        const snap=buildSnapshot([...irp,normal],{currentAge:40,retirementAge:60},blankPlan('2026-01-01'),'2026-01-01T00:00:00Z');
+        expect(snap.positions.find(p=>p.assetId==='a')?.role).toBe('pension');
+        expect(snap.positions.find(p=>p.assetId==='c')?.role).toBe('investment');
     });
 });

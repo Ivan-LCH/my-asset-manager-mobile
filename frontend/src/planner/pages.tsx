@@ -8,13 +8,13 @@ import './review.css';
 import CurrentOverview from './CurrentOverview';
 import { excludedSummary, reviewCounts, snapshotTotals } from './totals';
 import FundingEditor from './FundingEditor';
-import { stockAccounts, stockAccountUrl, safeAssetReturn, assetLabel, linkedAccountNames, pensionKind, PENSION_KIND_LABELS, type PensionKind } from './accounts';
+import { stockAccounts, stockAccountUrl, safeAssetReturn, assetLabel, pensionAccountNames, pensionKind, PENSION_KIND_LABELS, type PensionKind } from './accounts';
 import AssetDetail from '@/components/assets/AssetDetail';
 import { useAssets } from '@/hooks/useAssets';
 import { liveQuery } from 'dexie';
 import { db } from '@/lib/db';
 import { usePlanner, useSavedRun } from './context';
-import { ENGINE_VERSION, RULE_VERSION, assetPensionAmount, availability, blankPlan, debtSchema, defaultPolicy, eventSchema, fixedDate, flowSchema, scenarioSchema, type DateSpec, type PlannerPlan } from './model';
+import { ENGINE_VERSION, RULE_VERSION, assetPensionAmount, availability, blankPlan, debtSchema, eventSchema, fixedDate, flowSchema, resolvePolicy, scenarioSchema, type DateSpec, type PlannerPlan } from './model';
 import { baseScenario, selectYears, simulate } from './engine';
 import { assetFlowPreview, calculateAndSave, clearDraft, legacyPreview, readDraft, saveDraft, savePlan, type SavedRun } from './storage';
 import './planner.css';
@@ -156,10 +156,10 @@ export function PlanPage() {
     finally {
         setBusy(false);
     } };
-    const policyList = data.snapshot.positions.map(p => plan.policies.find(x => x.assetId === p.assetId) ?? defaultPolicy(p.source));
     const accountGroups = stockAccounts(data.snapshot.positions.map(p=>p.source));
+    const pensionAccounts = pensionAccountNames(data.snapshot.positions.map(p=>p.source));
+    const policyList = data.snapshot.positions.map(p => resolvePolicy(p.source, plan.policies, pensionAccounts));
     const policySearch = params.get('q') ?? '', policyGroup = params.get('group') ?? '', focusedPolicy = params.get('focus');
-    const pensionAccounts = linkedAccountNames(data.snapshot.positions.map(p=>p.source));
     const groupOf = (id: string) => { const p=data.snapshot.positions.find(p=>p.assetId===id);const g=accountGroups.find(g=>g.assets.some(a=>a.id===id));return g?'account:'+g.id:p?.source.type==='PENSION'?'pension:'+pensionKind(p.source):'type:'+(p?.source.type??''); };
     const typeGroup = (type: string, name: string) => ({id:'type:'+type,name,count:data.snapshot.positions.filter(p=>p.source.type===type).length});
     const policyGroups = [...accountGroups.map(g=>({id:'account:'+g.id,name:(pensionAccounts.has(g.name)?'연금 계좌 · ':'주식 · ')+g.name,count:g.assets.length})), typeGroup('REAL_ESTATE','부동산'), ...(['national','pension','insurance'] as PensionKind[]).map(kind=>({id:'pension:'+kind,name:'연금 · '+PENSION_KIND_LABELS[kind],count:data.snapshot.positions.filter(p=>p.source.type==='PENSION'&&pensionKind(p.source)===kind).length})), typeGroup('SAVINGS','예적금'), typeGroup('PHYSICAL','실물'), typeGroup('ETC','기타')].filter(g=>g.count);
