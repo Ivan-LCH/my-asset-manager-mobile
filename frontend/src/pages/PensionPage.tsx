@@ -171,7 +171,7 @@ export default function PensionPage() {
     return false
   })
   const active = pensionAssets.filter((a) => !a.disposalDate)
-  // 홈·대시보드와 같은 합계 기준(buildSnapshot) — 수급권 등은 제외 항목으로 표시
+  // 홈·대시보드와 같은 합계 기준(snapshotTotals) — 국민연금 수급권 평가액 포함, 합산 제외 등은 제외 항목으로 표시
   const { data: planner } = usePlanner()
   const totals = planner ? snapshotTotals(planner.current) : null
   const pensionExcluded = totals?.excluded.filter((e) => e.type === 'PENSION') ?? []

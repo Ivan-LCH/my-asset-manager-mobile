@@ -2,7 +2,7 @@
 // importBackup → loadContext 로 실제 앱과 같은 경로를 거쳐 홈·대시보드·연금·주식 계좌 KPI·가져오기 경고를 확인한다.
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { db, importBackup, previewBackup, getAllAssets, getSettings, getDividendSummary, FALLBACK_RATES } from '@/lib/db'
+import { db, importBackup, previewBackup, getAllAssets, getChartData, getSettings, getDividendSummary, FALLBACK_RATES } from '@/lib/db'
 import { stockSummary } from '@/lib/stockSummary'
 import type { Asset, StockDetail } from '@/types'
 import { stockAccounts } from './accounts'
@@ -20,23 +20,31 @@ const won = (v: number) => Math.round(v).toLocaleString('ko-KR')
 describe.skipIf(!existsSync(BACKUP))('실데이터 백업 (2026-10-14-fixed)', () => {
   beforeEach(async () => { await Promise.all(db.tables.map(t => t.clear())) })
 
-  it('홈 합계 == 대시보드 합계 == 2,533,608,701 · 제외 항목에 이창호-국민연금 1.15억', async () => {
+  it('홈 합계 == 대시보드 합계 == 2,648,608,701 (국민연금 포함) · 제외 항목 없음 · 차트 마지막 값 == 순자산', async () => {
     await importBackup(load())
     const ctx = await loadContext()
     // 홈(PlannerHome)·CurrentOverview·/history Dashboard·연금 탭 모두 snapshotTotals(usePlanner().data.current) 사용
     const home = snapshotTotals(ctx.current)
     const dashboard = snapshotTotals((await loadContext()).current)
-    const legacyHistory = (await getAllAssets()).filter(a => !a.disposalDate).reduce((s, a) => s + a.currentValue, 0)
-    console.log(`[phase1] 홈 총자산=${won(home.total)} (${formatEok(home.total)}) · 대시보드 총자산=${won(dashboard.total)} · 변경 전 /history 단순합=${won(legacyHistory)}`)
-    console.log(`[phase1] 부채=${won(home.debt)} · 순자산=${won(home.net)} · 연금 합산=${won(home.byType.PENSION ?? 0)}`)
-    console.log('[phase1] ' + excludedSummary(home.excluded))
+    // /history 성장 차트 — 앱과 같은 getChartData 경로, 마지막 날짜의 유형별 값 합
+    const chart = await getChartData({ period: 'all', group_by: 'type' })
+    const lastDate = chart.reduce((d, p) => p.date > d ? p.date : d, '')
+    const chartLast = chart.filter(p => p.date === lastDate).reduce((s, p) => s + p.value, 0)
+    console.log(`[phase1] 홈 총자산=${won(home.total)} (${formatEok(home.total)}) · 대시보드 총자산=${won(dashboard.total)}`)
+    console.log(`[phase1] 부채=${won(home.debt)} · 순자산=${won(home.net)} · 연금 합산=${won(home.byType.PENSION ?? 0)} · byType=${JSON.stringify(home.byType)}`)
+    console.log(`[phase1] 차트 마지막(${lastDate})=${won(chartLast)} · 제외 항목=${excludedSummary(home.excluded) || '(없음)'}`)
 
-    expect(home.total).toBe(2_533_608_701)
+    expect(home.total).toBe(2_648_608_701)
+    expect(home.debt).toBe(160_000_000)
+    expect(home.net).toBe(2_488_608_701)
     expect(dashboard.total).toBe(home.total)
     expect(dashboard.byType).toEqual(home.byType)
-    expect(home.excluded).toContainEqual(expect.objectContaining({ name: '이창호-국민연금', amount: 115_000_000, reason: 'entitlement' }))
-    expect(home.excluded.some(e => e.name === '최진숙-국민연금')).toBe(false)   // 0원 수급권은 생략
-    expect(Math.round((home.byType.PENSION ?? 0) / 1e4)).toBe(3981)              // 연금 39.81M (154.81M 아님)
+    expect(home.byType.PENSION).toBe(154_810_000)
+    expect(home.excluded).toEqual([])
+    expect(excludedSummary(home.excluded)).toBe('')
+    // 엔진 시작 잔액은 그대로 0 (지급 일정과 이중 계상 방지)
+    expect(ctx.current.positions.find(p => p.name === '이창호-국민연금')?.balance).toBe(0)
+    expect(chartLast).toBe(home.net)
   }, 60_000)
 
   it('주식 계좌 필터: 이창호-미래에셋-퇴직IRP KPI 250.41M (전체 436.25M 아님)', async () => {

@@ -39,7 +39,7 @@ interface Record_ { assetId: string; date: string; value: number }
 
 /**
  * 자산 하나의 이력 포인트를 레코드 리스트로 변환 (원본 _asset_to_records).
- * 부동산은 부채(대출 + 보증금)를 차감한 순자산 기준.
+ * 부동산은 부채(대출 + 보증금)를 차감한 순자산 기준. 값은 원 단위 반올림(카드 순자산과 일치).
  */
 function assetToRecords(asset: Asset, today: string): Record_[] {
   const aId   = asset.id
@@ -60,7 +60,7 @@ function assetToRecords(asset: Asset, today: string): Record_[] {
   const acqPrice = asset.acquisitionPrice || 0
   const qty      = asset.quantity || 0
   const initVal  = ((aType === 'STOCK' || aType === 'PHYSICAL') && qty) ? acqPrice * qty : acqPrice
-  records.push({ assetId: aId, date: acqDate, value: Math.max(0, initVal - liab) })
+  records.push({ assetId: aId, date: acqDate, value: Math.max(0, Math.round(initVal - liab)) })
 
   // (2) 이력
   for (const h of history) {
@@ -69,7 +69,7 @@ function assetToRecords(asset: Asset, today: string): Record_[] {
     if (h.value != null) val = h.value
     else if (h.price != null && h.quantity != null) val = h.price * h.quantity
     else continue
-    records.push({ assetId: aId, date: h.date.slice(0, 10), value: Math.max(0, val - liab) })
+    records.push({ assetId: aId, date: h.date.slice(0, 10), value: Math.max(0, Math.round(val - liab)) })
   }
 
   // (3) 현재값 or 매각값
@@ -78,7 +78,7 @@ function assetToRecords(asset: Asset, today: string): Record_[] {
     records.push({ assetId: aId, date: asset.disposalDate.slice(0, 10), value: 0 })
   } else {
     const cur = asset.currentValue || 0
-    records.push({ assetId: aId, date: today, value: Math.max(0, cur - liab) })
+    records.push({ assetId: aId, date: today, value: Math.max(0, Math.round(cur - liab)) })
   }
 
   return records

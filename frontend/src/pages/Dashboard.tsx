@@ -7,7 +7,7 @@ import { formatMoney, formatManwon, TYPE_LABELS, TYPE_COLORS } from '@/lib/utils
 import type { AssetType } from '@/types'
 
 export default function Dashboard() {
-  // 홈(/)과 같은 buildSnapshot 기준 합계 — 수급권·합산 제외·연결 잔액은 제외 항목으로 별도 표시
+  // 홈(/)과 같은 snapshotTotals 기준 합계 — 국민연금 수급권은 평가액 포함, 합산 제외·연결 잔액·기준일 뒤 취득은 제외 항목으로 별도 표시
   const { data: planner } = usePlanner()
   const isLoading = !planner
 
@@ -107,7 +107,7 @@ export default function Dashboard() {
       {/* 자산 성장 추이 — 1줄 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
         <h3 className="text-sm font-semibold text-gray-300 mb-1">📈 자산 성장 추이</h3>
-        <p className="text-xs text-gray-500 mb-4">차트는 원본 이력 합산입니다. 위 합계에서 뺀 제외 항목(수급권 등)도 포함되어 마지막 값이 총 자산과 다를 수 있습니다.</p>
+        <p className="text-xs text-gray-500 mb-4">차트 마지막 값 = 순자산(부동산 대출·보증금 차감). 연결·합산 제외 항목이 있으면 다를 수 있음.</p>
         <AssetChart groupBy="type" defaultPeriod="10y" height={260} />
       </div>
     </div>

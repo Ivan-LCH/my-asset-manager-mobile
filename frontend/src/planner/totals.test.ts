@@ -1,7 +1,9 @@
 // 1단계 — 총액 기준 통일: 홈(/)·통합 대시보드(/history)·연금 탭이 같은 snapshotTotals 를 쓰는지 검증
+// 국민연금 수급권은 화면 합계에 평가액 포함, 엔진 balance 는 0 유지(지급 일정과 이중 계상 방지)
 import { describe, it, expect } from 'vitest'
 import type { Asset } from '@/types'
-import { blankPlan, buildSnapshot } from './model'
+import { blankPlan, buildSnapshot, defaultPolicy, type PlannerPlan } from './model'
+import { simulate } from './engine'
 import { excludedSummary, formatEok, snapshotTotals } from './totals'
 
 const asset = (id: string, type: Asset['type'], value: number, extra: Partial<Asset> = {}): Asset => ({
@@ -9,22 +11,63 @@ const asset = (id: string, type: Asset['type'], value: number, extra: Partial<As
   ownership: { husband: 100, wife: 0 }, createdAt: '', updatedAt: '', history: [], ...extra,
 })
 const AS_OF = '2026-10-15'
-const snap = (assets: Asset[]) => buildSnapshot(assets, { currentAge: 40, retirementAge: 60 }, blankPlan(AS_OF), AS_OF + 'T00:00:00Z')
+const snap = (assets: Asset[], plan: PlannerPlan = blankPlan(AS_OF)) => buildSnapshot(assets, { currentAge: 40, retirementAge: 60 }, plan, AS_OF + 'T00:00:00Z')
+const fixture = () => [
+  asset('apt', 'REAL_ESTATE', 1_000_000_000, { detail: { loanAmount: 300_000_000, tenantDeposit: 0 } as any }),
+  asset('이창호-국민연금', 'PENSION', 115_000_000, { detail: { pensionType: 'NATIONAL' } as any }),
+  asset('배우자-국민연금', 'PENSION', 0, { detail: { pensionType: '국민연금' } as any }),
+  asset('IRP', 'PENSION', 39_810_000, { detail: { pensionType: 'IRP' } as any }),
+]
+const won = (v: number) => v.toLocaleString('ko-KR')
 
 describe('snapshotTotals', () => {
-  it('국민연금 수급권은 합계에서 빼고 제외 항목으로 돌려준다 (0원 수급권은 생략)', () => {
-    const t = snapshotTotals(snap([
-      asset('apt', 'REAL_ESTATE', 1_000_000_000, { detail: { loanAmount: 300_000_000, tenantDeposit: 0 } as any }),
-      asset('이창호-국민연금', 'PENSION', 115_000_000, { detail: { pensionType: 'NATIONAL' } as any }),
-      asset('배우자-국민연금', 'PENSION', 0, { detail: { pensionType: '국민연금' } as any }),
-      asset('IRP', 'PENSION', 39_810_000, { detail: { pensionType: 'IRP' } as any }),
-    ]))
-    expect(t.total).toBe(1_039_810_000)
+  it('국민연금 수급권은 평가액을 합계·byType 에 포함하고 제외 항목에 넣지 않는다', () => {
+    const t = snapshotTotals(snap(fixture()))
+    console.log(`[totals] 총자산=${won(t.total)} 부채=${won(t.debt)} 순자산=${won(t.net)} 연금=${won(t.byType.PENSION ?? 0)}`)
+    expect(t.total).toBe(1_154_810_000)
     expect(t.debt).toBe(300_000_000)
-    expect(t.net).toBe(739_810_000)
-    expect(t.byType.PENSION).toBe(39_810_000)
-    expect(t.excluded).toEqual([{ assetId: '이창호-국민연금', name: '이창호-국민연금', type: 'PENSION', amount: 115_000_000, reason: 'entitlement' }])
-    expect(excludedSummary(t.excluded)).toBe('제외 항목: 이창호-국민연금 수급권 1.15억')
+    expect(t.net).toBe(854_810_000)
+    expect(t.byType.PENSION).toBe(154_810_000)
+    expect(t.excluded).toEqual([])
+    expect(excludedSummary(t.excluded)).toBe('')
+  })
+
+  it('엔진 회귀: 수급권 snapshot balance 는 0 유지, 시작 순자산에 평가액이 들어가지 않는다', () => {
+    const plan = { ...blankPlan(AS_OF), endDate: '2026-12-31', inflation: 0 }
+    const s = snap([
+      asset('cash', 'SAVINGS', 1_000_000),
+      asset('이창호-국민연금', 'PENSION', 115_000_000, { detail: { pensionType: 'NATIONAL' } as any }),
+    ], plan)
+    const national = s.positions.find(p => p.assetId === '이창호-국민연금')!
+    expect(national.role).toBe('entitlement')
+    expect(national.balance).toBe(0)
+    expect(snapshotTotals(s).total).toBe(116_000_000)
+    const run = simulate(s)
+    expect(run.months.length).toBeGreaterThan(0)
+    console.log(`[totals] 엔진 첫 달 순자산=${won(run.months[0].netWorth)} (수급권 1.15억 미포함)`)
+    expect(run.months[0].netWorth).toBeLessThan(115_000_000)
+    expect(run.months.every(m => (m.balances['이창호-국민연금'] ?? 0) === 0)).toBe(true)
+  })
+
+  it('저장된 정책: role entitlement 는 포함, role excluded 는 계속 제외', () => {
+    const assets = fixture()
+    const plan = blankPlan(AS_OF)
+    plan.policies = [
+      { ...defaultPolicy(assets[1]), role: 'entitlement', confirmed: true },
+      { ...defaultPolicy(assets[3]), role: 'excluded', confirmed: true },
+    ]
+    const t = snapshotTotals(snap(assets, plan))
+    console.log(`[totals] 저장 정책 — 총자산=${won(t.total)} 연금=${won(t.byType.PENSION ?? 0)} · ${excludedSummary(t.excluded)}`)
+    expect(t.byType.PENSION).toBe(115_000_000)
+    expect(t.total).toBe(1_115_000_000)
+    expect(t.excluded).toEqual([{ assetId: 'IRP', name: 'IRP', type: 'PENSION', amount: 39_810_000, reason: 'excluded' }])
+    expect(excludedSummary(t.excluded)).toBe('제외 항목: IRP 합산 제외 3,981만원')
+  })
+
+  it('기준일 뒤 취득 수급권은 future 로 제외', () => {
+    const t = snapshotTotals(snap([asset('np', 'PENSION', 50_000_000, { acquisitionDate: '2027-01-01', detail: { pensionType: 'NATIONAL' } as any })]))
+    expect(t.total).toBe(0)
+    expect(t.excluded.map(e => [e.assetId, e.reason])).toEqual([['np', 'future']])
   })
 
   it('매각 자산은 합계·제외 목록 모두에 없고, 기준일 뒤 취득 자산은 제외 항목, 미래 매각 예정은 합산', () => {
