@@ -81,6 +81,7 @@ describe('최근 IRP·세금·시세 백업 보존',()=>{
     vi.stubGlobal('window',{google:{accounts:{oauth2:{initTokenClient:(options:any)=>({requestAccessToken:()=>options.callback({access_token:'synthetic-token'})})}}}})
     const fetchMock=vi.fn(async(url:string,options?:RequestInit)=>{
       if(url.includes('alt=media'))return {ok:true,text:async()=>json}
+      if(options?.method==='POST'&&!url.includes('/upload/'))return {ok:true,json:async()=>({id:'synthetic-folder'})}
       if(options?.method==='POST')return {ok:true,json:async()=>({id:'synthetic-id',name:backupFileName(backup.exportedAt)})}
       return {ok:true,json:async()=>({files:[]})}
     })
@@ -88,7 +89,7 @@ describe('최근 IRP·세금·시세 백업 보존',()=>{
     try{
       await drive.googleSignIn()
       expect((await drive.saveToDrive(json)).name).toBe(backupFileName(backup.exportedAt))
-      const upload=fetchMock.mock.calls.find(([,options])=>options?.method==='POST')
+      const upload=fetchMock.mock.calls.find(([url,options])=>options?.method==='POST'&&String(url).includes('/upload/'))
       expect(String(upload?.[1]?.body)).toContain(json)
       expect(JSON.parse(await drive.loadFromDrive('synthetic-id'))).toEqual(backup)
     }finally{drive.logout()}

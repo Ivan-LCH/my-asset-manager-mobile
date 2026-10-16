@@ -2,16 +2,16 @@ import MigrationReview from '@/planner/MigrationReview'
 import {pensionRegistrationSummary,registerPensionPlan} from '@/lib/registerPensionPlan'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, Upload, Cloud, CloudOff, FolderOpen, RefreshCw } from 'lucide-react'
+import { Download, Upload, Cloud, CloudOff, History, RefreshCw } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
-import { exportBackup, importBackup, previewBackup, restorePreviousImport, clearAllData, previewStockPriceCorrection, applyStockPriceCorrection, undoStockPriceCorrection, getLastBackupImport, type BackupData } from '@/lib/db'
+import { exportBackup, importBackup, mergeBackup, previewBackup, restorePreviousImport, clearAllData, previewStockPriceCorrection, applyStockPriceCorrection, undoStockPriceCorrection, getLastBackupImport, type BackupData } from '@/lib/db'
 import {backupFileName,backupSummary} from '@/lib/backupInfo'
 import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
 import { fmtQty } from '@/lib/utils'
-import { googleSignIn, ensureSignedIn, logout, isLoggedIn, onAuthChange, saveToDrive, listBackupFiles, loadFromDrive, pickFolder, pickBackupFile, pickerConfigured, type DriveFile } from '@/lib/googleDrive'
+import { googleSignIn, ensureSignedIn, logout, isLoggedIn, onAuthChange, saveToDrive, listBackupFiles, loadFromDrive, latestBackupFile, BACKUP_FOLDER_NAME, MANUAL_BACKUP_FILE_NAME, type DriveFile } from '@/lib/googleDrive'
 import { recordBackupSuccess } from '@/lib/autoBackup'
-import RestoreDiffDialog, { type RestoreRequest } from '@/components/common/RestoreDiffDialog'
+import RestoreDiffDialog, { type RestoreMode, type RestoreRequest } from '@/components/common/RestoreDiffDialog'
 
 export default function Settings() {
   const { data: settings, isLoading } = useSettings()
@@ -27,7 +27,6 @@ export default function Settings() {
   const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
   // Google Drive 상태
   const [gDriveLoggedIn, setGDriveLoggedIn] = useState(isLoggedIn())
-  const [driveFolder,    setDriveFolder]    = useState<{ id: string; name: string } | null>(null)
   const [driveFiles,     setDriveFiles]     = useState<DriveFile[]>([])
   const [driveLoading,   setDriveLoading]   = useState(false)
   // 복원 확인 모달 (변경 미리보기)
@@ -130,23 +129,29 @@ export default function Settings() {
     }
   }
 
-  // 검증·변경 미리보기 → 모달에서 확인 후 전체 교체 (파일 가져오기·Drive 공통)
+  // 검증·변경 미리보기 → 모달에서 방식(덮어쓰기/병합) 선택·확인 후 적용 (파일 가져오기·Drive 공통)
   const startRestore = async (data: unknown, source: string) => {
     const preview = await previewBackup(data)
     setPendingRestore({
-      request: { source, summary: backupSummary(preview.data), warnings: preview.warnings, diff: preview.diff },
+      request: { source, summary: backupSummary(preview.data), warnings: preview.warnings, diff: preview.diff, merge: preview.merge },
       data: preview.data, expected: preview.expected,
     })
   }
 
-  const confirmRestore = async () => {
+  const confirmRestore = async (mode: RestoreMode) => {
     if (!pendingRestore) return
     const { request, data, expected } = pendingRestore
     setRestoring(true)
     try {
-      await importBackup(data, expected, request.source)
-      await qc.invalidateQueries()   // 모든 쿼리 갱신
-      setBackupMsg({ ok: true, text: '가져오기 완료: '+request.source+'\n'+backupSummary(data) })
+      if (mode === 'merge') {
+        const added = await mergeBackup(data, expected, request.source)
+        await qc.invalidateQueries()
+        setBackupMsg({ ok: true, text: `병합 완료: ${request.source}\n백업에만 있던 자산 ${added}개를 추가했습니다. 기존 자산·설정·계획은 그대로입니다.` })
+      } else {
+        await importBackup(data, expected, request.source)
+        await qc.invalidateQueries()   // 모든 쿼리 갱신
+        setBackupMsg({ ok: true, text: '덮어쓰기 완료: '+request.source+'\n'+backupSummary(data) })
+      }
     } catch (err) {
       setBackupMsg({ ok: false, text: err instanceof Error ? err.message : '가져오기 실패' })
     }
@@ -197,10 +202,11 @@ export default function Settings() {
   const handleGDriveSave = () => driveAction(async () => {
     const data = await exportBackup()
     const json = JSON.stringify(data, null, 2)
-    const result = await saveToDrive(json, driveFolder?.id)
+    // 앱 백업 폴더의 고정 파일을 덮어쓴다 (자동 백업은 같은 폴더에 날짜별로 따로 보관)
+    const result = await saveToDrive(json, undefined, { fileName: MANUAL_BACKUP_FILE_NAME })
     recordBackupSuccess(data, result.id)   // 자동 백업 배너 기한 갱신
     setDriveFiles(await listBackupFiles())
-    setBackupMsg({ ok: true, text: `Drive에 저장됨: ${result.name}` })
+    setBackupMsg({ ok: true, text: `Drive에 저장됨: ${BACKUP_FOLDER_NAME}/${result.name}` })
   }, '저장 실패')
 
   const handleGDriveLoad = (fileId: string) => driveAction(async () => {
@@ -209,21 +215,15 @@ export default function Settings() {
       await startRestore(data, 'Drive: '+(driveFiles.find(f=>f.id===fileId)?.name??'백업 파일'))
   }, '복원 실패')
 
-  // Picker: 직접 업로드한 백업 파일도 선택 가능(선택 시 drive.file 접근 권한 부여) → 같은 미리보기·교체 흐름
-  const handlePickFile = () => driveAction(async () => {
-    const picked = await pickBackupFile()
-    if (!picked) return
-    const json = await loadFromDrive(picked.id)
-    await startRestore(JSON.parse(json.trim()), 'Drive: '+picked.name)   // trim 은 BOM 도 제거
-  }, '파일 선택 실패')
-
-  const handlePickFolder = () => driveAction(async () => {
-    const folder = await pickFolder()
-    if (folder) {
-      setDriveFolder(folder)
-      setBackupMsg({ ok: true, text: `폴더 선택: ${folder.name}` })
-    }
-  }, '폴더 선택 실패', 3000)
+  // 앱 백업 폴더에서 가장 최근 백업(수동·자동 중 modifiedTime 최신)을 찾아 같은 미리보기 흐름으로
+  const handleRestoreLatest = () => driveAction(async () => {
+    const files = await listBackupFiles()
+    setDriveFiles(files)
+    const latest = latestBackupFile(files)
+    if (!latest) throw new Error(`Drive '${BACKUP_FOLDER_NAME}' 폴더에 백업이 없습니다. 직접 올린 파일은 앱이 열 수 없으니 기기에 내려받아 아래 '가져오기'로 여세요.`)
+    const json = await loadFromDrive(latest.id)
+    await startRestore(JSON.parse(json.replace(/^\uFEFF/,'')), 'Drive: '+latest.name)
+  }, '복원 실패')
 
   const handleRefreshFiles = () => driveAction(async () => { setDriveFiles(await listBackupFiles()) }, '목록 조회 실패')
 
@@ -321,41 +321,38 @@ export default function Settings() {
           </button>
         ) : (
           <div className="space-y-3">
-            {/* 폴더 선택 (Picker 설정 시에만) */}
             <div className="flex items-center gap-2">
-              {pickerConfigured() && (
-                <button
-                  onClick={handlePickFolder}
-                  disabled={driveLoading}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors disabled:opacity-50"
-                >
-                  <FolderOpen className="w-3.5 h-3.5" />
-                  폴더 선택
-                </button>
-              )}
-              <span className="text-xs text-gray-400">
-                {driveFolder ? `📁 ${driveFolder.name}` : '내 Drive 루트'}
-              </span>
+              <span className="text-xs text-gray-400">📁 내 Drive / {BACKUP_FOLDER_NAME}</span>
               <button
-                onClick={() => { logout(); setGDriveLoggedIn(false); setDriveFolder(null); setDriveFiles([]) }}
+                onClick={() => { logout(); setGDriveLoggedIn(false); setDriveFiles([]) }}
                 className="ml-auto flex items-center gap-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300"
               >
                 <CloudOff className="w-3.5 h-3.5" /> 로그아웃
               </button>
             </div>
-            {/* 저장 */}
-            <button
-              onClick={handleGDriveSave}
-              disabled={driveLoading}
-              className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
-            >
-              <Cloud className="w-4 h-4" />
-              {driveLoading ? '저장 중...' : 'Drive에 저장'}
-            </button>
-            {/* 백업 파일 목록 */}
+            {/* 저장 · 최신 백업 복원 */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGDriveSave}
+                disabled={driveLoading}
+                className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
+              >
+                <Cloud className="w-4 h-4" />
+                {driveLoading ? '처리 중...' : 'Drive에 저장'}
+              </button>
+              <button
+                onClick={handleRestoreLatest}
+                disabled={driveLoading}
+                className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors disabled:opacity-50"
+              >
+                <History className="w-4 h-4" />
+                최신 백업 복원
+              </button>
+            </div>
+            {/* 백업 파일 목록 — 다른 시점의 백업을 고를 때 */}
             {driveFiles.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-gray-500">Drive 백업 파일 ({driveFiles.length}개)</p>
+                <p className="text-xs text-gray-500">폴더의 백업 파일 ({driveFiles.length}개 · 최신순) — 눌러서 복원</p>
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {driveFiles.map((f) => (
                     <button
@@ -370,29 +367,19 @@ export default function Settings() {
                 </div>
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleRefreshFiles}
-                disabled={driveLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> 새로고침
-              </button>
-              {pickerConfigured() && (
-                <button
-                  onClick={handlePickFile}
-                  disabled={driveLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 disabled:opacity-50"
-                >
-                  <FolderOpen className="w-3.5 h-3.5" /> Drive에서 파일 선택
-                </button>
-              )}
-            </div>
+            <button
+              onClick={handleRefreshFiles}
+              disabled={driveLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> 목록 새로고침
+            </button>
           </div>
         )}
-        {!pickerConfigured() && (
-          <p className="text-xs text-gray-500">목록에는 이 앱이 저장한 파일만 보입니다. 외부 업로드 파일은 '가져오기'로 열 수 있습니다.</p>
-        )}
+        <p className="text-xs text-gray-500">
+          백업은 내 Drive의 '{BACKUP_FOLDER_NAME}' 폴더에 저장됩니다. 수동 저장은 {MANUAL_BACKUP_FILE_NAME} 하나를 덮어쓰고, 자동 백업은 날짜별 파일로 최근 3개를 유지합니다.
+          이 앱이 만들지 않은 파일(직접 업로드·다른 위치로 옮긴 파일 등)은 앱이 열 수 없으니, 기기에 내려받아 아래 '가져오기'로 여세요.
+        </p>
       </div>
       <RestoreDiffDialog
         request={pendingRestore?.request ?? null}
@@ -436,7 +423,7 @@ export default function Settings() {
         {backupMsg && (
           <p className={`text-xs whitespace-pre-wrap break-words ${backupMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{backupMsg.text}</p>
         )}
-        <p className="text-xs text-gray-400">가져오기는 검증·확인 후 전체 교체합니다. 샘플은 별도 저장소에서 열립니다. 소스 ZIP에는 이 브라우저의 개인 자산이 포함되지 않습니다.</p>
+        <p className="text-xs text-gray-400">가져오기는 검증 후 덮어쓰기(전체 교체) 또는 병합(없는 자산만 추가) 중 골라 확인한 뒤 적용합니다. 샘플은 별도 저장소에서 열립니다. 소스 ZIP에는 이 브라우저의 개인 자산이 포함되지 않습니다.</p>
         <p className="text-xs text-gray-400">저장된 IRP 재원·합산·목돈 연결, 개인별/연도별 세금 추가정보, 소급 시세와 수량 추정 근거도 백업에 포함됩니다. 편집 중인 값은 해당 화면에서 먼저 저장하세요. 내보낸 파일을 만드는 것만으로 다른 브라우저에 적용되지는 않습니다.</p>
         {lastImport&&<details className="rounded border border-gray-700 p-3 text-xs" data-last-backup-import><summary className="cursor-pointer text-blue-300">이 브라우저에 마지막으로 가져온 백업</summary><p className="mt-2 break-words">파일: {lastImport.sourceName}</p><p>가져온 시각: {new Date(lastImport.importedAt).toLocaleString()}</p><p className="mt-2 whitespace-pre-wrap break-words">{lastImport.summary}</p><p className="mt-2 text-gray-400">가져올 당시의 기록입니다. 이후 저장한 변경은 다음 내보내기에 포함됩니다. 복구용 사본·가져오기 기록 자체는 다른 브라우저로 옮기지 않습니다.</p></details>}
         <button className="text-sm text-blue-300 underline p-3" onClick={() => { if (window.confirm('마지막 복원 직전 사본으로 되돌릴까요? 현재 데이터도 직전 사본으로 교체 보관됩니다.')) void restorePreviousImport().then(() => qc.invalidateQueries()).then(() => setBackupMsg({ok:true,text:'직전 사본 복구 완료'})).catch(e => setBackupMsg({ok:false,text:String(e)})) }}>마지막 복원 직전으로 되돌리기</button>

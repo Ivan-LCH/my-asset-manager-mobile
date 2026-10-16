@@ -5,7 +5,11 @@ import {backupFileName} from './backupInfo'
 // 환경변수가 없으면 기존 하드코딩 클라이언트 ID를 그대로 사용한다.
 const DEFAULT_CLIENT_ID = '806295714332-jc5h95el81jdqopvga1l1d1bsmdvj2er.apps.googleusercontent.com'
 const SCOPES = 'https://www.googleapis.com/auth/drive.file'
-const APP_FILE_PREFIX = 'asset-manager-backup'
+// drive.file 범위에서는 이 앱이 만든 파일·폴더만 보인다 → 앱이 만든 고정 폴더 하나에 모두 저장.
+export const BACKUP_FOLDER_NAME = 'MyAssetManager 백업'
+/** 수동 "Drive에 저장" 파일명 — 매번 같은 파일을 덮어쓴다(자동 백업은 날짜별 이름). */
+export const MANUAL_BACKUP_FILE_NAME = 'asset-manager-backup.json'
+const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const env = (key: keyof ImportMetaEnv): string => String(import.meta.env?.[key] ?? '').trim()
 const clientId = () => env('VITE_GOOGLE_CLIENT_ID') || DEFAULT_CLIENT_ID
 
@@ -33,42 +37,8 @@ declare global {
           revoke?: (token: string, done?: () => void) => void
         }
       }
-      picker?: {
-        PickerBuilder: new () => PickerBuilder
-        ViewId: { DOCS: string; FOLDERS: string }
-        Feature: { NAV_HIDDEN: string; MINE_ONLY: string }
-        DocsView: new (viewId?: string) => DocsView
-      }
-    }
-    // api.js 가 정의하는 로더 — window.google 아래가 아니라 최상위 window.gapi
-    gapi?: {
-      load: (api: string, callback: (() => void) | { callback: () => void; onerror?: () => void; timeout?: number; ontimeout?: () => void }) => void
     }
   }
-}
-
-interface PickerBuilder {
-  addView: (view: unknown) => PickerBuilder
-  enableFeature: (feature: string) => PickerBuilder
-  setOAuthToken: (token: string) => PickerBuilder
-  setDeveloperKey: (key: string) => PickerBuilder
-  setAppId: (appId: string) => PickerBuilder
-  setCallback: (callback: (data: PickerData) => void) => PickerBuilder
-  setTitle: (title: string) => PickerBuilder
-  build: () => { setVisible: (visible: boolean) => void }
-}
-
-interface DocsView {
-  setIncludeFolders: (v: boolean) => DocsView
-  setSelectFolderEnabled: (v: boolean) => DocsView
-  setParent: (parent: string) => DocsView
-  setMimeTypes: (mimeTypes: string) => DocsView
-  setQuery: (query: string) => DocsView
-}
-
-interface PickerData {
-  action: string  // 'picked' | 'cancel' | 'loaded'
-  docs?: Array<{ id: string; name: string; mimeType?: string }>
 }
 
 export interface DriveFile { id: string; name: string; modifiedTime: string; appProperties?: Record<string, string> }
@@ -106,6 +76,7 @@ let accessToken: string | null = null
 let expiresAt = 0
 let tokenClient: TokenClient | null = null
 let tokenClientOwner: unknown = null
+let folderPromise: Promise<string> | null = null
 let pending: { resolve: (t: string) => void; reject: (e: Error) => void } | null = null
 const listeners = new Set<() => void>()
 
@@ -120,6 +91,7 @@ function clearToken() {
   const had = accessToken !== null
   accessToken = null
   expiresAt = 0
+  folderPromise = null   // 다른 계정으로 다시 로그인할 수 있으므로 폴더 id 도 버린다
   if (had) notify()
 }
 
@@ -212,9 +184,44 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3'
 const MAX_LIST_PAGES = 10   // 100개 × 10쪽 — 무한 루프 방지
 
-/** 백업 파일 목록 조회 (앱에서 만든 파일·Picker로 고른 JSON 파일). nextPageToken을 끝까지 따라간다. */
+/** Drive 검색어(q) 문자열 리터럴 이스케이프 — 역슬래시와 작은따옴표. */
+export function driveQuote(value: string): string {
+  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
+}
+
+/** 앱 백업 폴더 id 조회 (없으면 null). 같은 이름이 여럿이면 가장 먼저 만든 폴더. */
+async function findBackupFolder(): Promise<string | null> {
+  const params = new URLSearchParams({
+    q: `name=${driveQuote(BACKUP_FOLDER_NAME)} and mimeType='${FOLDER_MIME}' and trashed=false`,
+    orderBy: 'createdTime', pageSize: '1', fields: 'files(id)',
+  })
+  const r = await driveFetch(`${DRIVE_API}/files?${params}`, '백업 폴더 확인')
+  return (await r.json() as { files?: { id: string }[] }).files?.[0]?.id ?? null
+}
+
+/** 앱 백업 폴더 id — 없으면 만든다. 동시에 여러 번 불려도 한 번만 조회·생성(실패 시 다음 호출에서 재시도). */
+export function ensureBackupFolder(): Promise<string> {
+  requireToken()
+  folderPromise ??= (async () => {
+    const found = await findBackupFolder()
+    if (found) return found
+    const r = await driveFetch(`${DRIVE_API}/files?fields=id`, '백업 폴더 만들기', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify({ name: BACKUP_FOLDER_NAME, mimeType: FOLDER_MIME }),
+    })
+    return (await r.json() as { id: string }).id
+  })().catch(e => { folderPromise = null; throw e })
+  return folderPromise
+}
+
+/** 앱 백업 폴더 안의 JSON 백업 목록(수정 시각 최신순). 폴더가 아직 없으면 빈 목록. nextPageToken을 끝까지 따라간다.
+ *  앱이 만들지 않은 파일은 drive.file 범위라 보이지 않는다 → 설정의 '가져오기'(로컬 파일)로 연다. */
 export async function listBackupFiles(): Promise<DriveFile[]> {
-  const q = `name contains '${APP_FILE_PREFIX}' and mimeType='application/json' and trashed=false`
+  requireToken()
+  const folderId = await (folderPromise ?? findBackupFolder())
+  if (!folderId) return []
+  const q = `${driveQuote(folderId)} in parents and mimeType='application/json' and trashed=false`
   const out: DriveFile[] = []
   let pageToken: string | undefined
   for (let page = 0; page < MAX_LIST_PAGES; page++) {
@@ -232,7 +239,13 @@ export async function listBackupFiles(): Promise<DriveFile[]> {
   return out
 }
 
-/** Drive에 백업 저장 (같은 이름이 있으면 업데이트, 없으면 생성). folderId 지정 시 해당 폴더에.
+/** 목록에서 가장 최근 백업(수동 고정 파일·자동 백업 구분 없이 modifiedTime 기준). */
+export function latestBackupFile(files: DriveFile[]): DriveFile | null {
+  return files.reduce<DriveFile | null>((best, f) => !best || (f.modifiedTime ?? '') > (best.modifiedTime ?? '') ? f : best, null)
+}
+
+/** Drive에 백업 저장 (같은 폴더에 같은 이름이 있으면 업데이트, 없으면 생성).
+ *  folderId 를 주지 않으면 앱 백업 폴더(ensureBackupFolder)에 저장한다 — 수동·자동 백업 공통.
  *  같은 이름 조회가 실패하면 중복 파일이 쌓이지 않게 저장도 중단(throw)한다. */
 export async function saveToDrive(
   jsonData: string,
@@ -241,18 +254,17 @@ export async function saveToDrive(
 ): Promise<{ id: string; name: string }> {
   requireToken()
   const fileName = opts.fileName ?? backupFileName(JSON.parse(jsonData).exportedAt??new Date().toISOString())
+  const parent = folderId ?? await ensureBackupFolder()
 
-  // 같은 이름 파일 검색 (실패 시 throw)
-  const query = folderId
-    ? `name='${fileName}' and '${folderId}' in parents and trashed=false`
-    : `name='${fileName}' and trashed=false`
+  // 같은 폴더의 같은 이름 파일 검색 (실패 시 throw)
+  const query = `name=${driveQuote(fileName)} and ${driveQuote(parent)} in parents and trashed=false`
   const listR = await driveFetch(`${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id)&pageSize=1`, '같은 이름 파일 확인')
   const existingId: string | undefined = (await listR.json()).files?.[0]?.id
 
   // multipart 업로드 (metadata + content). PATCH 에서는 parents 를 바꿀 수 없으므로 생성 때만 지정
   const metadata: Record<string, unknown> = { name: fileName, mimeType: 'application/json' }
   if (opts.appProperties) metadata.appProperties = opts.appProperties
-  if (folderId && !existingId) metadata.parents = [folderId]
+  if (!existingId) metadata.parents = [parent]
 
   const boundary = 'asset_manager_boundary'
   const body = `--${boundary}\r\n` +
@@ -285,65 +297,4 @@ export async function deleteDriveFile(fileId: string): Promise<void> {
 export async function loadFromDrive(fileId: string): Promise<string> {
   const r = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, '파일 다운로드')
   return r.text()
-}
-
-// ── Google Picker ───────────────────────────────────────────
-/** Picker는 API 키와 앱 ID(Cloud 프로젝트 번호)가 모두 설정된 경우에만 쓴다. */
-export function pickerConfigured(): boolean {
-  return !!(env('VITE_GOOGLE_API_KEY') && env('VITE_GOOGLE_APP_ID'))
-}
-
-/** api.js 의 gapi.load('picker') 로 Picker 라이브러리를 불러온다. */
-function loadPickerApi(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.google?.picker) { resolve(); return }
-    if (!window.gapi?.load) { reject(new Error('Google Picker 스크립트 로드 실패. 새로고침 후 재시도.')); return }
-    window.gapi.load('picker', {
-      callback: () => window.google?.picker ? resolve() : reject(new Error('Google Picker를 불러오지 못했습니다.')),
-      onerror: () => reject(new Error('Google Picker를 불러오지 못했습니다.')),
-      timeout: 10000,
-      ontimeout: () => reject(new Error('Google Picker 로드 시간 초과')),
-    })
-  })
-}
-
-function openPicker(view: DocsView, title: string, token: string): Promise<{ id: string; name: string } | null> {
-  const picker = window.google!.picker!
-  return new Promise((resolve) => {
-    new picker.PickerBuilder()
-      .addView(view)
-      .setOAuthToken(token)
-      .setDeveloperKey(env('VITE_GOOGLE_API_KEY'))
-      // setAppId: 고른 파일에 drive.file 접근 권한을 부여(없으면 이후 다운로드가 404)
-      .setAppId(env('VITE_GOOGLE_APP_ID'))
-      .setTitle(title)
-      .setCallback((data: PickerData) => {
-        if (data.action === 'picked' && data.docs?.[0]) resolve({ id: data.docs[0].id, name: data.docs[0].name })
-        else if (data.action === 'cancel') resolve(null)
-      })
-      .build()
-      .setVisible(true)
-  })
-}
-
-/** Google Picker로 폴더 선택 → folderId + folderName 반환. */
-export async function pickFolder(): Promise<{ id: string; name: string } | null> {
-  if (!pickerConfigured()) return null
-  const token = requireToken()
-  await loadPickerApi()
-  const view = new window.google!.picker!.DocsView(window.google!.picker!.ViewId.FOLDERS)
-    .setIncludeFolders(true)
-    .setSelectFolderEnabled(true)
-  return openPicker(view, '저장할 폴더 선택', token)
-}
-
-/** Google Picker로 백업 JSON 파일 선택(직접 업로드한 파일 포함) → {id,name}. */
-export async function pickBackupFile(): Promise<{ id: string; name: string } | null> {
-  if (!pickerConfigured()) return null
-  const token = requireToken()
-  await loadPickerApi()
-  const view = new window.google!.picker!.DocsView(window.google!.picker!.ViewId.DOCS)
-    .setMimeTypes('application/json')
-    .setQuery(APP_FILE_PREFIX)
-  return openPicker(view, '복원할 백업 파일 선택', token)
 }

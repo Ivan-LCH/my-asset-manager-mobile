@@ -138,7 +138,7 @@ describe('Drive 오류 매핑', () => {
     await drive.googleSignIn()
     const fetchMock = vi.fn(async () => ({ ok: false, status: 500 }))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(drive.saveToDrive('{"exportedAt":"2026-10-15T00:00:00Z"}', undefined, { fileName: 'asset-manager-backup-auto-x.json' })).rejects.toThrow('같은 이름 파일 확인')
+    await expect(drive.saveToDrive('{"exportedAt":"2026-10-15T00:00:00Z"}', 'folder-1', { fileName: 'asset-manager-backup-auto-x.json' })).rejects.toThrow('같은 이름 파일 확인')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
@@ -149,7 +149,7 @@ describe('Drive 오류 매핑', () => {
       return { ok: true, json: async () => ({ files: [{ id: 'f1' }] }) }
     })
     vi.stubGlobal('fetch', fetchMock)
-    await drive.saveToDrive('{}', undefined, { fileName: 'n', appProperties: { assetManagerAuto: '1' } })
+    await drive.saveToDrive('{}', 'folder-1', { fileName: 'n', appProperties: { assetManagerAuto: '1' } })
     const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')!
     expect(String(patch[0])).toContain('/files/f1?')
     expect(String(patch[1]!.body)).toContain('"assetManagerAuto":"1"')
@@ -167,49 +167,84 @@ describe('백업 목록', () => {
     }
     const fetchMock = vi.fn(async (url: string) => {
       const u = new URL(url)
+      if (u.searchParams.get('q')?.includes('google-apps.folder')) return { ok: true, json: async () => ({ files: [{ id: 'folder-1' }] }) }
       return { ok: true, json: async () => pages[u.searchParams.get('pageToken') ?? ''] }
     })
     vi.stubGlobal('fetch', fetchMock)
     const files = await drive.listBackupFiles()
     expect(files.map(f => f.id)).toEqual(['a', 'b', 'c'])
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    const q = new URL(fetchMock.mock.calls[0][0]).searchParams
+    expect(fetchMock).toHaveBeenCalledTimes(4)   // 폴더 조회 1 + 목록 3쪽
+    const q = new URL(fetchMock.mock.calls[1][0]).searchParams
     expect(q.get('q')).toContain("mimeType='application/json'")
+    expect(q.get('q')).toContain("'folder-1' in parents")
     expect(q.get('pageSize')).toBe('100')
+    expect(drive.latestBackupFile(files)?.id).toBe('a')
+  })
+
+  it('앱 폴더가 아직 없으면 빈 목록 (폴더를 만들지 않음)', async () => {
+    await drive.googleSignIn()
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ files: [] }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await drive.listBackupFiles()).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('최신 백업은 수동 고정 파일·자동 백업 구분 없이 modifiedTime 기준', () => {
+    expect(drive.latestBackupFile([])).toBeNull()
+    expect(drive.latestBackupFile([
+      { id: 'auto', name: 'asset-manager-backup-auto-x.json', modifiedTime: '2026-10-14T00:00:00Z' },
+      { id: 'manual', name: 'asset-manager-backup.json', modifiedTime: '2026-10-15T00:00:00Z' },
+    ])?.id).toBe('manual')
   })
 })
 
-describe('Picker', () => {
-  it('API 키·앱 ID 가 없으면 비활성(null), 있으면 gapi.load(picker) 후 setDeveloperKey/setAppId', async () => {
-    await drive.googleSignIn()
-    expect(drive.pickerConfigured()).toBe(false)
-    expect(await drive.pickBackupFile()).toBeNull()
+describe('앱 백업 폴더', () => {
+  it('Drive 검색어 따옴표·역슬래시 이스케이프', () => {
+    expect(drive.driveQuote("it's")).toBe("'it\\'s'")
+    expect(drive.driveQuote('a\\b')).toBe("'a\\\\b'")
+    expect(drive.driveQuote(drive.BACKUP_FOLDER_NAME)).toBe("'MyAssetManager 백업'")
+  })
 
-    vi.stubEnv('VITE_GOOGLE_API_KEY', 'key-1')
-    vi.stubEnv('VITE_GOOGLE_APP_ID', '806295714332')
-    expect(drive.pickerConfigured()).toBe(true)
-    const calls: Record<string, unknown[]> = {}
-    const builder: any = new Proxy({}, {
-      get: (_, prop: string) => (...args: unknown[]) => {
-        calls[prop] = args
-        if (prop === 'build') return { setVisible: () => (calls.setCallback![0] as (d: unknown) => void)({ action: 'picked', docs: [{ id: 'picked-id', name: 'asset-manager-backup-2026-10-15-fixed.json' }] }) }
-        return builder
-      },
+  it('폴더가 없으면 한 번 만들고, 이후 저장은 그 폴더에 (폴더 id 재사용)', async () => {
+    await drive.googleSignIn()
+    const posts: { url: string; body: string }[] = []
+    let created = false
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        posts.push({ url, body: String(init.body) })
+        if (!url.includes('/upload/')) { created = true; return { ok: true, json: async () => ({ id: 'new-folder' }) } }
+        return { ok: true, json: async () => ({ id: 'file-1', name: drive.MANUAL_BACKUP_FILE_NAME }) }
+      }
+      return { ok: true, json: async () => ({ files: [] }) }
     })
-    const view: any = new Proxy({}, { get: (_, prop: string) => (...args: unknown[]) => { calls['view.' + prop] = args; return view } })
-    const w = window as any
-    w.gapi = { load: vi.fn((name: string, cfg: { callback: () => void }) => {
-      w.google.picker = { PickerBuilder: function () { return builder }, DocsView: function (id: string) { calls.viewId = [id]; return view }, ViewId: { DOCS: 'all', FOLDERS: 'folders' }, Feature: {} }
-      cfg.callback()
-    }) }
-    const picked = await drive.pickBackupFile()
-    expect(w.gapi.load).toHaveBeenCalledWith('picker', expect.anything())
-    expect(picked).toEqual({ id: 'picked-id', name: 'asset-manager-backup-2026-10-15-fixed.json' })
-    expect(calls.setDeveloperKey).toEqual(['key-1'])
-    expect(calls.setAppId).toEqual(['806295714332'])
-    expect(calls.setOAuthToken).toEqual(['tok-1'])
-    expect(calls['view.setMimeTypes']).toEqual(['application/json'])
-    expect(calls['view.setQuery']).toEqual(['asset-manager-backup'])
-    expect(calls.viewId).toEqual(['all'])
+    vi.stubGlobal('fetch', fetchMock)
+    await Promise.all([drive.ensureBackupFolder(), drive.ensureBackupFolder()])
+    expect(posts).toHaveLength(1)   // 동시 호출도 한 번만 생성
+    expect(created).toBe(true)
+    const folderQ = new URL(fetchMock.mock.calls[0][0]).searchParams.get('q')!
+    expect(folderQ).toContain("name='MyAssetManager 백업'")
+    expect(folderQ).toContain("mimeType='application/vnd.google-apps.folder'")
+    expect(folderQ).toContain('trashed=false')
+    expect(JSON.parse(posts[0].body)).toEqual({ name: 'MyAssetManager 백업', mimeType: 'application/vnd.google-apps.folder' })
+
+    const r = await drive.saveToDrive('{}', undefined, { fileName: drive.MANUAL_BACKUP_FILE_NAME })
+    expect(r.name).toBe('asset-manager-backup.json')
+    expect(posts).toHaveLength(2)   // 폴더 재생성 없음, 파일 업로드만
+    expect(posts[1].body).toContain('"parents":["new-folder"]')
+    const sameName = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u))).find(u => u.includes("name='asset-manager-backup.json'"))!
+    expect(sameName).toContain("'new-folder' in parents")
+  })
+
+  it('로그아웃하면 폴더 id 캐시도 버린다 (다른 계정 대비)', async () => {
+    await drive.googleSignIn()
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ files: [{ id: 'folder-a' }] }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await drive.ensureBackupFolder()).toBe('folder-a')
+    await drive.ensureBackupFolder()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    drive.logout()
+    await drive.googleSignIn()
+    await drive.ensureBackupFolder()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

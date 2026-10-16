@@ -86,7 +86,8 @@ export function recordBackupFailure(message: string, now = new Date(), storage: 
   writeBackupState({ ...readBackupState(storage), error: message, errorAt: now.toISOString() }, storage)
 }
 
-/** 자동 백업 1회 실행: 업로드 → 상태 기록 → 오래된 자동 백업 정리. 업로드 실패는 throw. */
+/** 자동 백업 1회 실행: 업로드 → 상태 기록 → 오래된 자동 백업 정리. 업로드 실패는 throw.
+ *  폴더를 주지 않으므로 saveToDrive 가 앱 백업 폴더(수동 백업과 같은 곳)에 저장하고, listBackupFiles 도 그 폴더만 본다. */
 export async function runAutoBackup(data: BackupData, now = new Date()): Promise<{ id: string; name: string; pruned: number }> {
   const saved = await saveToDrive(JSON.stringify(data), undefined, { fileName: autoBackupFileName(data.exportedAt), appProperties: AUTO_BACKUP_PROPERTY })
   recordBackupSuccess(data, saved.id, now)

@@ -1,5 +1,5 @@
 // 복원 전 변경 미리보기 — 현재 데이터와 가져올 백업을 테이블별로 비교하는 순수 함수.
-// 읽기 전용이며 복원은 여전히 전체 교체만 한다(병합은 보류: ++id 기기별 충돌, 삭제 기록 없음).
+// 복원 방식: 전체 교체(diffBackup 표시) 또는 병합(planMerge — 백업에만 있는 자산과 그 상세·이력·배당만 추가).
 import { fingerprint } from '@/planner/model'
 import type { BackupData } from './db'
 
@@ -85,4 +85,44 @@ export function diffBackup(current: BackupData, incoming: BackupData): BackupDif
 /** 이름 목록을 앞 max개 + "외 N" 으로 줄임 */
 export function shortList(names: string[], max = 5): string {
   return names.length <= max ? names.join(', ') : `${names.slice(0, max).join(', ')} 외 ${names.length - max}`
+}
+
+// ── 병합 계획 ─────────────────────────────────────────────────
+// 현재 데이터는 그대로 두고, 백업에만 있는 자산(id 기준)과 그 자산의 상세·이력·배당만 추가한다.
+// id 가 겹치면 현재 값 유지. settings·planner 테이블은 건드리지 않는다(삭제 기록·updatedAt 이 없어 병합 불가).
+export const MERGE_TABLES = ['assets', ...DETAIL_TABLES, 'assetHistory', 'dividendHistory']
+export interface MergePlan {
+  /** 추가할 행 — 테이블별. 이력·배당은 ++id 를 지워 새 id 를 받는다(현재 행과 id 충돌 방지). */
+  tables: Record<string, Row[]>
+  assetNames: string[]
+  /** 추가 행 수 (자산 제외 — 상세·이력·배당) */
+  details: number
+  history: number
+  dividends: number
+}
+
+export function planMerge(current: BackupData, incoming: BackupData): MergePlan {
+  const have = (table: string, key: string) => new Set(((current.tables[table] ?? []) as Row[]).map(r => String(r[key])))
+  const existingAssets = have('assets', 'id')
+  const newAssets = ((incoming.tables.assets ?? []) as Row[]).filter(a => !existingAssets.has(String(a.id)))
+  const newIds = new Set(newAssets.map(a => String(a.id)))
+  const tables: Record<string, Row[]> = { assets: newAssets }
+  let details = 0
+  for (const table of DETAIL_TABLES) {
+    // 상세는 assetId 가 기본 키 — 이미 있으면(고아 상세라도) 현재 값 유지
+    const existing = have(table, 'assetId')
+    tables[table] = ((incoming.tables[table] ?? []) as Row[]).filter(r => newIds.has(String(r.assetId)) && !existing.has(String(r.assetId)))
+    details += tables[table].length
+  }
+  for (const table of ['assetHistory', 'dividendHistory']) {
+    // 현재 DB에 같은 자산의 고아 행(같은 자연 키)이 남아 있으면 현재 행 유지
+    const existing = new Set(((current.tables[table] ?? []) as Row[]).map(r => keyOf(table, r)))
+    tables[table] = ((incoming.tables[table] ?? []) as Row[])
+      .filter(r => newIds.has(String(r.assetId)) && !existing.has(keyOf(table, r)))
+      .map(({ id: _id, ...rest }) => rest)
+  }
+  return {
+    tables, assetNames: newAssets.map(a => String(a.name ?? a.id)), details,
+    history: tables.assetHistory.length, dividends: tables.dividendHistory.length,
+  }
 }
