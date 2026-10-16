@@ -21,7 +21,7 @@ interface TokenResponse {
   error?: string
   error_description?: string
 }
-interface TokenClient { requestAccessToken: (opts?: { prompt?: string }) => void }
+interface TokenClient { requestAccessToken: (opts?: { prompt?: string; include_granted_scopes?: boolean }) => void }
 
 declare global {
   interface Window {
@@ -31,6 +31,7 @@ declare global {
           initTokenClient: (config: {
             client_id: string
             scope: string
+            include_granted_scopes?: boolean
             callback: (response: TokenResponse) => void
             error_callback?: (e: { type?: string; message?: string }) => void
           }) => TokenClient
@@ -119,6 +120,8 @@ function getTokenClient(): TokenClient {
   tokenClient = oauth2.initTokenClient({
     client_id: clientId(),
     scope: SCOPES,
+    // 같은 OAuth 클라이언트에 이전에 부여된 다른 scope(YouTube 등)가 합쳐지면 400 — drive.file 만 요청
+    include_granted_scopes: false,
     callback: (response) => {
       const p = pending; pending = null
       if (response.error || !response.access_token) { p?.reject(new Error(gisErrorMessage(response.error ?? 'unknown'))); return }
@@ -147,8 +150,8 @@ export function googleSignIn(): Promise<string> {
     }
     pending?.reject(new Error('새 로그인 요청으로 대체되었습니다.'))
     pending = { resolve, reject }
-    // prompt:'' — 동의 화면은 처음(또는 권한이 없을 때)만 표시
-    getTokenClient().requestAccessToken({ prompt: '' })
+    // prompt:'' — 동의 화면은 처음(또는 권한이 없을 때)만 표시, 기존 부여 scope 병합 안 함
+    getTokenClient().requestAccessToken({ prompt: '', include_granted_scopes: false })
   })
 }
 

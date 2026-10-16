@@ -50,12 +50,17 @@ describe('Google 토큰', () => {
     expect(drive.isLoggedIn()).toBe(false)
   })
 
-  it("prompt:'' 로 요청하고 토큰 클라이언트는 한 번만 만든다", async () => {
+  it("prompt:'' + include_granted_scopes:false 로 요청하고 토큰 클라이언트는 한 번만 만든다", async () => {
     await drive.googleSignIn()
     tokenResponse = { ...tokenResponse, access_token: 'tok-2' }
     await drive.googleSignIn()
     expect(initTokenClient).toHaveBeenCalledTimes(1)
-    expect(requestAccessToken).toHaveBeenCalledWith({ prompt: '' })
+    // 이전에 부여된 다른 scope(YouTube 등)와 합쳐지면 GIS 가 400 을 내므로 병합을 끈다
+    expect(initTokenClient.mock.calls[0][0]).toMatchObject({
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      include_granted_scopes: false,
+    })
+    expect(requestAccessToken).toHaveBeenCalledWith({ prompt: '', include_granted_scopes: false })
     expect(drive.getAccessToken()).toBe('tok-2')
   })
 
