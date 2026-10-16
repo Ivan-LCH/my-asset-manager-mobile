@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts'
 import { useAssets, useAssetsByType } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'

@@ -7,6 +7,7 @@ import { useChart } from '@/hooks/useAssets'
 import PeriodFilter, { Period } from './PeriodFilter'
 import type { AssetType, ChartDataPoint } from '@/types'
 import { colorForLabel, cn, formatAxisAmount, formatEok } from '@/lib/utils'
+import { axisTicks, axisTickCount } from '@/lib/chartTicks'
 
 interface CustomTooltipProps {
   active?:  boolean
@@ -130,6 +131,8 @@ export default function AssetChart({
 
   const pivoted = pivot(data)
   const labels  = getLabels(data)
+  // X축 tick: 달력 경계(주·월·연) 기준으로 규칙적인 간격 — 추이·일별 모두 같은 날짜 축
+  const xTicks = axisTicks(pivoted.map((row) => row.date as string), axisTickCount())
 
   // 일별 증감 모드는 단/중기에서만 의미 있음 (장기는 막대가 너무 많아 노이즈)
   const isDailyAllowed = period === '1m' || period === '3m' || period === '1y'
@@ -159,6 +162,7 @@ export default function AssetChart({
         tickLine={false}
         axisLine={false}
         tickFormatter={(v: string) => (isShortPeriod ? v.slice(5, 10) : v.slice(2, 7))}
+        ticks={xTicks}
         interval="preserveStartEnd"
       />
       <YAxis
@@ -250,6 +254,7 @@ export default function AssetChart({
               tickLine={false}
               axisLine={false}
               tickFormatter={(v: string) => (isShortPeriod ? v.slice(5, 10) : v.slice(2, 7))}
+              ticks={xTicks}
               interval="preserveStartEnd"
             />
             <YAxis
