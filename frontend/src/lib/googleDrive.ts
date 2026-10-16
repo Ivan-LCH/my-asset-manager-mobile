@@ -3,7 +3,7 @@ import {backupFileName} from './backupInfo'
 // 사용자별 Google 계정으로 인증 → 본인 Drive에만 접근 (drive.file scope).
 
 // 환경변수가 없으면 기존 하드코딩 클라이언트 ID를 그대로 사용한다.
-const DEFAULT_CLIENT_ID = '806295714332-jc5h95el81jdqopvga1l1d1bsmdvj2er.apps.googleusercontent.com'
+const DEFAULT_CLIENT_ID = '806295714332-ogbgd18j1n90atd8j9u46brus5ad2tuc.apps.googleusercontent.com'
 const SCOPES = 'https://www.googleapis.com/auth/drive.file'
 // drive.file 범위에서는 이 앱이 만든 파일·폴더만 보인다 → 앱이 만든 고정 폴더 하나에 모두 저장.
 export const BACKUP_FOLDER_NAME = 'MyAssetManager 백업'
