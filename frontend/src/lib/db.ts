@@ -9,6 +9,7 @@ import { fetchStockHistory } from './stockPrice'
 import { validateBackup } from '@/planner/backup'
 import { fingerprint } from '@/planner/model'
 import {backupSummary,backupReplacementWarnings} from './backupInfo'
+import { diffBackup, planMerge, shortList, MERGE_TABLES } from './backupDiff'
 import { backupWarnings, seoulToday } from './validation'
 
 // ──────────────────────────────────────────────────────────────
@@ -651,17 +652,19 @@ export async function beginQuoteRequest(assetIds: string[], requestId: string) {
     for (const id of assetIds) await db.settings.put({key:'quote-request:'+id,value:requestId})
   })
 }
-export async function applyQuoteObservation(assetId:string,ticker:string,price:number|null,date:string,requestId:string):Promise<boolean> {
+/** failure: 시세 조회 실패 사유(stockPrice.fetchStockQuote 의 error/status)와 라벨 — quote-status 에 함께 기록 */
+export async function applyQuoteObservation(assetId:string,ticker:string,price:number|null,date:string,requestId:string,failure?:{error:string;status?:number;label:string}):Promise<boolean> {
   return db.transaction('rw', db.assets, db.stockDetails, db.assetHistory, db.settings, async () => {
     if ((await db.settings.get('quote-request:'+assetId))?.value !== requestId) return false
     const a=await db.assets.get(assetId), stock=await db.stockDetails.get(assetId)
-    let reason=''
+    let reason='',fetchFailed=false
     if (!a || a.type!=='STOCK' || a.disposalDate) reason='처분되었거나 존재하지 않는 종목'
     else if(stock?.ticker!==ticker || stock?.isAccountLevel) reason='티커/계좌 입력이 변경되어 재조회 필요'
-    else if(price===null || !Number.isFinite(price) || price<=0) reason='시세 조회 실패 — 기존 평가액 유지'
+    else if(price===null || !Number.isFinite(price) || price<=0) {fetchFailed=true;reason=`시세 조회 실패${failure?` (${failure.label})`:''} — 기존 평가액 유지`}
     else if((await db.assetHistory.where('assetId').equals(assetId).toArray()).some(h=>h.date>date)) reason='미래 이력이 있어 확인 필요'
     const observedAt=new Date().toISOString()
-    await db.settings.put({key:'quote-status:'+assetId,value:JSON.stringify({observedAt,ok:!reason,reason,marketTimestamp:null})})
+    const error=fetchFailed?failure?.error??'no_price':undefined,status=fetchFailed?failure?.status:undefined
+    await db.settings.put({key:'quote-status:'+assetId,value:JSON.stringify({observedAt,ok:!reason,reason,error,status,marketTimestamp:null})})
     if(reason || !a || price===null)return false
     const rate=await getExchangeRate(stock?.currency??'KRW'),value=price*a.quantity*rate
     const existing=await db.assetHistory.where('[assetId+date]').equals([assetId,date]).first()
@@ -808,14 +811,21 @@ export async function exportBackup(): Promise<BackupData> {
   })
 }
 
-/** 백업 객체 → 기존 데이터 전체 교체(모든 테이블 clear 후 bulkAdd) */
+/** 가져오기 미리보기 — 검증·경고·전체 교체 diff·병합 계획. 쓰기 없음. */
 export async function previewBackup(data: unknown) {
   const validated = validateBackup(data), current = await exportBackup()
   // 입력값 경고(날짜 범위·0원 미처분·계좌/티커 중복)는 가져오기를 막지 않고 확인 창에 목록으로만 보여준다
   const inputWarnings=backupWarnings(validated.tables,seoulToday())
   const warnings=[...backupReplacementWarnings(current,validated),...inputWarnings]
-  return { data: validated, expected: fingerprint(current.tables), warnings, inputWarnings, summary: backupSummary(validated)+(warnings.length?'\n\n확인 필요:\n'+warnings.join('\n'):'') }
+  // 변경 미리보기 — 같은 스키마 정규화를 거친 현재 데이터와 비교(검증 실패 시 원본 그대로)
+  let normalized:BackupData=current
+  try{normalized=validateBackup(current)}catch{/* 현재 데이터가 검증을 통과하지 못해도 미리보기는 계속 */}
+  const diff=diffBackup(normalized,validated)
+  // 병합 미리보기 — mergeBackup 과 같은 계획(현재 DB 원본 기준)
+  const merge=planMerge(current,validated)
+  return { data: validated, expected: fingerprint(current.tables), warnings, inputWarnings, diff, merge, summary:backupSummary(validated)+(warnings.length?'\n\n확인 필요:\n'+warnings.join('\n'):'') }
 }
+/** 백업 객체 → 기존 데이터 전체 교체(모든 테이블 clear 후 bulkAdd) */
 export async function importBackup(data: BackupData, expected?: string, sourceName?:string): Promise<void> {
   const validated = validateBackup(data)
   await db.transaction('rw', db.tables, async () => {
@@ -828,6 +838,25 @@ export async function importBackup(data: BackupData, expected?: string, sourceNa
       if (rows && rows.length > 0) await t.bulkAdd(rows as Record<string, unknown>[])
     }
     await db.table('plannerRecovery').put({id:'last-import',sourceName:sourceName??'백업 파일',importedAt:new Date().toISOString(),exportedAt:validated.exportedAt,summary:backupSummary(validated)})
+  })
+}
+/** 병합 가져오기 — 현재 데이터는 그대로 두고 백업에만 있는 자산(+상세·이력·배당)만 추가. 추가한 자산 수 반환.
+ *  settings·planner 테이블은 건드리지 않는다. 추가할 것이 없으면 아무것도 쓰지 않는다(직전 사본도 유지). */
+export async function mergeBackup(data: BackupData, expected?: string, sourceName?: string): Promise<number> {
+  const validated = validateBackup(data)
+  return db.transaction('rw', db.tables, async () => {
+    const previous = await exportBackup()
+    if (expected && expected !== fingerprint(previous.tables)) throw new Error('미리보기 이후 데이터가 변경되었습니다. 다시 검토해 주세요.')
+    const plan = planMerge(previous, validated)
+    if (plan.assetNames.length === 0) return 0
+    await db.table('plannerRecovery').put({ id: 'before-import', createdAt: new Date().toISOString(), backup: previous })
+    for (const name of MERGE_TABLES) {
+      const rows = plan.tables[name]
+      if (rows?.length) await db.table(name).bulkAdd(rows)
+    }
+    const summary = `병합: 백업에만 있는 자산 ${plan.assetNames.length}개 추가 (${shortList(plan.assetNames)}) · 상세 ${plan.details} · 이력 ${plan.history} · 배당 ${plan.dividends}건. 기존 자산·설정·계획은 그대로.\n\n백업 파일 내용:\n${backupSummary(validated)}`
+    await db.table('plannerRecovery').put({ id: 'last-import', sourceName: sourceName ?? '백업 파일', importedAt: new Date().toISOString(), exportedAt: validated.exportedAt, summary })
+    return plan.assetNames.length
   })
 }
 export async function getLastBackupImport():Promise<{sourceName:string;importedAt:string;exportedAt:string;summary:string}|null>{

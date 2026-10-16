@@ -11,8 +11,9 @@ import AssetChart from '@/components/common/AssetChart'
 import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import { useStockAccountOwnership, useSaveStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
-import { beginQuoteRequest, applyQuoteObservation, getAllAssets, FALLBACK_RATES } from '@/lib/db'
-import { fetchPrices } from '@/lib/stockPrice'
+import { beginQuoteRequest, applyQuoteObservation, getAllAssets } from '@/lib/db'
+import { fetchQuotes, quoteErrorLabel, quoteRunSummary, type QuoteStatus } from '@/lib/stockPrice'
+import { fxFailureText, readFxStatus, settingsRate, updateExchangeRates, type FxStatus } from '@/lib/fx'
 import { formatEok, formatManwon, formatPnlEok, formatPnl, formatPnlManwon, formatAvgPrice, formatPrice, fmtPct, fmtQty, cn } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { Asset, Settings, StockDetail } from '@/types'
@@ -24,8 +25,17 @@ function stockTotals(stocks:Asset[],settings:Settings|undefined,positions:Positi
 
 // settings KV 키는 snake_case (exchange_rate_USD). db.getExchangeRate 와 동일.
 function getRate(settings: Settings | undefined, currency?: string): number {
-  if (!currency || currency === 'KRW') return 1
-  return (settings?.[`exchange_rate_${currency}`] as number) ?? FALLBACK_RATES[currency] ?? 1
+  return settingsRate(settings as Record<string, unknown> | undefined, currency)
+}
+
+function parseQuoteStatus(raw: unknown): QuoteStatus | null {
+  try { return raw ? JSON.parse(String(raw)) : null } catch { return null }
+}
+
+// 오늘이면 HH:MM, 아니면 MM-DD HH:MM
+function shortTime(iso: string): string {
+  const d = new Date(iso), hm = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return d.toDateString() === new Date().toDateString() ? hm : `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${hm}`
 }
 
 // acquisitionPrice = 주식 네이티브 통화 기준 (USD 주식 → USD, KRW 주식 → KRW)
@@ -61,11 +71,15 @@ export default function StockPage() {
   const [showCreate,    setShowCreate]    = useState(false)
   const [updating,      setUpdating]      = useState(false)
   const [updMsg,        setUpdMsg]        = useState('')
+  const [fxStatus,      setFxStatus]      = useState<FxStatus | null>(() => readFxStatus())
 
   const modalAsset = assets.find((a) => a.id === modalId) ?? null
 
   const active = assets.filter((a) => !a.disposalDate)
   const sold   = assets.filter((a) => !!a.disposalDate)
+  // 시세 갱신 요약(저장된 종목별 quote-status 기준, 새로고침 후에도 유지) + 환율 실패 안내
+  const quoteSummary = quoteRunSummary(active.filter(a => (a.detail as StockDetail | undefined)?.ticker).map(a => parseQuoteStatus(settings?.['quote-status:' + a.id])))
+  const fxFailures = (fxStatus?.results ?? []).map(fxFailureText).filter((t): t is string => !!t)
 
   // 시세 자동 갱신: /api/price 로 단가 일괄 조회 → 오늘 이력에 반영 (모달 없이 1탭)
   const runAutoUpdate = async () => {
@@ -82,14 +96,19 @@ export default function StockPage() {
     try {
     const requestId = crypto.randomUUID()
     await beginQuoteRequest(items.map(it=>it.id),requestId)
+    // 환율 먼저 — applyQuoteObservation 이 그 순간의 환율로 평가액을 계산한다. 실패해도 기존 값으로 계속.
+    const currencies = ['USD', ...active.some(a => (a.detail as StockDetail | undefined)?.currency === 'JPY') ? ['JPY'] : []]
+    await updateExchangeRates(currencies)
+    setFxStatus(readFxStatus())
     const today = new Date()
     const todayStr = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
     const totalBefore = active.reduce((s, a) => s + a.currentValue, 0)
-    const result = await fetchPrices(items.map(({ id, ticker }) => ({ id, ticker })))
+    const result = await fetchQuotes(items.map(({ id, ticker }) => ({ id, ticker })))
     let cnt = 0
     await Promise.all(items.map(async (it) => {
-      const p = result[it.id]
-      if (await applyQuoteObservation(it.id,it.ticker,p??null,todayStr,requestId)) cnt++
+      const r = result[it.id]
+      const failure = r && 'error' in r ? { error: r.error, status: r.status, label: quoteErrorLabel(r.error, r.status) } : undefined
+      if (await applyQuoteObservation(it.id,it.ticker,r && 'price' in r ? r.price : null,todayStr,requestId,failure)) cnt++
     }))
     await qc.invalidateQueries({ queryKey: ['assets'] })
     await qc.invalidateQueries({ queryKey: ['chart'] })
@@ -186,6 +205,17 @@ export default function StockPage() {
           </button>
         </div>
       </div>
+
+      {(quoteSummary || fxFailures.length > 0) && (
+        <div className="text-xs space-y-0.5" data-quote-summary>
+          {quoteSummary && (
+            <p className={quoteSummary.failed ? 'text-amber-300' : 'text-gray-400'}>
+              마지막 갱신 {shortTime(quoteSummary.lastAt)}{quoteSummary.failed ? ` · 실패 ${quoteSummary.failed}건 (${quoteSummary.reasons})` : ' · 실패 없음'}
+            </p>
+          )}
+          {fxFailures.map((t) => <p key={t} className="text-amber-300">{t}</p>)}
+        </div>
+      )}
 
       {showCreate && (
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">

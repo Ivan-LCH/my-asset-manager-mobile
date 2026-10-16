@@ -1,19 +1,27 @@
 // Vercel serverless function — 배당수익률 산정(3년 배당이력 기준).
 // GET /api/yield?ticker=SCHD → { price, ttmDividend, ttmYield, avg3yDividend, avg3yYield, count3y }
 // Yahoo chart events=div 로 3년 배당 내역 + 현재가로 TTM/3년평균 수익률 계산.
+// 참고: 현재 src/ 에 호출자가 없다(미사용). 추후 배당률 표시용으로 남겨 둔다.
+// 같은 출처 전용이라 CORS 헤더(ACAO)를 두지 않는다.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { validTicker } from './_validate.js'
 
 function round2(n: number) { return Math.round(n * 100) / 100 }
 function pct(div: number, price: number) { return price > 0 ? round2((div / price) * 100) : null }
 
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Cache-Control', 'public, max-age=3600') // 배당률은 천천히 변함
 
-  const ticker = req.query?.ticker
-  if (!ticker) {
+  const raw = req.query?.ticker
+  if (!raw) {
     res.statusCode = 400
     res.end(JSON.stringify({ error: 'missing ticker' }))
+    return
+  }
+  const ticker = validTicker(raw)
+  if (!ticker) {
+    res.statusCode = 400
+    res.end(JSON.stringify({ error: 'invalid ticker' }))
     return
   }
 

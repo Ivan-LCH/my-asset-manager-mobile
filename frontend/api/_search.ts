@@ -53,8 +53,8 @@ export async function searchStocks(q: string, krOnly: boolean): Promise<SearchRe
     return true
   }).slice(0, 8)
 
-  // 검색 결과 없고 티커 형식이면 직접 조회 폴백
-  if (quotes.length === 0 && /^[0-9]{6}\.(KS|KQ)$/i.test(q.toUpperCase())) {
+  // 검색 결과 없고 티커 형식이면 직접 조회 폴백 (0040X0.KS 처럼 영문이 섞인 KRX 코드 포함)
+  if (quotes.length === 0 && /^[0-9][0-9A-Z]{5}\.(KS|KQ)$/.test(q.toUpperCase())) {
     const t = q.toUpperCase()
     try {
       const cr = await fetch(

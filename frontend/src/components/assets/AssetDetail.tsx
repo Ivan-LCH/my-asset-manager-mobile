@@ -10,14 +10,15 @@ import { useUpdateHistory } from '@/hooks/useHistory'
 import { useSettings } from '@/hooks/useSettings'
 import { fmtAmount, formatWon, formatPrice, formatAvgPrice, formatAxisAmount, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing, valueKpiLabels } from '@/lib/assetLabels'
+import { settingsRate } from '@/lib/fx'
 import type { Asset, RealEstateDetail, Settings, StockDetail, PensionDetail } from '@/types'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 
+// 환율 미설정 시 1이 아니라 FALLBACK_RATES 사용 (StockPage 와 동일)
 function getRate(settings: Settings | undefined, currency?: string): number {
-  if (!currency || currency === 'KRW') return 1
-  return (settings?.[`exchange_rate_${currency}`] as number) ?? 1
+  return settingsRate(settings as Record<string, unknown> | undefined, currency)
 }
 
 interface Props {
