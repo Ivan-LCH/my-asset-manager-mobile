@@ -1,4 +1,6 @@
+import type {ReactNode} from 'react'
 import {Link} from 'react-router-dom'
+import {UnconfirmedTag} from './UnconfirmedTag'
 import {annualIncomeTax} from '@/lib/incomeTax'
 import {useSettings} from '@/hooks/useSettings'
 import type {PensionScheduleRow} from '@/lib/pensionSim'
@@ -10,10 +12,10 @@ export function FinancialTaxBreakdown({row,plan}:{row:PensionScheduleRow;plan:Pe
   const taxes=annualIncomeTax(row,plan,settings)
   const unresolved=taxes.husband.unresolvedPension+taxes.wife.unresolvedPension>0
   return <details className="my-3 rounded-lg border border-gray-700 p-3" data-financial-tax-total={taxes.totalTax} data-tax-incomplete={taxes.incomplete}>
-    <summary className="cursor-pointer text-sm text-blue-300">연금·금융 종합세금 내역 · 연 {won(taxes.totalTax)}{unresolved?' + 미확정':''}</summary>
+    <summary className="cursor-pointer text-sm text-blue-300">연금·금융 종합세금 내역 · 연 {won(taxes.totalTax)}{unresolved&&<UnconfirmedTag>+ 미확정</UnconfirmedTag>}</summary>
     <div className="mt-3 grid gap-3 sm:grid-cols-2">{(['husband','wife'] as const).map(owner=>{
       const t=taxes[owner]
-      const line=(label:string,amount:number,key:string)=><div className="flex flex-wrap justify-between gap-x-2 gap-y-1" data-tax-field={key} data-amount={amount}><dt className="text-gray-400">{label}</dt><dd className="tabular-nums text-gray-100">{won(amount)}</dd></div>
+      const line=(label:ReactNode,amount:number,key:string)=><div className="flex flex-wrap justify-between gap-x-2 gap-y-1" data-tax-field={key} data-amount={amount}><dt className="text-gray-400">{label}</dt><dd className="tabular-nums text-gray-100">{won(amount)}</dd></div>
       return <section key={owner} data-financial-tax-owner={owner} className="min-w-0 rounded bg-gray-900/50 p-3 text-xs space-y-2">
         <h4 className="font-semibold text-gray-200">{owner==='husband'?'남편':'아내'} · {row.year}년</h4>
         <dl className="space-y-2">
@@ -29,7 +31,7 @@ export function FinancialTaxBreakdown({row,plan}:{row:PensionScheduleRow;plan:Pe
         <dl className="space-y-2 border-t border-gray-700 pt-2">
           {line(t.withholdingEstimated?'① 원천징수 예상액 (국내+해외)':'① 입력 기납부액 (국내+해외)',t.withholdingTax,'withholding')}
           {t.unresolvedPension>0?<div className="text-amber-200" data-tax-field="additional" data-unresolved="true"><dt>② 추가 납부·환급액</dt><dd>미확정 · 연금 재원과 세율 확인 필요</dd></div>:line(t.additionalTax<0?'② 정산 환급 예상액 (차감)':'② 추가 납부 예상액',t.additionalTax,'additional')}
-          {line(t.unresolvedPension>0?'반영된 세금 소계 · 미확정 제외':'총 세금 부담 (① + ②)',t.totalTax,'total')}
+          {line(t.unresolvedPension>0?<>반영된 세금 소계<UnconfirmedTag>미확정 제외</UnconfirmedTag></>:'총 세금 부담 (① + ②)',t.totalTax,'total')}
         </dl>
         <details className="pt-1"><summary className="cursor-pointer text-blue-300">계산 근거 · 공제 내역</summary><dl className="mt-2 space-y-2">
           {line('인적·기타 소득공제',t.incomeDeduction,'income-deduction')}

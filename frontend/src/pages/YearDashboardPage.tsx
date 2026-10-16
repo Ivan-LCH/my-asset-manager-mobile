@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { AnalysisNotices } from '@/components/retirement/AnalysisNotices'
+import { UnconfirmedTag } from '@/components/retirement/UnconfirmedTag'
 import { PensionLedger } from '@/components/retirement/PensionLedger'
 import { PensionIncomeDetails } from '@/components/retirement/PensionIncomeDetails'
 import { HealthBreakdown } from '@/components/retirement/HealthBreakdown'
@@ -115,8 +116,9 @@ export default function YearDashboardPage() {
               </p>
             </div>
             <div className="bg-blue-950/20 border border-blue-900/40 rounded-xl p-3">
-              <p className="text-xs text-gray-500 mb-1">{pensionTaxUnknown?'미확정 연금세 제외 누적':'입력 기준 누적'}</p>
+              <p className="text-xs text-gray-500 mb-1">입력 기준 누적</p>
               <p className={`text-lg font-bold ${pnlColor(row.cumulative)}`}>{formatManwon(row.cumulative)}</p>
+              {pensionTaxUnknown&&<p className="text-[11px] text-gray-400 mt-0.5" data-unconfirmed>미확정 연금세 제외</p>}
             </div>
           </div>
 
@@ -140,7 +142,7 @@ export default function YearDashboardPage() {
 
           {/* ── ③ 세금 상세 (연) ── */}
           <details id="analysis-tax" className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-gray-200">🧾 세금 상세 · 연 {formatManwon(taxSum)}{pensionTaxUnknown||(holdAuto&&holdDetail.incomplete)?' + 미확정':' (추정)'}</summary><div className="mt-3">
+            <summary className="cursor-pointer text-sm font-semibold text-gray-200">🧾 세금 상세 · 연 {formatManwon(taxSum)}{pensionTaxUnknown||(holdAuto&&holdDetail.incomplete)?<UnconfirmedTag>+ 미확정</UnconfirmedTag>:' (추정)'}</summary><div className="mt-3">
             <div className="flex items-baseline justify-between py-1.5 border-b border-gray-700/40">
               <span className="text-xs text-gray-400">
                 소득세 (연금·금융{eng.pensionLinked&&(eng.pensionSimPlan?.otherIncome??0)>0?'·기타':''})
@@ -148,7 +150,7 @@ export default function YearDashboardPage() {
                   ? <span className="text-gray-600"> · 남편 {fmtM(eng.husbandTaxByYear.get(year) ?? 0)} / 와이프 {fmtM(eng.wifeTaxByYear.get(year) ?? 0)}</span>
                   : <span className="text-gray-600"> · 근사 (배당 {((eng.corpCF?.dividendTaxRate ?? 0.154) * 100).toFixed(1)}% + 급여 3%)</span>}
               </span>
-              <span className="text-sm font-semibold text-red-300">{pensionTaxUnknown?(incomeTax>0?formatManwon(incomeTax)+' + 연금세 미확정':'연금세 미확정'):formatManwon(incomeTax)}</span>
+              <span className="text-sm font-semibold text-red-300">{pensionTaxUnknown?(incomeTax>0?<>{formatManwon(incomeTax)}<UnconfirmedTag>+ 연금세 미확정</UnconfirmedTag></>:<UnconfirmedTag>연금세 미확정</UnconfirmedTag>):formatManwon(incomeTax)}</span>
             </div>
             {eng.pensionLinked && eng.pensionSimPlan && pensionRow && <FinancialTaxBreakdown row={pensionRow} plan={eng.pensionSimPlan}/>}
             <div className="flex items-baseline justify-between py-1.5 border-b border-gray-700/40">
@@ -171,7 +173,7 @@ export default function YearDashboardPage() {
               </div>
             )}
             <div className="flex items-baseline justify-between pt-2 mt-1 border-t border-gray-700">
-              <span className="text-xs text-gray-300 font-semibold">{pensionTaxUnknown||(holdAuto&&holdDetail.incomplete)?'반영된 세금 소계 (미확정 제외)':'연간 세금 추정 합계'}</span>
+              <span className="text-xs text-gray-300 font-semibold">{pensionTaxUnknown||(holdAuto&&holdDetail.incomplete)?<>반영된 세금 소계<UnconfirmedTag>미확정 제외</UnconfirmedTag></>:'연간 세금 추정 합계'}</span>
               <span className="text-base font-bold text-red-400">{formatManwon(taxSum)}</span>
             </div>
           </div></details>
