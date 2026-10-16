@@ -39,6 +39,13 @@ export function daysSinceBackup(state: DriveBackupState, now: Date): number | nu
   return Number.isFinite(t) ? Math.max(0, Math.floor((now.getTime() - t) / DAY_MS)) : null
 }
 
+/** 경과 배너 문구. 이 기기의 Drive 백업 기록 기준 — 마지막 백업 뒤 변경분은 Drive 사본에 없다. */
+export function bannerText(days: number | null): string {
+  return days == null
+    ? '이 기기에서 Drive로 백업한 기록이 없습니다 — 지금 백업으로 사본을 만들 수 있습니다.'
+    : `Drive 백업 ${days}일 경과 — 그 뒤 변경 내용은 Drive에 없습니다.`
+}
+
 /** 마지막 성공이 N일보다 오래됐거나 기록이 없으면 true. */
 export function backupOverdue(state: DriveBackupState, now: Date, days = AUTO_BACKUP_DAYS): boolean {
   const t = state.at ? Date.parse(state.at) : NaN

@@ -394,7 +394,8 @@ export default function Settings() {
         <div>
           <h3 className="text-sm font-semibold text-gray-300">데이터 백업 / 복원</h3>
           <p className="text-xs text-gray-500 mt-1">
-            데이터는 이 폰에만 저장됩니다. 폰 교체·초기화 전에 내보내기 해두세요.
+            데이터는 이 기기(브라우저)에 저장됩니다. 위 Google Drive 백업(수동·자동)으로 본인 Drive에, 아래 내보내기로 파일에 사본을 만들 수 있습니다.
+            사본이 없으면 기기 교체·초기화·브라우저 데이터 삭제 시 복구할 수 없습니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
