@@ -130,3 +130,32 @@ describe('자산 조회 레거시 폴백 (composeAsset)', () => {
     expect((await getAllAssets()).map((a) => a.id).sort()).toEqual(['own', 're', 'st'])
   })
 })
+
+describe('레거시 변환 순수 함수 (store/legacyPlans — getPensionSim/getPortfolio 와 같은 결과)', async () => {
+  const { upgradePensionSimPlan, upgradePortfolio } = await import('./store/legacyPlans')
+
+  it('upgradePensionSimPlan', () => {
+    expect(upgradePensionSimPlan({ stockBalance: 1000, stockDividendYield: 3, refYear: 2026 })).toEqual({
+      refYear: 2026, stockOwnership: { husband: 50, wife: 50 },
+      stockAccount: { husband: { extraAmount: 0, dividendYield: 4, growthRate: 5 }, wife: { extraAmount: 0, dividendYield: 4, growthRate: 5 } },
+      allocations: [],
+    })
+    expect(upgradePensionSimPlan({ comprehensiveDeduction: 1 })).toEqual({ spouseDependent: true, dependents: 0, useStandardDeduction: true, allocations: [] })
+    // 입력 객체를 제자리에서 고치고 같은 객체를 돌려준다
+    const input: Record<string, unknown> = { a: 1 }
+    expect(upgradePensionSimPlan(input)).toBe(input)
+    expect(input).toEqual({ a: 1, allocations: [] })
+  })
+
+  it('upgradePortfolio', () => {
+    expect(upgradePortfolio({ holdings: [{ weight: 1, growthRate: 4 }, { weight: 3, growthRate: 8 }], blendedYield: 2.5 }))
+      .toEqual({ dividendYield: 2.5, growthRate: 7 })
+    expect(upgradePortfolio({ dividendYield: 1 })).toEqual({ dividendYield: 1 })
+  })
+
+  it('getPensionSim 과 결과가 같다', async () => {
+    const raw = { stockHoldings: [{ ticker: 'A', weight: 1, growthRate: 3 }], stockYields: [{ ticker: 'A', yield: 2 }], comprehensiveDeduction: 5 }
+    await put('pension_sim_plan', raw)
+    expect(await getPensionSim()).toEqual(upgradePensionSimPlan(structuredClone(raw)))
+  })
+})

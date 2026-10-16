@@ -4,6 +4,11 @@ import 'fake-indexeddb/auto'
 import { describe, it, expect } from 'vitest'
 import type * as Db from '@/lib/db'
 
+const fs = (await import('node:fs' as string)) as {
+  readdirSync(path: string): string[]; readFileSync(path: string, encoding: 'utf8'): string
+}
+const LIB = new URL('./', import.meta.url).pathname
+
 // 분리 전(2f0aa47) `Object.keys(await import('@/lib/db')).sort()`
 const VALUE_EXPORTS = [
   'AssetDB', 'FALLBACK_RATES', 'addDividend', 'addHistory', 'applyPriceHistory', 'applyQuoteObservation',
@@ -45,5 +50,23 @@ describe('@/lib/db 공개 API', () => {
       dividendHistory: '++id,assetId,date', settings: 'key',
       plannerPlans: 'id', plannerRuns: 'id,createdAt', plannerDrafts: 'id', plannerRecovery: 'id,createdAt',
     })
+  })
+})
+
+describe('lib/store 분리 규칙', () => {
+  const stores = fs.readdirSync(LIB + 'store').filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+
+  it('lib/db.ts 는 명시 목록으로만 재노출한다 (export * 금지)', () => {
+    const facade = fs.readFileSync(LIB + 'db.ts', 'utf8')
+    expect(facade).not.toMatch(/^export\s*\*/m)
+    expect(facade.split('\n').filter((l) => !l.startsWith('//')).join('\n')).not.toMatch(/_KEY\b/)
+  })
+
+  it('store/* 는 @/lib/db 를 import 하지 않는다 (순환 방지)', () => {
+    expect(stores.length).toBeGreaterThan(10)
+    for (const f of stores) {
+      const src = fs.readFileSync(LIB + 'store/' + f, 'utf8')
+      expect(src, f).not.toMatch(/from\s+['"](@\/lib\/db|\.\.\/db)['"]/)
+    }
   })
 })
