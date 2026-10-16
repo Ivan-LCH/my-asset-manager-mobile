@@ -28,7 +28,7 @@ export default function AppLayout() {
   },[scrollKey])
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
+    <div className="flex flex-1 min-h-0 bg-gray-950 text-gray-100 overflow-hidden">
       {/* 데스크톱 사이드바 (lg 이상, 접기 가능) */}
       {!sidebarCollapsed && <Sidebar />}
       <button
