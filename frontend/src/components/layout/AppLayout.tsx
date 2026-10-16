@@ -1,23 +1,10 @@
 import { useState, useLayoutEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { PanelLeftClose, PanelLeftOpen, Home, FolderOpen, BarChart3, CalendarDays } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import Sidebar from './Sidebar'
+import { TABS } from './bottomTabs'
 import DriveBackupBanner from '@/components/common/DriveBackupBanner'
 import { cn } from '@/lib/utils'
-
-// 하단 탭 4개 (모바일 전용 — 데스크톱은 사이드바)
-const TABS = [
-  { to: '/',         icon: Home,       label: '홈',   end: true,
-    match: (p: string) => p === '/' },
-  { to: '/assets',   icon: FolderOpen, label: '자산',
-    match: (p: string) =>
-      p.startsWith('/assets') ||
-      ['/stock', '/real-estate', '/pension', '/savings', '/physical', '/etc'].includes(p) },
-  { to: '/analysis', icon: BarChart3,  label: '분석',
-    match: (p: string) =>
-      p.startsWith('/analysis') || p.startsWith('/plan') || p.startsWith('/advanced-analysis') ||
-      ['/prep', '/pension/sim', '/corp-sim', '/retirement'].includes(p) },
-]
 
 export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
