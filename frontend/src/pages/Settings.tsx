@@ -1,4 +1,3 @@
-import MigrationReview from '@/planner/MigrationReview'
 import {pensionRegistrationSummary,registerPensionPlan} from '@/lib/registerPensionPlan'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
@@ -11,10 +10,13 @@ import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
 import { fmtQty } from '@/lib/utils'
 import { googleSignIn, ensureSignedIn, logout, isLoggedIn, onAuthChange, saveToDrive, listBackupFiles, loadFromDrive, latestBackupFile, BACKUP_FOLDER_NAME, MANUAL_BACKUP_FILE_NAME, type DriveFile } from '@/lib/googleDrive'
 import { recordBackupSuccess } from '@/lib/autoBackup'
+import { usePlanner } from '@/planner/context'
 import RestoreDiffDialog, { type RestoreMode, type RestoreRequest } from '@/components/common/RestoreDiffDialog'
 
 export default function Settings() {
   const { data: settings, isLoading } = useSettings()
+  const planner = usePlanner()
+  const unconfirmedPolicies = planner.data?.current.positions.filter(p=>!p.confirmed).length ?? 0
   const saveMut = useSaveSettings()
   const qc = useQueryClient()
   const {data:lastImport}=useQuery({queryKey:['backup-import-info'],queryFn:getLastBackupImport})
@@ -234,9 +236,14 @@ export default function Settings() {
   return (
     <div className="p-6 max-w-lg mx-auto space-y-6">
       <h2 className="text-xl font-bold text-gray-100">⚙️ 설정</h2>
-      <p className="text-sm text-gray-300">새 계획의 구성원·은퇴일·물가 가정은 <Link className="underline text-blue-300" to="/plan">계획 화면</Link>에서 관리합니다. 여기는 백업·외부 연결·기존 도구 설정입니다.</p>
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-2" data-totals-card>
+        <h3 className="text-sm font-semibold text-gray-300">합산 기준</h3>
+        <p className="text-sm text-gray-400">홈·자산 변동 이력·연금 탭 합계에서 제외하거나 중복 연결할 자산을 정합니다.</p>
+        {unconfirmedPolicies>0&&<p className="text-xs text-amber-300">분류 미확인 {unconfirmedPolicies}건</p>}
+        <Link className="inline-block py-2 text-blue-300 underline" to="/settings/totals">합산 기준 열기 →</Link>
+      </div>
       <details className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-5">
-        <summary className="text-sm font-semibold text-gray-300 cursor-pointer">기존 참고 계산기 인물 설정 (새 계획과 별도)</summary>
+        <summary className="text-sm font-semibold text-gray-300 cursor-pointer">인물·은퇴 기본값 (은퇴 분석용)</summary>
 
         <div className="space-y-4">
           <div>
@@ -388,7 +395,6 @@ export default function Settings() {
         onCancel={() => setPendingRestore(null)}
       />
 
-      <MigrationReview />
       {/* 데이터 백업 / 복원 */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-4">
         <div>

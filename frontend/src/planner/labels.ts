@@ -1,0 +1,3 @@
+// planner 화면 공용 라벨
+export const roleLabels: Record<string, string> = { cash: '생활 현금', investment: '투자 계좌/종목', pension: '인출형 연금 계좌', entitlement: '공적/계약 연금 수급권', property: '부동산', deposit: '예치금·지급한 보증금', other: '기타 자산', excluded: '합산 제외' };
+export const eventLabels: Record<string, string> = { completion: '준공', approval: '사용승인', move: '입주', valuation: '평가액 변경', inflow: '목돈 유입', expense: '일회성 지출·분담금', sale: '매각', borrow: '대출 실행', repay: '대출 상환', depositReceived: '보증금 수령', depositReturned: '보증금 반환', depositPaid: '보증금 지급', depositRecovered: '보증금 회수', transfer: '현금 → 자산 이전', taxSettlement: '연간 세금 정산' };

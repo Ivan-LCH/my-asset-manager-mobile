@@ -9,6 +9,7 @@ import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { useRetirement } from '@/hooks/useRetirement'
 import { retirementInputs } from '@/lib/analysisInputs'
+import { useMonthlyArchive } from '@/planner/archive'
 
 const TABS = [
   { value:'year', label:'분석 요약', emoji:'📊' },
@@ -25,10 +26,11 @@ export default function AnalysisPage() {
   const error=[assets,settings,retirement].find(q=>q.error)?.error
   const live=(assets.data??[]).filter(a=>!a.disposalDate)
   const resultTab=tab==='year'||tab==='cashflow'
+  const archive=useMonthlyArchive()
   return <div data-existing-analysis>
     <header className="max-w-screen-xl mx-auto px-4 pt-5 pb-3 space-y-2">
       <h1 className="text-xl font-bold">내 은퇴 분석</h1>
-      <p className="text-sm text-gray-400">등록한 자산·연금·생활비로 자동 계산합니다. 새 계획을 다시 입력할 필요가 없습니다.</p>
+      <p className="text-sm text-gray-400">등록한 자산·연금·생활비로 자동 계산합니다.</p>
       <details className="text-sm border border-gray-700 rounded-lg p-3">
         <summary className="cursor-pointer">연결된 입력 확인 · 수정은 원래 화면에서</summary>
         <ul className="space-y-2 mt-3 text-gray-300">
@@ -42,15 +44,15 @@ export default function AnalysisPage() {
         </ul>
       </details>
       <details className="text-sm text-gray-400" open={tab==='pension-sim'||tab==='corp-sim'} key={tab==='pension-sim'||tab==='corp-sim'?'detail':'basic'}>
-        <summary className="cursor-pointer py-2">세부 계산·고급 기능</summary>
+        <summary className="cursor-pointer py-2">연금·법인 시뮬레이션</summary>
         <div className="flex flex-wrap gap-3 py-2 text-blue-300">
           <Link to="/analysis?tab=pension-sim">연금 시뮬레이션</Link><Link to="/analysis?tab=corp-sim">법인 시뮬레이션</Link>
-          <Link to="/plan">별도 월별 계획 편집</Link><Link to="/advanced-analysis">보관한 월별 분석</Link>
-        </div><p className="text-xs">월별 계획은 별도 가정입니다. 기본 분석과 합산하지 않으며 기존 저장 결과도 보존합니다.</p>
+        </div>
       </details>
+      {archive===true&&<p className="text-sm"><Link className="text-blue-300" to="/analysis/archive" data-archive-link>보관된 월별 분석 (읽기 전용) →</Link></p>}
     </header>
     <SegmentedTabs tabs={TABS} value={tab} onChange={v=>setParams({tab:v})}/>
-    {loading?<p role="status" className="p-6">기존 입력을 불러오는 중…</p>:error?<p role="alert" className="p-6 text-red-300">입력을 읽지 못했습니다. 새로고침 후 다시 확인해 주세요.</p>:
+    {loading?<p role="status" className="p-6">입력을 불러오는 중…</p>:error?<p role="alert" className="p-6 text-red-300">입력을 읽지 못했습니다. 새로고침 후 다시 확인해 주세요.</p>:
       resultTab&&inputs.missing.length>0?<section className="p-6 max-w-screen-xl mx-auto"><h2 className="text-lg font-semibold">이 정보만 확인하면 분석을 볼 수 있습니다</h2><p className="text-sm text-gray-400 my-2">이미 등록한 자산은 다시 입력하지 마세요. 빠진 정보를 임의의 예시 금액으로 채우지 않습니다.</p><ul className="space-y-3">{inputs.missing.map(m=><li key={m.label}><Link className="text-blue-300 underline" to={m.to}>{m.label} 확인 →</Link></li>)}</ul></section>:
       <>{tab==='year'&&<YearDashboardPage/>}{tab==='cashflow'&&<RetirementPage/>}{tab==='prep'&&<RetirementPrepPage/>}{tab==='pension-sim'&&<PensionSimPage/>}{tab==='corp-sim'&&<CorpSimPage/>}</>}
   </div>
