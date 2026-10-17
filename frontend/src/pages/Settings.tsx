@@ -238,7 +238,7 @@ export default function Settings() {
       <h2 className="text-xl font-bold text-gray-100">⚙️ 설정</h2>
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-2" data-totals-card>
         <h3 className="text-sm font-semibold text-gray-300">합산 기준</h3>
-        <p className="text-sm text-gray-400">홈·자산 변동 이력·연금 탭 합계에서 제외하거나 중복 연결할 자산을 정합니다.</p>
+        <p className="text-sm text-gray-400">홈·자산 변동 이력·연금 탭 합계와 은퇴 분석에서 제외하거나 중복 연결할 자산을 정합니다.</p>
         {unconfirmedPolicies>0&&<p className="text-xs text-amber-300">분류 미확인 {unconfirmedPolicies}건</p>}
         <Link className="inline-block py-2 text-blue-300 underline" to="/settings/totals">합산 기준 열기 →</Link>
       </div>

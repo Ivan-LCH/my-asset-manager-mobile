@@ -25,7 +25,8 @@ export interface SnapshotTotals {
 export const EXCLUDED_REASON_LABELS: Record<ExcludedReason, string> = {
     excluded: '합산 제외', linked: '연결 잔액', future: '기준일 뒤 취득',
 };
-function excludedReason(p: Position, asOfDate: string): ExcludedReason | null {
+/** 합계에서 0 처리되는 사유 — 은퇴 분석의 합산 기준 적용(lib/analysisScope)도 같은 판정을 쓴다 */
+export function excludedReason(p: Position, asOfDate: string): ExcludedReason | null {
     if (p.source.acquisitionDate && p.source.acquisitionDate > asOfDate) return 'future';
     if (p.role === 'excluded') return 'excluded';
     if (p.linkedTo || p.linkedAccount) return 'linked';

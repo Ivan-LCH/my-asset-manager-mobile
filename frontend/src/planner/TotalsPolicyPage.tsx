@@ -1,4 +1,5 @@
 // 설정 › 합산 기준 (/settings/totals). 홈·자산 변동 이력·연금 탭 합계의 분류(합산 제외·수급권)와 동일 잔액 연결만 편집한다.
+// 은퇴 분석(연 단위)도 같은 기준을 쓴다 — 고정 규칙은 lib/analysisScope.
 // 저장은 기존과 같은 savePlan(plannerPlans 'main') 경로. 초안 자동 보존(plannerDrafts)은 쓰지 않는다.
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -54,9 +55,10 @@ export default function TotalsPolicyPage() {
     finally {
         setBusy(false);
     } };
-    return <Shell title="합산 기준" subtitle="홈·자산 변동 이력·연금 탭 합계에만 적용됩니다. 은퇴 분석(연 단위)은 이 설정을 쓰지 않습니다." action={back}>
+    return <Shell title="합산 기준" subtitle="홈·자산 변동 이력·연금 탭 합계와 은퇴 분석(연 단위)에 적용됩니다." action={back}>
     {params.get('returnTo') && <Link to={safeAssetReturn(params.get('returnTo'))}>← 이전 자산 화면으로</Link>}
     <p className="notice">원본 금액·주식 수량은 자산 화면에서 관리합니다. 여기서는 합계에서 제외할 자산과 같은 잔액을 가리키는 중복 기록(동일 잔액 연결)만 정합니다.</p>
+    <p className="notice" data-analysis-rules>은퇴 분석에서는 합산 제외·동일 잔액 연결한 자산의 잔액·연금 지급·배당을 뺍니다. 다만 부동산은 보유세·건강보험 계산에 남기고, 국민연금 등 수급권은 지급을 그대로 반영합니다. 주식 계좌에 연결된 연금(예: 퇴직IRP)은 제외해도 계좌 종목으로 계산되므로, 빼려면 그 계좌의 종목을 제외하세요.</p>
     {message && !dirty && <p role="status" className="notice good">{message}</p>}
     {draft && data.plan.revision !== draft.revision && <p role="alert" className="notice">다른 화면에서 변경되었습니다. 이 변경은 그대로 덮어쓸 수 없습니다. 변경 취소 후 다시 적용해 주세요.</p>}
     <section className="panel policy-tools"><h2>계좌·유형별 검토</h2><div className="form-grid"><Txt label="자산 이름·계좌명 검색" value={policySearch} onChange={v=>policyNav({q:v,focus:''})}/><Check label="미확인 항목만" value={params.has('unconfirmed')} onChange={v=>policyNav({unconfirmed:v?'1':'',focus:''})}/></div><div className="actions"><button className="secondary" onClick={()=>policyNav({group:'',q:'',focus:'',unconfirmed:''})}>그룹 목록</button>{focusedPolicy&&<button className="secondary" onClick={()=>policyNav({group:groupOf(focusedPolicy),focus:''})}>이 계좌·유형 목록</button>}</div><div className="policy-group-list">{policyGroups.map(g=><button key={g.id} className="secondary" aria-pressed={policyGroup===g.id} onClick={()=>policyNav({group:g.id,focus:'',q:''})}>{g.name} · {g.count}개</button>)}</div><p className="muted">선택한 항목의 설정만 펼칩니다. 분류는 확인 없이 확정하지 않습니다.</p></section>

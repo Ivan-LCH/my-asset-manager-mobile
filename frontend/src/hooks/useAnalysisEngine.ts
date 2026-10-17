@@ -6,6 +6,8 @@ import { annualHealth, type AnnualHealthResult } from '@/lib/annualHealth'
 // 순수 리팩터: 계산 순서·산식은 RetirementPage 원본과 동일. plan(은퇴계획)과 저장된 시뮬 설정을 받아
 // 현금흐름·연금 스케줄·1인별 세금/건보·보유세 자동 산출까지 한 번에 계산한다.
 import { pensionInputs, pensionInputNotes } from '@/lib/analysisInputs'
+import { analysisScope, scopeInputs } from '@/lib/analysisScope'
+import { usePlanner } from '@/planner/context'
 import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { useDividendSummary } from '@/hooks/useDividends'
@@ -27,8 +29,12 @@ import type { Asset, StockDetail, SavingsDetail, PensionDetail, RetirementPlan, 
 /** 은퇴 계획 → 현금흐름·세금·건보·보유세 등 분석 결과 일괄 산출. */
 export function useAnalysisEngine(plan: RetirementPlan) {
   const assetQuery=useAssets(), settingsQuery=useSettings(), dividendQuery=useDividendSummary()
-  const allAssets=(assetQuery.data??[]).filter(a=>!a.disposalDate)
-  const settings=settingsQuery.data, divSummary=dividendQuery.data
+  const pensionQuery=usePensionSim(), planner=usePlanner()
+  // 합산 기준 적용 — 홈 합계와 같은 스냅샷으로 판정해 자산·배당·저장 연금 시뮬을 여기서 한 번만 거른다 (lib/analysisScope)
+  const scoped=scopeInputs({assets:assetQuery.data??[],dividends:dividendQuery.data,pensionSim:pensionQuery.data},analysisScope(planner.data?.current))
+  const assets=scoped.assets
+  const allAssets=assets.filter(a=>!a.disposalDate)
+  const settings=settingsQuery.data, divSummary=scoped.dividends
 
   const currentAge = resolveAge(settings)
   const linkMode: 'none' | 'corp' | 'pension' = plan.linkCorpSim ? 'corp' : plan.linkPensionSim ? 'pension' : 'none'
@@ -66,8 +72,8 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   const stockDiv = divSummary ? stockDividendsByOwner(allAssets, divSummary, accountOwners) : { husband: 0, wife: 0 }
 
   // ── 연금시뮬 연동 (linkMode==='pension') ──
-  const pensionQuery=usePensionSim(), rawPensionSim=pensionQuery.data
-  const realEstateAssets: Asset[] = (assetQuery.data??[]).filter((a) => a.type === 'REAL_ESTATE')
+  const rawPensionSim=scoped.pensionSim
+  const realEstateAssets: Asset[] = assets.filter((a) => a.type === 'REAL_ESTATE')
   const pensionAssetsAll = allAssets.filter((a) => a.type === 'PENSION')
   // IRP 포트폴리오 상승률/배당률 (은퇴준비 IRP 포트폴리오에서) — 퇴직시점 잔액 성장·수령액 산정용
   const portfolioQuery=usePortfolio(), portfolio=portfolioQuery.data
@@ -77,7 +83,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   const irpAssets = allAssets.filter((a) => a.type === 'PENSION' && !a.disposalDate)
   const irpInitial = irpAssets.reduce((s, a) => s + a.currentValue, 0)
 
-  const pensionSimPlan = rawPensionSim ? pensionInputs(rawPensionSim,assetQuery.data??[],plan.retirementYear) : null
+  const pensionSimPlan = rawPensionSim ? pensionInputs(rawPensionSim,assets,plan.retirementYear) : null
   const pensionLinked = linkMode === 'pension' && !!pensionSimPlan
   // 국민연금 자산(확정급여) 추출
   const nationals = (pensionSimPlan ? pensionAssetsAll
@@ -96,7 +102,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   // buildCashFlow의 전체 범위(SIM_START_YEAR ~ 100세)를 커버하도록 넓게 생성
   const schedFromYear = SIM_START_YEAR
   const schedToYear = new Date().getFullYear() + (100 - resolveAge(settings))
-  const projection=annualPension(pensionLinked&&pensionSimPlan?pensionSimPlan:pensionInputs(null,assetQuery.data??[],plan.retirementYear),assetQuery.data??[],schedFromYear,schedToYear,{
+  const projection=annualPension(pensionLinked&&pensionSimPlan?pensionSimPlan:pensionInputs(null,assets,plan.retirementYear),assets,schedFromYear,schedToYear,{
     simulation:pensionLinked,growth:irpGrowthRate,dividend:irpDivYield,lumpsums:plan.lumpsum,stockLink:{dividends:divSummary?.items,owners:accountOwners},
   })
   const sched=projection.rows
@@ -106,7 +112,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
     registeredNationalByYear=new Map(sched.map(r=>[r.year,r.nationalAnnual/12]))
     stockDivMonthly=(divSummary?.items??[]).filter(r=>!projection.fundedStockIds.has(r.assetId)).reduce((sum,r)=>sum+r.monthlyKrw,0)
   }
-  const analysisNotes=[...projection.notes,...pensionInputNotes(rawPensionSim,assetQuery.data??[])]
+  const analysisNotes=[...projection.notes,...pensionInputNotes(rawPensionSim,assets),...scoped.notes]
   analysisNotes.push(plan.expenseInflationRate==null?'생활비·여행비·의료비 물가상승률 미설정: 기존 고정 금액으로 계산합니다. 생활비·목돈 입력에서 확인하세요.':`생활비·여행비·의료비는 ${plan.expenseBaseYear??new Date().getFullYear()}년 금액 기준, 연 ${plan.expenseInflationRate}% 증가 가정입니다. 세금·건보·목돈·일회 지출에는 이 비율을 중복 적용하지 않습니다.`)
   if(projection.rows.some(r=>r.opening>0||r.inflow>0))analysisNotes.push(`연금 계좌 운용 가정: 상승률 ${irpGrowthRate}% + 배당률 ${irpDivYield}%. 미저장 기본값은 각각 0%이며 실제 수익을 보장하지 않습니다.`)
   if(!plan.holdingTaxAuto&&realEstateAssets.length)analysisNotes.push('수동 보유세 적용 중입니다. 재건축 날짜와 연동하려면 연도별 현금흐름의 보유세를 자동으로 선택하세요.')
@@ -221,7 +227,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   const queries=[assetQuery,settingsQuery,dividendQuery,corpQuery,ownersQuery,pensionQuery,portfolioQuery]
   return {
     projection, analysisNotes,
-    isLoading:queries.some(q=>q.isPending), error:queries.find(q=>q.error)?.error,
+    isLoading:queries.some(q=>q.isPending)||(!planner.data&&!planner.error), error:queries.find(q=>q.error)?.error??(planner.error?new Error(planner.error):undefined),
     // 입력 스냅샷
     currentAge, linkMode, retirementYear,
     realEstateAssets,
