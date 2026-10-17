@@ -7,6 +7,7 @@ import AssetModal from '@/components/common/AssetModal'
 import KpiCard from '@/components/common/KpiCard'
 import OwnershipBadge from '@/components/common/OwnershipBadge'
 import { formatEok, formatManwon, formatPnlEok, formatPnlManwon, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
+import { chartTypes } from '@/lib/chartTypes'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing } from '@/lib/assetLabels'
 import type { AssetType, Asset } from '@/types'
 
@@ -25,6 +26,7 @@ export default function AssetPage({ types }: Props) {
 
   const active = assets.filter((a) => !a.disposalDate)
   const sold   = assets.filter((a) => !!a.disposalDate)
+  const shownTypes = chartTypes(types, active)
 
   const totalVal  = active.reduce((s, a) => s + a.currentValue, 0)
   const totalCost = active.reduce((s, a) =>
@@ -69,11 +71,11 @@ export default function AssetPage({ types }: Props) {
         />
       </div>
 
-      {/* 성장 추이 — 병합 유형(실물·기타)은 유형별로 표시 */}
-      {active.length > 0 && types.map((t) => (
+      {/* 성장 추이 — 병합 유형(실물·기타)은 보유 자산이 있는 유형별로 표시 */}
+      {shownTypes.map((t) => (
         <div key={t} className="bg-gray-800 border border-gray-700 rounded-xl p-5">
           <h3 className="text-sm font-semibold text-gray-300 mb-4">
-            📈 성장 추이{types.length > 1 ? ` — ${TYPE_LABELS[t]}` : ''}
+            📈 성장 추이{shownTypes.length > 1 ? ` — ${TYPE_LABELS[t]}` : ''}
           </h3>
           <AssetChart type={t} groupBy="name" defaultPeriod="3y" height={200} />
         </div>

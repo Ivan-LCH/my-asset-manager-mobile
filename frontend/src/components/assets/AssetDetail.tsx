@@ -11,6 +11,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { fmtAmount, formatWon, formatPrice, formatAvgPrice, formatAxisAmount, fmtPct, fmtQty, formatKoreanDate, TYPE_LABELS } from '@/lib/utils'
 import { DISPOSAL_PRICE_MISSING, disposalPriceMissing, valueKpiLabels } from '@/lib/assetLabels'
 import { settingsRate } from '@/lib/fx'
+import { axisTicks, axisTickCount } from '@/lib/chartTicks'
 import type { Asset, RealEstateDetail, Settings, StockDetail, PensionDetail } from '@/types'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -370,6 +371,7 @@ export default function AssetDetail({ asset, chartData }: Props) {
                 tick={{ fill: '#6b7280', fontSize: 10 }}
                 tickLine={false} axisLine={false}
                 tickFormatter={(v: string) => v.slice(2, 7)}
+                ticks={axisTicks(miniChart.map((p) => p.date), axisTickCount())}
                 interval="preserveStartEnd"
               />
               <YAxis

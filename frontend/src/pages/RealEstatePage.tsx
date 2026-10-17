@@ -126,7 +126,7 @@ function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void 
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-100 truncate group-hover:text-blue-300 transition-colors">{asset.name}</p>
-            <p className="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-1.5">
+            <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               <span className="truncate">{d?.address ?? '-'}</span>
               {asset.acquisitionDate && <span className="shrink-0">· {asset.acquisitionDate.slice(0, 7)} 취득</span>}
               <OwnershipBadge ownership={asset.ownership} />
@@ -152,7 +152,7 @@ function RealEstateTile({ asset, onClick }: { asset: Asset; onClick: () => void 
         </div>
 
         {/* 하단 지표 4칸 */}
-        <div className="grid grid-cols-4 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2.5 pt-2.5 border-t border-gray-700/60 text-xs">
           <div className="min-w-0">
             <p className="text-gray-500 mb-0.5">순자산</p>
             <p className="text-blue-400 font-semibold truncate">{formatManwon(equity)}</p>

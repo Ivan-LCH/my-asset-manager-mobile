@@ -6,7 +6,7 @@ import { UploadCloud, X } from 'lucide-react'
 import { exportBackup, isDemoDatabase } from '@/lib/db'
 import { DriveError, ensureSignedIn, isLoggedIn } from '@/lib/googleDrive'
 import {
-  BACKUP_STATE_EVENT, backupFingerprint, backupHasData, backupOverdue, daysSinceBackup, decideAutoBackup,
+  BACKUP_STATE_EVENT, backupFingerprint, bannerText, backupHasData, backupOverdue, daysSinceBackup, decideAutoBackup,
   readBackupState, recordBackupFailure, runAutoBackup,
 } from '@/lib/autoBackup'
 
@@ -79,7 +79,7 @@ export default function DriveBackupBanner() {
   return (
     <div className="bg-amber-900/70 border-b border-amber-700 text-amber-100 px-4 py-2 text-xs flex items-center gap-3" role="status" data-drive-backup-banner>
       <div className="flex-1 min-w-0">
-        <p>{banner.days == null ? 'Drive 백업 기록 없음' : `Drive 백업 ${banner.days}일 경과`} — 데이터는 이 기기에만 있습니다.</p>
+        <p>{bannerText(banner.days)}</p>
         {banner.error && <p className="text-amber-300 break-words">마지막 시도 실패: {banner.error}</p>}
       </div>
       <button onClick={backupNow} disabled={busy}

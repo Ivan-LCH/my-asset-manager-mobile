@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  AUTO_BACKUP_PREFIX, autoBackupFileName, backupFingerprint, backupHasData, backupOverdue, daysSinceBackup,
+  AUTO_BACKUP_PREFIX, autoBackupFileName, bannerText, backupFingerprint, backupHasData, backupOverdue, daysSinceBackup,
   decideAutoBackup, isAutoBackupFile, readBackupState, recordBackupFailure, recordBackupSuccess, selectAutoBackupsToDelete,
 } from './autoBackup'
 import type { BackupData } from './db'
@@ -111,5 +111,13 @@ describe('runAutoBackup (모의 Drive)', () => {
     expect(read().fileId).toBe('new')
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+})
+
+describe('bannerText', () => {
+  it('기록 없음 / N일 경과 문구를 구분 (Drive 사본 존재 여부를 정확히)', () => {
+    expect(bannerText(null)).toBe('이 기기에서 Drive로 백업한 기록이 없습니다 — 지금 백업으로 사본을 만들 수 있습니다.')
+    expect(bannerText(5)).toBe('Drive 백업 5일 경과 — 그 뒤 변경 내용은 Drive에 없습니다.')
+    expect(bannerText(0)).toContain('0일 경과')
   })
 })

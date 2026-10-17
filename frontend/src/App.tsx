@@ -28,7 +28,9 @@ function LegacyAnalysis() {
 }
 function AnalysisEntry() { const [params]=useSearchParams(); return params.has('run')?<PlannerAnalysis/>:<AnalysisPage/> }
 export default function App() {
-  return <QueryClientProvider client={qc}><PlannerProvider><UpdatePrompt/><DemoBanner/><BrowserRouter><Routes>
+  // 앱 높이 = 보이는 뷰포트(dvh). 100vh는 모바일 브라우저 탭에서 주소창만큼 길어 하단 탭이 화면 밖으로 밀리고,
+  // 샘플 배너도 이 열 안에 둬야 배너 높이만큼 하단 탭이 잘리지 않는다.
+  return <QueryClientProvider client={qc}><PlannerProvider><div className="flex flex-col h-screen supports-[height:100dvh]:h-dvh"><UpdatePrompt/><DemoBanner/><BrowserRouter><Routes>
     <Route element={<AppLayout/>}>
       <Route index element={<PlannerHome/>}/>
       <Route path="assets" element={<AssetsPage/>}/>
@@ -51,5 +53,5 @@ export default function App() {
       <Route path="corp-sim" element={<Navigate to="/legacy-analysis?tab=corp-sim" replace/>}/>
       <Route path="portfolio" element={<Navigate to="/analysis" replace/>}/>
       <Route path="*" element={<Navigate to="/" replace/>}/>
-    </Route></Routes></BrowserRouter></PlannerProvider></QueryClientProvider>
+    </Route></Routes></BrowserRouter></div></PlannerProvider></QueryClientProvider>
 }

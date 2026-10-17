@@ -40,10 +40,18 @@
 
 ## 4단계 — 정리
 - [ ] '기존 계산기'와 '새 계획' 이중 체계 통합.
-- [ ] `/analysis` 상단 주의문(약 25줄) 접기, 미확정 수치는 보조 표시.
-- [ ] 차트 X축 라벨 누락, 데이터 없는 '기타' 카드 숨기기. 설정 문구 "이 폰에만 저장" 수정.
-- [ ] `lib/db.ts`(1,300줄+) 분리, 레거시 변환 로직 정리.
-- [ ] 모바일 뷰포트 실사용 점검.
+  - 결정 대기 — 통합안 사용자 결정 필요 (안 1 A 단일 분석·월별 원장 보관 권고 / 안 2 A 입력 + B 월별 보기 / 안 3 B 일원화, 합산 정책 편집기 위치, 월별 기능 신규 사용자 노출 여부). 구현 없음.
+- [x] `/analysis` 상단 주의문(약 25줄) 접기, 미확정 수치는 보조 표시.
+  - 결정: 순수 함수 `lib/analysisNotices.ts groupNotices` — 문구는 그대로, '확인 필요'(`확인 필요|확인이 필요|확인하세요|미확정|미산정|찾지 못|빠릅니다|미설정`)와 '계산 가정'(나머지)으로만 분류, 중복 제거·보유세 노트 이름 접두사는 기존과 동일. `AnalysisNotices`는 요약줄 "제목 · 확인 필요 N건 · 계산 가정 M건"으로 **기본 접힘**, 지급 부족·IRP 미연결·세금 미반영이면 **기존처럼 펼친 채 시작**(제목·링크 유지)하되 계산 가정은 안쪽 `<details>`로 접힘(실데이터 23항목이 한 번에 펼쳐지던 문제). 미확정 수치는 주 수치를 대체하지 않고 보조 표기(`UnconfirmedTag`, 11px 회색): YearDashboard 누적 KPI 라벨은 "입력 기준 누적" 고정 + 값 아래 "미확정 연금세 제외", 세금 요약 "+ 미확정"·소득세 줄 "+ 연금세 미확정"·소계 "미확정 제외"·`FinancialTaxBreakdown` 요약/소계 동일 방식. 숫자 계산 불변.
+- [x] 차트 X축 라벨 누락, 데이터 없는 '기타' 카드 숨기기. 설정 문구 "이 폰에만 저장" 수정.
+  - 결정(3a): 라벨 누락은 현 코드·실데이터(390px·1280px, 전 기간)에서 재현 안 됨 → 데이터 변경 없이 tick만 규칙화. `lib/chartTicks.ts axisTicks(dates, maxTicks)`가 주·2주·월·분기·반기·연 경계 중 maxTicks 안에 드는 가장 촘촘한 간격을 고르고 첫·끝 날짜 포함, 가장자리에 너무 가까운 중간 tick 제거(인덱스 기준 `preserveStartEnd`의 불규칙 간격 해소). `tickCountForWidth`(390px → 5). `AssetChart` 두 XAxis·`AssetDetail` 미니차트 적용(라벨 포맷 'YY-MM'/'MM-DD'은 그대로). CashTrend 축 라벨은 미적용. PensionPage 미사용 recharts import 정리. 누락을 본 화면은 사용자 확인 대기.
+  - 결정(3b): `lib/chartTypes.ts chartTypes` — 보유(미처분) 자산이 있는 유형만 성장 추이 카드 표시(실물·기타 탭에서 ETC 0건이면 카드 없음), 남은 유형이 1개면 제목 " — 유형" 생략. 미사용 `AllSummary` 삭제.
+  - 결정(3c): 설정 '데이터 백업 / 복원' 안내 → "데이터는 이 기기(브라우저)에 저장됩니다. 위 Google Drive 백업(수동·자동)으로 본인 Drive에, 아래 내보내기로 파일에 사본을 만들 수 있습니다. 사본이 없으면 기기 교체·초기화·브라우저 데이터 삭제 시 복구할 수 없습니다." 배너 문구는 `autoBackup.bannerText(days)`: 기록 없음 "이 기기에서 Drive로 백업한 기록이 없습니다 — 지금 백업으로 사본을 만들 수 있습니다.", N일 경과 "Drive 백업 N일 경과 — 그 뒤 변경 내용은 Drive에 없습니다." (`index.html`·`vite.config.ts`의 "폰 로컬 저장 PWA"는 사실이라 유지.)
+- [x] `lib/db.ts`(1,300줄+) 분리, 레거시 변환 로직 정리.
+  - 결정: 순수 리팩터. 1,440줄을 `lib/store/*` 14개 모듈(schema·exchangeRate·settings·assets·history·legacyPlans·plans·quotes·dividends·backupIO·seed·stockAccounts·priceCorrection·migrations)로 잘라 옮김(본문 불변, import/export 줄만 추가). `lib/db.ts`는 **명시 재노출 목록**(`export *` 없음) — 값 52개·타입 11개 분리 전과 동일, settings 키 상수는 store 내부 export만(비공개 유지). 데모 판정 → DB 이름 선택 → `new AssetDB()` 순서는 `schema.ts` 안에서 그대로. Dexie 스키마·버전(2)·upgrade 변경 없음(실데이터 마이그레이션 없음). 레거시 읽기 변환은 `legacyPlans.ts upgradePensionSimPlan`/`upgradePortfolio`로 추출(입력 객체 제자리 수정·반환, 호출은 기존 try 안 → 깨진 저장값은 계속 null). 미사용 `migrate*` 4종·`backfillGaps`·`backfillAllHistoryGaps`·`backfillStockPrices`·`getHistory`는 삭제하지 않고 보관(별도 결정). 테스트는 이동 전에 먼저 추가: 공개 export 스냅샷(`dbExports.test.ts`, DB 이름·테이블·인덱스 포함), 레거시 변환 characterization(`legacyPlans.test.ts`), 미검증 경로(`dbStore.test.ts`: renameStockAccount·deleteAsset 연쇄·deleteHistory 동기화·배당). 이동 후 store/*의 `@/lib/db` 비참조·`export *` 금지 검사.
+- [x] 모바일 뷰포트 실사용 점검.
+  - 선행 조치: 모바일 하단 탭에 '설정' 복구(f25c21a에서 제거돼 모바일에서 Drive 백업·복원·내보내기 진입 불가였음, `components/layout/bottomTabs.ts`).
+  - 결정: Playwright(390×844, DPR 2, isMobile·hasTouch) + `?demo=1` 샘플 데이터로 26개 경로(홈·자산 유형 탭 6·자산 상세 3·`/history`·`/analysis` 탭 5·`/plan` 탭 7·`/advanced-analysis`·`/settings`·리다이렉트) 점검. 문서·`main` 가로 넘침은 1곳 외 없음, 표는 모두 가로 스크롤 컨테이너 안(최소 12px). 수정(CSS만, 동작·데이터 불변): ① 법인 시뮬 `sim/layout.tsx Row` 라벨 `shrink-0`→`min-w-0` — 긴 라벨("= 법인 잔여 현금(가수금·배당 원천)", "가수금(…) 전액 회수")이 값 칸을 카드 밖(x=407)으로 밀어 "1,84…"로 잘리던 문제, 라벨 줄바꿈으로 해결(`layout.test.tsx`). ② 부동산 타일 부제(주소·취득·명의)가 한 줄 고정이라 주소가 13px로 눌리던 문제 → `flex-wrap`, 하단 지표 4칸은 모바일 2×2(`sm:` 이상 4칸) — "105,000만…" 잘림 해소. ③ 앱 높이 `h-screen`(100vh)→ `App.tsx` 바깥 열 `h-dvh`(미지원 시 `h-screen`), `AppLayout`은 `flex-1 min-h-0`, 샘플 배너를 같은 열에 포함 — 샘플 모드에서 배너 높이(64px)만큼 하단 탭이 화면 밖으로 밀리던 문제 해결, 모바일 브라우저 탭(주소창 표시)에서 100vh가 보이는 영역보다 커 하단 탭이 가려지는 문제도 함께 대응(실기기 미확인). 미수정(명확한 버그 아님): 연금 시뮬 세금/건보 요약표의 좁은 칸 줄바꿈("세대 합산으로 계/산"), 자산 상세 계좌·취득 줄이 가로 스크롤로 잘려 보임, 접힌 섹션 제목 말줄임(의도된 `truncate`), 부동산 상세 KPI "순자산 (Equity)" 3px 말줄임, 32px 미만 터치 타깃 다수(연금 시뮬 64개), `/assets` 상단 '신규 추가'가 헤더 위에 따로 놓인 배치. 실데이터 점검·키보드 표시 상태는 미실시. 보고서 `/workspace/asset-phase4/mobile.md`.
 
 ## 참고 (데이터, 앱 수정 아님)
 - KODEX AI전력핵심설비(퇴직IRP) 취득일 수정본: 드라이브 자산관리 폴더 `asset-manager-backup-2026-10-15-fixed.json`.

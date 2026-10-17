@@ -10,7 +10,7 @@ export function Row({ label, children, hint }: { label: string; children: ReactN
   return (
     <div className="py-1">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-gray-400 shrink-0">{label}</span>
+        <span className="text-sm text-gray-400 min-w-0">{label}</span>
         <div className="w-40 sm:w-48 shrink-0">{children}</div>
       </div>
       {hint && <p className="text-xs text-gray-600 mt-0.5 sm:text-right sm:mr-48">{hint}</p>}
