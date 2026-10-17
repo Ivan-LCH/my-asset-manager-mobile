@@ -59,9 +59,8 @@ export default function AssetModal({ asset, onClose }: Props) {
 
         {/* 모달 바디 — 스크롤 가능 */}
         <div className="overflow-y-auto flex-1 px-5 py-4">
-          <Link className="inline-block py-3 text-blue-300 underline" to={'/plan?tab=policies&focus='+encodeURIComponent(asset.id)+'&returnTo='+encodeURIComponent(location.pathname+location.search)} onClick={onClose}>이 자산의 분석 연결·인출 조건 →</Link>
+          <Link className="inline-block py-3 text-blue-300 underline" to={'/settings/totals?focus='+encodeURIComponent(asset.id)+'&returnTo='+encodeURIComponent(location.pathname+location.search)} onClick={onClose}>이 자산의 합산 기준 →</Link>
           <AssetDetail asset={asset} />
-          {asset.type==='PENSION'&&<Link className="inline-block py-3 text-blue-300" to={'/plan?tab=flows&asset='+encodeURIComponent(asset.id)+'&returnTo='+encodeURIComponent(location.pathname+location.search)} onClick={onClose}>이 연금의 지급 계획 연결 →</Link>}
         </div>
       </div>
     </div>

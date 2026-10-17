@@ -112,7 +112,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   if(!plan.holdingTaxAuto&&realEstateAssets.length)analysisNotes.push('수동 보유세 적용 중입니다. 재건축 날짜와 연동하려면 연도별 현금흐름의 보유세를 자동으로 선택하세요.')
   if(!plan.holdingTaxAuto&&plan.holdingTaxAnnual&&!plan.holdingTaxStartYear)analysisNotes.push('수동 보유세 개시 연도가 없어 은퇴 예정 연도부터 적용했습니다.')
   if(realEstateAssets.some(a=>(a.detail as {futureYear?:number})?.futureYear))analysisNotes.push('공사 중 토지의 건강보험 재산 과표는 별도 확인이 필요합니다. 주택으로 전환되기 전 주택 과표는 포함하지 않습니다.')
-  if(linkMode==='pension'&&!pensionLinked)analysisNotes.push('저장된 연금 시뮬레이션이 없어 등록 자산 지급액으로 계산 중입니다. 세부 계산에서 연금 설정을 확인하세요.')
+  if(linkMode==='pension'&&!pensionLinked)analysisNotes.push('저장된 연금 시뮬레이션이 없어 등록 자산 지급액으로 계산 중입니다. 분석 › 연금·법인 시뮬레이션에서 연금 설정을 확인하세요.')
   if(linkMode==='corp'&&!linked)analysisNotes.push('저장된 법인 설정이 없어 법인 소득을 반영하지 못했습니다.')
   if(!pensionLinked&&sched.some(r=>r.drawdownAnnual>0||r.nationalAnnual>0))analysisNotes.push('기본 모드는 등록 지급액 기준입니다. 연금소득세는 미산정이므로 세금 합계를 확정 납부액으로 보지 마세요.')
   const nationalByYear = new Map(sched.map((r) => [r.year, r.nationalAnnual / 12]))
