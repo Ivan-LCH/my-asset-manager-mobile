@@ -98,6 +98,6 @@ describe.skipIf(!existsSync(BACKUP))('실데이터 — 은퇴 분석에 합산 �
     const r = await run([{ name: '이창호-퇴직IRP-미래에셋', role: 'excluded' }])
     expect(r.e.cashFlow).toEqual(before.e.cashFlow)
     expect(r.final).toBe(776_572)
-    expect(r.e.analysisNotes.some(n => n.startsWith('이창호-퇴직IRP-미래에셋(') && n.includes('계좌의 종목을 제외하세요'))).toBe(true)
+    expect(r.e.analysisNotes.some(n => n.startsWith('이창호-퇴직IRP-미래에셋 → ') && n.includes('계좌의 종목을 제외하세요'))).toBe(true)
   })
 })

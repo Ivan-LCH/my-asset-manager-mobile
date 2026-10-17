@@ -114,7 +114,7 @@ describe('analysisScope — 합산 기준을 은퇴 분석 입력에 적용', ()
     const after = project(fixture(), plan({ wrapper: { role: 'excluded' } }))
     expect(after.scoped.assets.some(a => a.id === 'wrapper')).toBe(true)
     expect(after.paid(2031, 'wrapper')).toBe(before.paid(2031, 'wrapper'))
-    expect(after.scoped.notes).toEqual([expect.stringMatching(/^wrapper\(IRP계좌\): .*계좌의 종목을 제외하세요/)])
+    expect(after.scoped.notes).toEqual([expect.stringMatching(/^wrapper → IRP계좌: .*계좌의 종목을 제외하세요/)])
     // 계좌 종목을 제외하면 그 돈이 빠진다
     const stock = analysisScope(snap(fixture(), plan({ irpStock: { role: 'excluded' } })))
     expect([...stock.dropIds]).toEqual(['irpStock'])

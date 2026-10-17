@@ -31,7 +31,7 @@ export function analysisScope(snapshot: Snapshot | null | undefined): AnalysisSc
     const reason = excludedReason(p, snapshot.plan.asOfDate);
     // 래퍼 자체의 기본 상태(linkedAccount → 'linked')는 제외 설정이 아니다 — 저장된 제외·연결만 본다
     if (reason !== 'excluded' && !(reason === 'linked' && p.linkedTo)) continue;
-    if (p.linkedAccount) wrappers.push(`${p.name}(${p.linkedAccount})`);
+    if (p.linkedAccount) wrappers.push(`${p.name} → ${p.linkedAccount}`);
     else if (p.source.type === 'REAL_ESTATE') realEstate.push(p.name);
     else if (p.role === 'entitlement' || defaultPolicy(p.source).role === 'entitlement') entitlements.push(p.name);
     else {
@@ -43,7 +43,7 @@ export function analysisScope(snapshot: Snapshot | null | undefined): AnalysisSc
   if (dropped.length) notes.push(`합산 기준에서 뺀 자산은 은퇴 분석에서도 잔액·연금 지급·배당을 반영하지 않습니다. ${excludedSummary(dropped)}`);
   if (realEstate.length) notes.push(`${realEstate.join(', ')}: 합산 기준에서 뺀 부동산이지만 보유 중이므로 보유세·건강보험 재산 산정에는 포함합니다.`);
   if (entitlements.length) notes.push(`${entitlements.join(', ')}: 합산 기준에서 뺀 수급권은 평가액만 빠집니다. 은퇴 분석에는 원래 잔액이 없으므로 연금 지급은 그대로 반영합니다.`);
-  if (wrappers.length) notes.push(`${wrappers.join(', ')}: 연결 계좌 연금은 홈 합계와 같이 합산 제외 설정을 적용하지 않고 계좌 종목 합계로 분석합니다. 이 돈을 빼려면 합산 기준에서 계좌의 종목을 제외하세요.`);
+  if (wrappers.length) notes.push(`${wrappers.join(', ')}: 주식 계좌에 연결된 연금은 홈 합계와 같이 합산 제외 설정을 적용하지 않고 계좌 종목 합계로 분석합니다. 이 돈을 빼려면 합산 기준에서 계좌의 종목을 제외하세요.`);
   return { dropIds, droppedStock, notes };
 }
 
