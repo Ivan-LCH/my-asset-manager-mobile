@@ -42,7 +42,7 @@ export function AssetInspect() {
     const { assetId } = useParams(), { data: assets, isLoading, error } = useAssets(), asset = assets?.find(a => a.id === assetId);
     const group = stockAccounts(assets ?? []).find(g=>g.assets.some(a=>a.id===assetId));
     const back = safeAssetReturn(params.get('returnTo'), group ? stockAccountUrl(group.id) : '/assets?type=' + (asset?.type ?? 'ALL'));
-    return <Shell title={asset?.name ?? '자산 상세'}><Link to={back}>← 유형별 관리</Link>{isLoading ? <p>불러오는 중…</p> : error ? <p role="alert">{String(error)}</p> : asset ? <section className="panel"><Link to={'/settings/totals?focus=' + encodeURIComponent(asset.id) + '&returnTo=' + encodeURIComponent(group ? back + '&asset=' + encodeURIComponent(asset.id) : back)}>이 자산의 합산 기준 →</Link><AssetDetail asset={asset}/></section> : <p>삭제되었거나 존재하지 않는 자산입니다.</p>}</Shell>;
+    return <Shell title={asset?.name ?? '자산 상세'}><Link to={back}>← 유형별 관리</Link>{isLoading ? <p>불러오는 중…</p> : error ? <p role="alert">{String(error)}</p> : asset ? <section className="panel"><p><Link to={'/settings/totals?focus=' + encodeURIComponent(asset.id) + '&returnTo=' + encodeURIComponent(group ? back + '&asset=' + encodeURIComponent(asset.id) : back)}>이 자산의 합산 기준 →</Link></p><AssetDetail asset={asset}/></section> : <p>삭제되었거나 존재하지 않는 자산입니다.</p>}</Shell>;
 }
 function exportCsv(record: SavedRun, month: string) {
     const safe = (v: unknown) => {const raw=String(v??'');const value=typeof v==='number'?raw:/^[\\s=+@-]/.test(raw)?"'"+raw:raw;return '"'+value.replace(/"/g,'""')+'"'};
