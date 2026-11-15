@@ -4,9 +4,11 @@ import { Link } from 'react-router-dom'
 import { Download, Upload, Cloud, CloudOff, History, RefreshCw } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
+import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { exportBackup, importBackup, mergeBackup, previewBackup, restorePreviousImport, clearAllData, previewStockPriceCorrection, applyStockPriceCorrection, undoStockPriceCorrection, getLastBackupImport, type BackupData } from '@/lib/db'
 import {backupFileName,backupSummary} from '@/lib/backupInfo'
-import { resolveAge, nationalPensionStartYear, hasSpouse } from '@/lib/people'
+import { resolveAge, nationalPensionStartYear, hasSpouse, validYear } from '@/lib/people'
+import type { Settings } from '@/types'
 import { fmtQty } from '@/lib/utils'
 import { googleSignIn, ensureSignedIn, logout, isLoggedIn, onAuthChange, saveToDrive, listBackupFiles, loadFromDrive, latestBackupFile, BACKUP_FOLDER_NAME, MANUAL_BACKUP_FILE_NAME, type DriveFile } from '@/lib/googleDrive'
 import { recordBackupSuccess } from '@/lib/autoBackup'
@@ -18,6 +20,8 @@ export default function Settings() {
   const planner = usePlanner()
   const unconfirmedPolicies = planner.data?.current.positions.filter(p=>!p.confirmed).length ?? 0
   const saveMut = useSaveSettings()
+  const {data:retirementSaved}=useRetirement()
+  const saveRetirementMut=useSaveRetirement()
   const qc = useQueryClient()
   const {data:lastImport}=useQuery({queryKey:['backup-import-info'],queryFn:getLastBackupImport})
   const fileRef = useRef<HTMLInputElement>(null)
@@ -25,6 +29,7 @@ export default function Settings() {
   const [birthHusband,   setBirthHusband]   = useState('')
   const [birthWife,      setBirthWife]      = useState('')
   const [retirementYear, setRetirementYear] = useState(new Date().getFullYear() + 10)
+  const [wifeRetirementYear, setWifeRetirementYear] = useState('') // 빈 값 = 미입력
   const [saved,          setSaved]          = useState(false)
   const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
   // Google Drive 상태
@@ -46,11 +51,15 @@ export default function Settings() {
       setBirthHusband(settings.birthHusband ?? '')
       setBirthWife(settings.birthWife ?? '')
       setRetirementYear(settings.retirementYear ?? new Date().getFullYear() + 10)
+      setWifeRetirementYear(validYear(settings.wifeRetirementYear)?.toString() ?? '')
     }
   }, [settings])
 
   const handleSave = () => {
-    saveMut.mutate({ birthHusband, birthWife, retirementYear }, {
+    // 와이프 은퇴 연도: 빈 값은 '' 로 저장(미입력). 은퇴 입력에 별도 값이 있으면 같이 맞춰 두 화면이 어긋나지 않게 한다.
+    const wifeYear = validYear(wifeRetirementYear)
+    if (retirementSaved?.wifeRetirementYear != null) saveRetirementMut.mutate({ wifeRetirementYear: wifeYear ?? undefined })
+    saveMut.mutate({ birthHusband, birthWife, retirementYear, wifeRetirementYear: wifeYear ?? '' } as Partial<Settings>, {
       onSuccess: () => {
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
@@ -275,13 +284,30 @@ export default function Settings() {
             </p>
           </div>
           <div>
-            <label className="text-xs text-gray-400 block mb-1">은퇴 예정 연도</label>
+            <label className="text-xs text-gray-400 block mb-1">본인(남편) 은퇴 예정 연도</label>
             <input
               type="number" inputMode="decimal"
               className={inputCls}
               value={retirementYear}
               onChange={(e) => setRetirementYear(+e.target.value)}
             />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">와이프 은퇴 예정 연도</label>
+            <input
+              type="number" inputMode="decimal" placeholder="비우면 미입력"
+              className={`${inputCls} disabled:opacity-40`}
+              disabled={!hasSpouse(preview)}
+              value={hasSpouse(preview) ? wifeRetirementYear : ''}
+              onChange={(e) => setWifeRetirementYear(e.target.value)}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {!hasSpouse(preview)
+                ? '미혼(단독)으로 가정 — 와이프 은퇴 연도 없음'
+                : validYear(wifeRetirementYear) === null
+                  ? '와이프 은퇴 연도 미입력 — 건강보험 피부양자 경로를 계산하지 않습니다'
+                  : '본인 은퇴 후에도 와이프가 일하면 피부양자 계획 모형을 분석에 표시합니다 (공단 자격 판정 아님)'}
+            </p>
           </div>
         </div>
 

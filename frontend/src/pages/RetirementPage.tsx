@@ -1,8 +1,9 @@
 import { useRef } from 'react'
 import { AnalysisNotices } from '@/components/retirement/AnalysisNotices'
 import { PensionLedger } from '@/components/retirement/PensionLedger'
-import { useSettings } from '@/hooks/useSettings'
+import { useSettings, useSaveSettings } from '@/hooks/useSettings'
 import { retirementInputs } from '@/lib/analysisInputs'
+import { hasSpouse } from '@/lib/people'
 // 은퇴 생활비 계획 — 현금흐름 뷰(결과 중심). 입력은 은퇴 준비(준비 탭)에서.
 // 파생 계산은 hooks/useAnalysisEngine (연도별 대시보드와 공유), 표·카드: components/retirement.
 import { useState, useEffect, useCallback } from 'react'
@@ -14,13 +15,14 @@ import { useAnalysisEngine } from '@/hooks/useAnalysisEngine'
 import { estimateHoldingTax, toHoldingTaxAssets } from '@/lib/holdingTax'
 import { EMPTY_PLAN, normalizeSavedPlan } from '@/lib/retirementPlan'
 import { formatManwon } from '@/lib/utils'
-import type { RetirementPlan } from '@/types'
+import type { RetirementPlan, Settings } from '@/types'
 
 // ── 메인 페이지 ────────────────────────────────────────────
 export default function RetirementPage() {
   const { data: saved } = useRetirement()
   const saveMut = useSaveRetirement()
   const {data:settings}=useSettings()
+  const saveSettingsMut=useSaveSettings()
   const editedFields=useRef(new Set<keyof RetirementPlan>())
   const editVersion=useRef(0)
 
@@ -51,6 +53,8 @@ export default function RetirementPage() {
   const handleSave = () => {
     const version=editVersion.current
     const patch=Object.fromEntries([...editedFields.current].map(key=>[key,plan[key]])) as Partial<RetirementPlan>
+    // 와이프 은퇴 연도는 설정에도 같이 저장해 두 화면의 값을 하나로 유지 (은퇴 입력 > 설정 순으로 읽음)
+    if('wifeRetirementYear' in patch)saveSettingsMut.mutate({wifeRetirementYear:patch.wifeRetirementYear??''} as Partial<Settings>)
     saveMut.mutate(patch,{onSuccess:()=>{if(version===editVersion.current){editedFields.current.clear();setDirty(false)}}})
   }
 
@@ -76,7 +80,7 @@ export default function RetirementPage() {
         <h2 className="text-lg sm:text-xl font-bold text-gray-100">🌅 은퇴 생활비 계획</h2>
         <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">은퇴 예상 연도</span>
+            <span className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">본인(남편) 은퇴 예상 연도</span>
             <input
               type="number" inputMode="decimal"
               className="w-20 sm:w-24 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-blue-300
@@ -85,6 +89,19 @@ export default function RetirementPage() {
               onChange={(e) => { update('retirementYear', Number(e.target.value)); }}
             />
             <span className="text-xs sm:text-sm text-gray-500">년</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">와이프 은퇴 예상 연도</span>
+            {hasSpouse(settings ?? {}) ? (
+              <input
+                type="number" inputMode="decimal" placeholder="미입력"
+                className="w-20 sm:w-24 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-sm text-pink-300
+                  font-semibold focus:outline-none focus:border-blue-500 text-center"
+                value={plan.wifeRetirementYear || ''}
+                onChange={(e) => { update('wifeRetirementYear', Number(e.target.value) || undefined); }}
+              />
+            ) : <span className="text-xs text-gray-500">미혼(단독) 가정 — 없음</span>}
+            {hasSpouse(settings ?? {}) && <span className="text-xs sm:text-sm text-gray-500">년</span>}
           </div>
           <div className="flex items-center gap-1.5">
             {([

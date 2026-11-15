@@ -1,6 +1,7 @@
 import {annualVehicle} from '@/lib/annualVehicle'
 import {annualIncomeTax} from '@/lib/incomeTax'
-import { annualPension } from '@/lib/annualPension'
+import { annualPension, resolvedAllocations } from '@/lib/annualPension'
+import { analyzeDependent, isJeonseLumpsum, type JeonseItem } from '@/lib/nhiDependent'
 import { annualHealth, type AnnualHealthResult } from '@/lib/annualHealth'
 // 은퇴 분석 엔진 — RetirementPage의 파생 계산 전부를 훅으로 추출 (연도별 대시보드와 공유).
 // 순수 리팩터: 계산 순서·산식은 RetirementPage 원본과 동일. plan(은퇴계획)과 저장된 시뮬 설정을 받아
@@ -18,7 +19,7 @@ import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 import { corpHealthMonthly, EMPTY_CORP_PLAN, mergeCorpTax } from '@/lib/corpSim'
 import { buildCorpCashFlow } from '@/lib/corpCashFlow'
 import { calcPensionByYear, SIM_START_YEAR } from '@/lib/pensionCalc'
-import { resolveAge } from '@/lib/people'
+import { resolveAge, hasSpouse } from '@/lib/people'
 import { pensionSchedule, severanceTax, EMPTY_PENSION_PLAN, sourcesFromAssets, stockAccountBalances, perPersonYearTaxHealth } from '@/lib/pensionSim'
 import { calcHealthInsurance, realEstatePropertyBases, stockDividendsByOwner } from '@/lib/healthInsurance'
 import { holdingTaxByYear, toHoldingTaxAssets } from '@/lib/holdingTax'
@@ -224,6 +225,25 @@ export function useAnalysisEngine(plan: RetirementPlan) {
   // KPI
   const retirementRow = cashFlow.find((r) => r.year >= retirementYear)
 
+  // ── 건강보험 피부양자 계획 모형 (표시 전용 — 저장된 배분·배당률은 바꾸지 않는다) ──
+  const dsPlan=pensionLinked&&pensionSimPlan?pensionSimPlan:null
+  const resolvedAlloc=dsPlan?resolvedAllocations(dsPlan,plan.lumpsum??[]):[]
+  const jeonseItems:JeonseItem[]=(plan.lumpsum??[]).filter(l=>isJeonseLumpsum(l.name)).map(l=>{
+    const a=resolvedAlloc.find(x=>x.lumpsumId===l.id)
+    return {id:l.id,name:l.name,receiveYear:l.receiveYear,amount:l.amount,irpAmount:a?.irpAmount??0,stockAmount:a?.stockAmount??0}
+  })
+  const dependent=analyzeDependent({
+    hasSpouse:hasSpouse(settings),husbandRetirementYear:plan.retirementYear,wifeRetirementYear:plan.wifeRetirementYear??null,
+    rows:sched.map(r=>({year:r.year,husbandPublicPension:Math.max(0,r.pensionByOwner?.husband.national??r.nationalAnnual),
+      husbandPrivatePension:Math.max(0,r.pensionByOwner?r.pensionByOwner.husband.taxable+r.pensionByOwner.husband.exempt:r.drawdownAnnual),
+      husbandFinancial:Math.max(0,r.financialHusbandAnnual)})),
+    otherIncome:Math.max(0,dsPlan?.otherIncome??0),
+    propertyBase:y=>realEstateAssets.length?realEstatePropertyBases(realEstateAssets,y).husband.propertyTaxBase:null,
+    jeonse:jeonseItems,jeonseFound:jeonseItems.length>0,
+    husbandShare:(dsPlan?.stockOwnership.husband??100)/100,dividendYieldPct:dsPlan?.stockAccount.husband.dividendYield??0,
+    allocationsApplied:!!dsPlan,corpLinked:linkMode==='corp',
+  })
+
   const queries=[assetQuery,settingsQuery,dividendQuery,corpQuery,ownersQuery,pensionQuery,portfolioQuery]
   return {
     projection, analysisNotes,
@@ -242,6 +262,8 @@ export function useAnalysisEngine(plan: RetirementPlan) {
     cashLumpsum, lumpsumTaxByYear,
     // 현금흐름·계좌
     cashFlow, retirementRow, accountSim, corpCF,
+    // 건강보험 피부양자 계획 모형
+    dependent,
     // 보유세
     autoHoldingTaxByYear,
     // IRP·주식계좌 설정

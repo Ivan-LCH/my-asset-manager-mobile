@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseBirthYear, resolveAge, resolveRetirementYear, nationalPensionStartYear, hasSpouse } from '@/lib/people'
+import { parseBirthYear, resolveAge, resolveRetirementYear, nationalPensionStartYear, hasSpouse, resolveWifeRetirementYear, validYear } from '@/lib/people'
 
 describe('people (생년월 헬퍼)', () => {
   it('parseBirthYear: YYYY.MM 파싱', () => {
@@ -28,5 +28,20 @@ describe('people (생년월 헬퍼)', () => {
     expect(hasSpouse({ birthWife: '1975.03' })).toBe(true)
     expect(hasSpouse({ birthWife: '' })).toBe(false)
     expect(hasSpouse({})).toBe(false)
+  })
+
+  it('resolveWifeRetirementYear: 배우자 있고 연도 입력 시만 값, 아니면 null', () => {
+    expect(resolveWifeRetirementYear({ birthWife: '1982.03', wifeRetirementYear: 2045 })).toBe(2045)
+    expect(resolveWifeRetirementYear({ birthWife: '1982.03' })).toBeNull()
+    expect(resolveWifeRetirementYear({ birthWife: '1982.03', wifeRetirementYear: '' as unknown as number })).toBeNull()
+    expect(resolveWifeRetirementYear({ birthWife: '', wifeRetirementYear: 2045 })).toBeNull() // 미혼
+  })
+
+  it('validYear: 정수 연도만 허용', () => {
+    expect(validYear(2040)).toBe(2040)
+    expect(validYear('2040')).toBe(2040)
+    expect(validYear('')).toBeNull()
+    expect(validYear(undefined)).toBeNull()
+    expect(validYear(20.5)).toBeNull()
   })
 })
