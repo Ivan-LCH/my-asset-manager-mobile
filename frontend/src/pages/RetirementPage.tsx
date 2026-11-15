@@ -3,7 +3,7 @@ import { AnalysisNotices } from '@/components/retirement/AnalysisNotices'
 import { PensionLedger } from '@/components/retirement/PensionLedger'
 import { useSettings, useSaveSettings } from '@/hooks/useSettings'
 import { retirementInputs } from '@/lib/analysisInputs'
-import { hasSpouse } from '@/lib/people'
+import { hasSpouse, parseBirthYear } from '@/lib/people'
 // 은퇴 생활비 계획 — 현금흐름 뷰(결과 중심). 입력은 은퇴 준비(준비 탭)에서.
 // 파생 계산은 hooks/useAnalysisEngine (연도별 대시보드와 공유), 표·카드: components/retirement.
 import { useState, useEffect, useCallback } from 'react'
@@ -278,7 +278,13 @@ export default function RetirementPage() {
       )}
 
       {/* 연도별 현금흐름 테이블 */}
-      <CashFlowTable rows={cashFlow} retirementYear={retirementYear} linkMode={engLinkMode} />
+      <CashFlowTable
+        rows={cashFlow}
+        retirementYear={retirementYear}
+        wifeRetirementYear={hasSpouse(settings ?? {}) ? plan.wifeRetirementYear ?? null : null}
+        wifeBirthYear={parseBirthYear(settings?.birthWife)}
+        linkMode={engLinkMode}
+      />
 
       {/* 계좌 잔액 추이 (IRP + 일반주식계좌) */}
       {accountSim.length > 0 && (

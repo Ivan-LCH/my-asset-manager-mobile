@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseBirthYear, resolveAge, resolveRetirementYear, nationalPensionStartYear, hasSpouse, resolveWifeRetirementYear, validYear } from '@/lib/people'
+import { parseBirthYear, resolveAge, resolveRetirementYear, nationalPensionStartYear, hasSpouse, resolveWifeRetirementYear, validYear, retirementMarkers, ageInYear, ageSummaryText } from '@/lib/people'
 
 describe('people (생년월 헬퍼)', () => {
   it('parseBirthYear: YYYY.MM 파싱', () => {
@@ -43,5 +43,25 @@ describe('people (생년월 헬퍼)', () => {
     expect(validYear('')).toBeNull()
     expect(validYear(undefined)).toBeNull()
     expect(validYear(20.5)).toBeNull()
+  })
+})
+
+describe('people (연도별 은퇴·나이 표시 헬퍼)', () => {
+  it('retirementMarkers: 남편/와이프/같은 해/없음', () => {
+    expect(retirementMarkers(2034, 2034, 2036)).toEqual(['은퇴'])
+    expect(retirementMarkers(2036, 2034, 2036)).toEqual(['와이프 은퇴'])
+    expect(retirementMarkers(2034, 2034, 2034)).toEqual(['은퇴', '와이프 은퇴'])
+    expect(retirementMarkers(2035, 2034, 2036)).toEqual([])
+    expect(retirementMarkers(2034, null, null)).toEqual([])
+    expect(retirementMarkers(2034, undefined, undefined)).toEqual([])
+  })
+  it('ageInYear: 출생연도 없으면 null', () => {
+    expect(ageInYear(2034, 1972)).toBe(62)
+    expect(ageInYear(2034, null)).toBeNull()
+    expect(ageInYear(2034, undefined)).toBeNull()
+  })
+  it('ageSummaryText: 배우자 있으면 와이프 나이, 없으면 미혼(단독)', () => {
+    expect(ageSummaryText(64, 62)).toBe('남편 64세 · 와이프 62세')
+    expect(ageSummaryText(64, null)).toBe('남편 64세 · 미혼(단독)')
   })
 })
