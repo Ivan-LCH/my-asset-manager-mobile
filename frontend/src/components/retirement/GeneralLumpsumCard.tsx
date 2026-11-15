@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Trash2 } from 'lucide-react'
 import { AmountInput, TextInput, YearInput } from '@/components/sim'
 import { formatManwon, cn } from '@/lib/utils'
@@ -16,13 +17,15 @@ export function destinationOf(lumpsum: LumpsumItem, a: Pick<PensionAllocation,'i
   return a.stockAmount >= Math.max(0, lumpsum.amount - a.irpAmount) ? 'stock' : 'partial'
 }
 
-export function GeneralLumpsumCard({ lumpsum, allocation, ownership, onLumpsum, onAllocation, onRemove }: {
+export function GeneralLumpsumCard({ lumpsum, allocation, ownership, onLumpsum, onAllocation, onRemove, children }: {
   lumpsum: LumpsumItem
   allocation: Pick<PensionAllocation,'irpAmount'|'stockAmount'|'destination'|'stockDividendRatio'>
   ownership: Ownership
   onLumpsum: (patch: Partial<LumpsumItem>) => void
   onAllocation: (patch: AllocPatch) => void
   onRemove: () => void
+  /** 카드 안 추가 입력 (예: 생활비·목돈 입력 탭의 과세 구분 토글) */
+  children?: ReactNode
 }) {
   const dest = destinationOf(lumpsum, allocation)
   const irp = Math.max(0, allocation.irpAmount)   // 기존 데이터 호환용 — 일반 목돈은 새로 IRP를 넣지 않음
@@ -59,6 +62,7 @@ export function GeneralLumpsumCard({ lumpsum, allocation, ownership, onLumpsum, 
           }} />
         </div>
       </div>
+      {children}
       <div>
         <p className="text-xs text-gray-500 mb-0.5">행선지</p>
         <div className="flex gap-1">
@@ -84,15 +88,16 @@ export function GeneralLumpsumCard({ lumpsum, allocation, ownership, onLumpsum, 
           {ownerBtn(undefined, `기존 지분 (남편 ${ownership.husband}%)`)}
         </div>
       </div>
-      {dest !== 'cash' && (
-        <label className="block text-xs text-gray-500">증권 내 배당투자 비율 (나머지 일반투자 · 배당 0%)
+      {dest !== 'cash' && stock > 0 && (
+        <label className="block text-xs text-gray-500">증권 계좌 안 배분 (배당주 / 일반주)
           <div className="flex items-center gap-1 mt-0.5">
-            <input aria-label={(lumpsum.name || '목돈') + ' 배당투자 비율'} type="number" inputMode="decimal" min={0} max={100} step="any"
+            <span className="text-xs text-gray-500 shrink-0">배당주</span>
+            <input aria-label={(lumpsum.name || '목돈') + ' 배당주 비율'} type="number" inputMode="decimal" min={0} max={100} step="any"
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-100 text-right focus:outline-none focus:border-blue-500"
               value={ratio} onChange={(e) => onAllocation({ stockDividendRatio: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })} />
-            <span className="text-xs text-gray-500 shrink-0">%</span>
+            <span className="text-xs text-gray-500 shrink-0">% (나머지 일반주)</span>
           </div>
-          <span className="block mt-1 text-gray-400">배당투자 {formatManwon(stock * ratio / 100)} · 일반투자 {formatManwon(stock * (100 - ratio) / 100)} — 둘 다 계좌 상승률로 성장</span>
+          <span className="block mt-1 text-gray-400">배당주 {formatManwon(stock * ratio / 100)} · 일반주 {formatManwon(stock * (100 - ratio) / 100)} — 일반주는 배당 0%, 둘 다 계좌 상승률로 성장</span>
         </label>
       )}
       {irp > 0 && <p className="text-xs text-amber-300">기존 퇴직IRP 분배 {formatManwon(irp)}가 남아 있습니다. 행선지를 다시 고르면 일반 목돈 기준(IRP 없음)으로 정리됩니다.</p>}
