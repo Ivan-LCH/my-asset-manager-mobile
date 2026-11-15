@@ -24,6 +24,19 @@ export function resolveRetirementYear(settings?: Partial<Settings>): number {
   return new Date().getFullYear() + Math.max(0, retirementAge - currentAge)
 }
 
+/** 연도 입력값 검증 (정수 1900 초과). 빈 문자열·NaN·undefined → null. */
+export function validYear(v: unknown): number | null {
+  if (v === '' || v == null) return null
+  const n = Number(v)
+  return Number.isInteger(n) && n > 1900 ? n : null
+}
+
+/** 와이프 은퇴 예정 연도. 배우자(birthWife)가 없거나 미입력이면 null — 연도를 임의로 만들지 않는다. */
+export function resolveWifeRetirementYear(settings?: Partial<Settings>): number | null {
+  if (!hasSpouse(settings)) return null
+  return validYear(settings?.wifeRetirementYear)
+}
+
 /** 국민연금 개시연도 = 출생연도 + 65. 출생연도 없으면 null. */
 export function nationalPensionStartYear(birthDate?: string): number | null {
   const by = parseBirthYear(birthDate)

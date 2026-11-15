@@ -58,6 +58,7 @@ export function normalizeSavedPlan(saved: Partial<RetirementPlan>): RetirementPl
     })),
     emergency:      saved.emergency      ?? [],
     retirementYear:  saved.retirementYear  ?? new Date().getFullYear() + 10,
+    wifeRetirementYear: saved.wifeRetirementYear ?? undefined,
     healthInsurance: saved.healthInsurance  ? { ...DEFAULT_HI, ...saved.healthInsurance } : DEFAULT_HI,
     linkCorpSim:     saved.linkCorpSim ?? false,
     linkPensionSim:  saved.linkPensionSim ?? false,

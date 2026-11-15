@@ -9,6 +9,7 @@ import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
 import { useRetirement } from '@/hooks/useRetirement'
 import { retirementInputs } from '@/lib/analysisInputs'
+import { hasSpouse } from '@/lib/people'
 import { useMonthlyArchive } from '@/planner/archive'
 
 const TABS = [
@@ -38,7 +39,8 @@ export default function AnalysisPage() {
           <li><Link className="text-blue-300" to="/assets?type=PENSION">등록 연금 {live.filter(a=>a.type==='PENSION').length}건 · 지급액·기간 →</Link></li>
           <li><Link className="text-blue-300" to="/assets?type=STOCK">주식·배당 원본 →</Link></li>
           <li><Link className="text-blue-300" to="/analysis?tab=prep">생활비·목돈·여행·의료비 →</Link></li>
-          <li>은퇴 연도: {inputs.missing.some(m=>m.label==='은퇴 예정 연도')?'미입력':inputs.plan.retirementYear} · 출처: {inputs.yearSource} <Link className="text-blue-300" to={inputs.yearSource==='설정'?'/settings':'/analysis?tab=cashflow'}>수정 →</Link></li>
+          <li>본인(남편) 은퇴 연도: {inputs.missing.some(m=>m.label==='은퇴 예정 연도')?'미입력':inputs.plan.retirementYear} · 출처: {inputs.yearSource} <Link className="text-blue-300" to={inputs.yearSource==='설정'?'/settings':'/analysis?tab=cashflow'}>수정 →</Link></li>
+          <li>와이프 은퇴 연도: {!hasSpouse(settings.data??{})?'미혼(단독) 가정':inputs.wifeYear??'와이프 은퇴 연도 미입력'}{inputs.wifeYear!=null&&<> · 출처: {inputs.wifeYearSource}</>} <Link className="text-blue-300" to={inputs.wifeYear!=null&&inputs.wifeYearSource==='은퇴 입력'?'/analysis?tab=cashflow':'/settings'}>수정 →</Link>{inputs.wifeYear!=null&&inputs.wifeYear>inputs.plan.retirementYear&&<span className="text-gray-400"> · 본인 은퇴 후 와이프가 일하는 기간({inputs.plan.retirementYear}~{inputs.wifeYear-1}년)은 피부양자 계획 모형 적용</span>}</li>
           <li>소득 계산: {inputs.plan.linkCorpSim?'저장된 법인 설정':inputs.plan.linkPensionSim?'저장된 연금 설정':'등록 연금 지급액·배당'} · 기존 연동 선택을 유지합니다.</li>
           {inputs.medicalMissing&&<li className="text-amber-300">의료비는 미입력입니다. 결과에 별도 의료비가 포함되지 않습니다.</li>}
         </ul>

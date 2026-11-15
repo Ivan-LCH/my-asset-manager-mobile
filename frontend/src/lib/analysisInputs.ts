@@ -1,7 +1,7 @@
 import type { Asset, PensionDetail, PensionSimPlan, RetirementPlan, Settings } from '@/types';
 import { EMPTY_PENSION_PLAN, sourcesFromAssets } from './pensionSim';
 import { normalizeSavedPlan } from './retirementPlan';
-import { parseBirthYear } from './people';
+import { parseBirthYear, hasSpouse, validYear } from './people';
 import {stockAccounts} from '@/planner/accounts';
 
 /** Read-only projection of existing inputs. Never saves defaults or marks a plan reviewed. */
@@ -11,8 +11,10 @@ export function retirementInputs(saved: Partial<RetirementPlan> = {}, settings: 
   if (!Number.isInteger(year) || Number(year) < 1900) missing.push({label:'은퇴 예정 연도',to:'/settings'});
   if (parseBirthYear(settings.birthHusband)===null && !(Number(settings.currentAge)>0)) missing.push({label:'생년월 또는 기존 나이',to:'/settings'});
   if (!Array.isArray(saved.expenses)) missing.push({label:'생활비',to:'/analysis?tab=prep'});
-  const plan = normalizeSavedPlan({...saved, retirementYear:year ?? new Date().getFullYear(), expenses:saved.expenses??[], medicalMonthly:saved.medicalMonthly??0});
-  return {plan,missing,yearSource:saved.retirementYear!=null?'은퇴 입력':'설정',medicalMissing:saved.medicalMonthly==null};
+  // 와이프 은퇴 연도: 은퇴 입력 > 설정. 배우자 없으면 사용 안 함, 미입력이면 연도를 만들지 않는다.
+  const wifeYear = hasSpouse(settings) ? (validYear(saved.wifeRetirementYear) ?? validYear(settings.wifeRetirementYear)) : null;
+  const plan = normalizeSavedPlan({...saved, retirementYear:year ?? new Date().getFullYear(), wifeRetirementYear:wifeYear ?? undefined, expenses:saved.expenses??[], medicalMonthly:saved.medicalMonthly??0});
+  return {plan,missing,yearSource:saved.retirementYear!=null?'은퇴 입력':'설정',wifeYear,wifeYearSource:validYear(saved.wifeRetirementYear)!==null?'은퇴 입력':'설정',medicalMissing:saved.medicalMonthly==null};
 }
 
 /** Shared by the existing pension editor and annual/cash-flow views. */

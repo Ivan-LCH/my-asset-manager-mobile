@@ -147,7 +147,8 @@ export interface Settings {
   retirementAge: number       // (구버전, retirementYear 미입력 시 폴 백)
   birthHusband?: string       // 남편 생년월 "YYYY.MM" (예: 1980.05)
   birthWife?:    string       // 와이프 생년월 "YYYY.MM" (비우면 미혼/단독 가정)
-  retirementYear?: number     // 은퇴 예정 연도
+  retirementYear?: number     // 본인(남편) 은퇴 예정 연도
+  wifeRetirementYear?: number // 와이프 은퇴 예정 연도 (미입력=빈 값, 임의 추정 안 함)
   [key: string]: number | string | undefined
 }
 
@@ -178,6 +179,7 @@ export interface RetirementPlan {
   lumpsum:         LumpsumItem[]
   emergency:       EmergencyItem[]
   retirementYear:  number
+  wifeRetirementYear?: number // 와이프 은퇴 예정 연도 (선택). 없으면 설정값으로 폴백
   healthInsurance: HealthInsuranceInputs
   linkCorpSim:     boolean
   linkPensionSim:  boolean

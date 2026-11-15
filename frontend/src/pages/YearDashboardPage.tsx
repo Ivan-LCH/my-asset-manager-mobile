@@ -4,6 +4,7 @@ import { UnconfirmedTag } from '@/components/retirement/UnconfirmedTag'
 import { PensionLedger } from '@/components/retirement/PensionLedger'
 import { PensionIncomeDetails } from '@/components/retirement/PensionIncomeDetails'
 import { HealthBreakdown } from '@/components/retirement/HealthBreakdown'
+import { DependentPanel } from '@/components/retirement/DependentPanel'
 import { FinancialTaxBreakdown } from '@/components/retirement/FinancialTaxBreakdown'
 import { retirementInputs } from '@/lib/analysisInputs'
 import { expenseFactor } from '@/lib/retirementCashflow'
@@ -203,6 +204,13 @@ export default function YearDashboardPage() {
               </div>
             )}
           </div></details>
+
+          {/* ── ④-2 건강보험 피부양자 계획 모형 (와이프가 더 오래 일할 때) ── */}
+          <details id="analysis-dependent" className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-gray-200">👨‍👩 피부양자 경로 · 전세금 재배분 (계획 모형)
+              <span className="block mt-1 text-xs font-normal text-gray-400">{eng.dependent.status==='active'?`${eng.dependent.window!.start}~${eng.dependent.window!.end}년 · 와이프 직장가입 가정`:eng.dependent.status==='wife-year-missing'?'와이프 은퇴 연도 미입력':eng.dependent.status==='no-spouse'?'미혼(단독) 가정':'적용 안 함'}</span>
+            </summary><div className="mt-3"><DependentPanel value={eng.dependent} year={year}/></div>
+          </details>
 
           {/* ── ⑤ 생활비 상세 (월) ── */}
           <details id="analysis-expenses" className="bg-gray-800 border border-gray-700 rounded-xl p-4">
