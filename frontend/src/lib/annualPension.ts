@@ -4,6 +4,7 @@ import {stockAccounts} from '@/planner/accounts';
 import {linkedStocks,type StockLinkData} from './linkedStocks';
 import {openingFunding,mergeFunding,withdrawFunding,scaleFunding,growFunding,type FundingPool} from './pensionFunding';
 import { monthlyPension } from './monthlyPension';
+import {requestedStockAmount,splitLumpsumStock} from './lumpsumStock';
 
 export interface PensionAccountRow {
   id:string; name:string; opening:number; inflow:number; growth:number; paid:number; closing:number; pending:boolean;
@@ -37,8 +38,8 @@ export function resolvedAllocations(plan:PensionSimPlan,lumpsums:LumpsumItem[]){
   return plan.allocations.flatMap(a=>{
     const l=lumpsums.find(l=>l.id===a.lumpsumId);if(!l||seen.has(l.id))return [];seen.add(l.id);
     const irp=Math.min(Math.max(0,l.amount),Math.max(0,a.irpAmount));
-    const stock=Math.min(Math.max(0,l.amount-irp),Math.max(0,a.stockAmount));
-    return [{...a,irpAmount:irp,stockAmount:stock,year:l.receiveYear,name:l.name,taxKind:l.taxKind}];
+    const stock=Math.min(Math.max(0,l.amount-irp),Math.max(0,requestedStockAmount(a,l.amount,irp)));
+    return [{...a,irpAmount:irp,stockAmount:stock,year:l.receiveYear,name:l.name,taxKind:l.taxKind,owner:l.owner}];
   });
 }
 
@@ -50,7 +51,7 @@ export function annualPension(plan:PensionSimPlan,assets:Asset[],from:number,to:
   const fundedStockIds=new Set<string>();
   const allocations=options.simulation?resolvedAllocations(plan,options.lumpsums??[]):[];
   if(options.simulation&&plan.allocations.some(a=>!allocations.some(r=>r.lumpsumId===a.lumpsumId)))notes.push('원본이 없거나 중복된 목돈 분배는 제외했습니다. 기존 목돈 입력을 확인하세요.');
-  if(options.simulation&&plan.allocations.some(a=>{const r=allocations.find(r=>r.lumpsumId===a.lumpsumId);return r&&(r.irpAmount!==a.irpAmount||r.stockAmount!==a.stockAmount)}))notes.push('목돈을 초과한 분배는 원본 금액 이내로 제한했습니다.');
+  if(options.simulation&&plan.allocations.some(a=>{const r=allocations.find(r=>r.lumpsumId===a.lumpsumId);return r&&(r.irpAmount!==a.irpAmount||(!a.destination||a.destination==='partial')&&r.stockAmount!==a.stockAmount)}))notes.push('목돈을 초과한 분배는 원본 금액 이내로 제한했습니다.');
   if(allocations.some(a=>a.year<current))notes.push('과거 목돈 분배는 현재 잔액에 포함된 것으로 보고 다시 입금하지 않습니다.');
   const sources:PensionSource[]=[...plan.sources];
   for(const a of live){
@@ -129,6 +130,8 @@ export function annualPension(plan:PensionSimPlan,assets:Asset[],from:number,to:
   let hStock=options.simulation?(stockInputs?stockInputs.husband.balance:Math.max(0,plan.stockAccount.husband.extraAmount)):0,wStock=options.simulation?(stockInputs?stockInputs.wife.balance:Math.max(0,plan.stockAccount.wife.extraAmount)):0;
   let hLinkedBalance=stockInputs?.husband.balance??0,wLinkedBalance=stockInputs?.wife.balance??0;
   let hLinkedDividend=stockInputs?.husband.annualDividend??0,wLinkedDividend=stockInputs?.wife.annualDividend??0;
+  // 목돈 증권 중 일반투자(배당 0%) 원금. 계좌 상승률로 함께 성장해 배당/일반 비율을 유지한다.
+  let hGrowthOnly=0,wGrowthOnly=0;
   const rows:PensionLedgerRow[]=[];
   for(let year=current;year<=to;year++){
     const opening=[...balances.values()].reduce((s,n)=>s+n,0);let inflow=0,growth=0,paid=0,shortfall=0,benefitAnnual=0;
@@ -194,11 +197,15 @@ export function annualPension(plan:PensionSimPlan,assets:Asset[],from:number,to:
       const pool=funding.get(key);if(pool){growFunding(pool,change);if(pool.enabled&&change<0)notes.push(`${accountNames.get(key)}: 운용손실 이후 세무 원금 조정은 미확정입니다. 해당 인출 세금은 확정 합계에서 제외합니다.`);}
       accounts.push({id:key,name:accountNames.get(key)??key,opening:accountOpening.get(key)??0,inflow:accountInflows.get(key)??0,growth:change,paid:withdrawal,closing,pending:pendingAccounts.has(key),transferIn:transferIn.get(key)??0,transferOut:transferOut.get(key)??0,funding:pool?.enabled?scaleFunding(pool,1):undefined});
     }
-    for(const a of allocations.filter(a=>a.year===year)){hStock+=a.stockAmount*plan.stockOwnership.husband/100;wStock+=a.stockAmount*plan.stockOwnership.wife/100;}
-    const financialHusbandAnnual=hLinkedDividend+Math.max(0,hStock-hLinkedBalance)*plan.stockAccount.husband.dividendYield/100,financialWifeAnnual=wLinkedDividend+Math.max(0,wStock-wLinkedBalance)*plan.stockAccount.wife.dividendYield/100;
+    for(const a of allocations.filter(a=>a.year===year)){
+      // 원금은 명의(owner, 없으면 stockOwnership)로 귀속, 배당은 배당투자 몫만.
+      const sp=splitLumpsumStock(a.stockAmount,a.owner,plan.stockOwnership,a);
+      hStock+=sp.husband.stock;wStock+=sp.wife.stock;hGrowthOnly+=sp.husband.growthOnly;wGrowthOnly+=sp.wife.growthOnly;
+    }
+    const financialHusbandAnnual=hLinkedDividend+Math.max(0,hStock-hLinkedBalance-hGrowthOnly)*plan.stockAccount.husband.dividendYield/100,financialWifeAnnual=wLinkedDividend+Math.max(0,wStock-wLinkedBalance-wGrowthOnly)*plan.stockAccount.wife.dividendYield/100;
     hStock=Math.max(0,hStock*(1+plan.stockAccount.husband.growthRate/100));wStock=Math.max(0,wStock*(1+plan.stockAccount.wife.growthRate/100));
     const hg=Math.max(0,1+plan.stockAccount.husband.growthRate/100),wg=Math.max(0,1+plan.stockAccount.wife.growthRate/100);
-    hLinkedBalance*=hg;wLinkedBalance*=wg;hLinkedDividend*=hg;wLinkedDividend*=wg;
+    hLinkedBalance*=hg;wLinkedBalance*=wg;hGrowthOnly*=hg;wGrowthOnly*=wg;hLinkedDividend*=hg;wLinkedDividend*=wg;
     const nationalAnnual=own.husband.national+own.wife.national,exemptAnnual=own.husband.exempt+own.wife.exempt,taxableAnnual=own.husband.taxable+own.wife.taxable+nationalAnnual;
     const financialAnnual=financialHusbandAnnual+financialWifeAnnual;
     if(year>=from)rows.push({year,opening,inflow,growth,paid,closing:[...balances.values()].reduce((s,n)=>s+n,0),shortfall,benefitAnnual,stockHusband:hStock,stockWife:wStock,pensionByOwner:own,entries,accounts,payoutChanges,

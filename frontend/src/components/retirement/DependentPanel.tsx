@@ -33,18 +33,18 @@ export function DependentPanel({value,year}:{value:DependentAnalysis;year:number
         <Basis r={cur.current}/>
         <p className="text-gray-400">{cur.current.reason}</p>
         <div className="border-t border-gray-700 pt-2 space-y-1" data-dependent-rebalance>
-          <p className="font-semibold text-gray-200">전세 목돈 재배분 권고 (저장값 미변경)</p>
-          {!v.jeonseFound?<p className="text-gray-400">이름에 "전세"/"보증금"이 포함된 목돈이 없어 재배분하지 않았습니다.</p>
-          :cur.jeonseStock<=0&&cur.jeonseCash<=0?<p className="text-gray-400">이 연도에는 아직 수령 전이거나 배분된 전세 목돈이 없습니다.</p>
+          <p className="font-semibold text-gray-200">목돈(전세 등) 배당 재배분 권고 · 남편 몫 증권 (저장값 미변경)</p>
+          {!v.jeonseFound?<p className="text-gray-400">증권 배분이 있는 일반 목돈(목돈 분배에서 명의·배당 비율 지정)이 없고, 기존 데이터에서 이름에 "전세"/"보증금"이 포함된 목돈도 없어 재배분하지 않았습니다.</p>
+          :cur.jeonseStock<=0&&cur.jeonseCash<=0?<p className="text-gray-400">이 연도에는 아직 수령 전이거나 배분된 대상 목돈이 없습니다.</p>
           :cur.rebalance.allocation?<>
             <table className="w-full text-right"><tbody>
-              <tr><th className="text-left font-normal">배당투자</th><td>{won(cur.rebalance.allocation.dividendAmount)}</td></tr>
-              <tr><th className="text-left font-normal">일반(성장)투자 · 배당 0% 가정</th><td>{won(cur.rebalance.allocation.growthAmount)}</td></tr>
+              <tr><th className="text-left font-normal">배당투자 (남편 몫)</th><td>{won(cur.rebalance.allocation.dividendAmount)}</td></tr>
+              <tr><th className="text-left font-normal">일반(성장)투자 (남편 몫) · 배당 0% 가정</th><td>{won(cur.rebalance.allocation.growthAmount)}</td></tr>
               <tr><th className="text-left font-normal">현금 · 이자 0% 가정(변경 없음)</th><td>{won(cur.rebalance.allocation.cashAmount)}</td></tr>
             </tbody></table>
             <p className="text-gray-300">적용 시 금융소득 {formatManwon(cur.rebalance.result.income.financial)} (1천만 원 절벽 대비 {cur.rebalance.result.income.financial<=FINANCIAL_INCOME_EXEMPTION?'이하':'초과'}) · 반영 소득 {formatManwon(cur.rebalance.result.income.countable)} / 상한 {formatManwon(cur.rebalance.result.incomeLimit)} · <span className={STATUS[cur.rebalance.result.status].cls}>{STATUS[cur.rebalance.result.status].label}</span></p>
           </>
-          :cur.rebalance.mode==='none'?<p className="text-gray-400">전세 목돈의 배당투자 원금이 없거나 연금 시뮬레이션 연동이 꺼져 주식 배분을 알 수 없습니다. 현금은 그대로 두고 재배분을 권고하지 않습니다.</p>
+          :cur.rebalance.mode==='none'?<p className="text-gray-400">대상 목돈의 남편 몫 증권 원금이 없거나(와이프 명의 등) 연금 시뮬레이션 연동이 꺼져 주식 배분을 알 수 없습니다. 현금은 그대로 두고 재배분을 권고하지 않습니다.</p>
           :<p className="text-red-300">배당을 0으로 줄여도 요건을 맞출 수 없어 재배분을 권고하지 않습니다. {cur.rebalance.baseline.reason}</p>}
         </div>
       </div>:<p className="text-gray-400">선택한 {year}년은 피부양자 기간이 아닙니다. 아래 표에서 기간별 결과를 확인하세요.</p>}
@@ -55,7 +55,7 @@ export function DependentPanel({value,year}:{value:DependentAnalysis;year:number
           <td className={STATUS[y.rebalance.result.status].cls}>{STATUS[y.rebalance.result.status].label}</td></tr>)}
       </tbody></table></div>
     </>}
-    {v.jeonseItems.length>0&&<p className="text-gray-400">전세 목돈으로 인식: {v.jeonseItems.map(j=>`${j.name}(${j.receiveYear}년 ${formatManwon(j.amount)})`).join(', ')}</p>}
+    {v.jeonseItems.length>0&&<p className="text-gray-400">재배분 대상 목돈: {v.jeonseItems.map(j=>`${j.name||'목돈'}(${j.receiveYear}년 ${formatManwon(j.amount)} · ${j.basis==='keyword'?'이름 기준':'분배 설정 기준'}${j.husbandShare===0?' · 와이프 명의':j.husbandShare===1?' · 남편 명의':''}${(j.dividendRatio??100)<100?` · 배당 ${Math.round(j.dividendRatio!)}%`:''})`).join(', ')}</p>}
     <p className="text-amber-300">계획 모형이며 국민건강보험공단의 자격 판정이 아닙니다.</p>
     <p className="text-gray-400">기준(2022 부과체계 개편 후, 시행규칙 별표 1의2·제44조 실무 해석): 소득 {formatManwon(DEPENDENT_INCOME_LIMIT)} 이하 · 재산 과표 {formatManwon(DEPENDENT_PROPERTY_LIMIT)} 이하는 소득만 / {formatManwon(DEPENDENT_PROPERTY_LIMIT)} 초과~{formatManwon(DEPENDENT_PROPERTY_HARD_LIMIT)} 이하는 소득 {formatManwon(DEPENDENT_PROPERTY_INCOME_LIMIT)} 이하 / {formatManwon(DEPENDENT_PROPERTY_HARD_LIMIT)} 초과 불가.</p>
     {v.notes.map(n=><p key={n} className="text-gray-400">{n}</p>)}

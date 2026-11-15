@@ -3,6 +3,7 @@ import type {annualPension,PensionAccountRow,PensionLedgerRow} from './annualPen
 import {stockAccounts} from '@/planner/accounts'
 import {openingFunding,mergeFunding,growFunding,withdrawFunding,scaleFunding,type FundingPool} from './pensionFunding'
 import {initialMonthlyPayout,monthIndex,monthLabel} from './monthlyPensionPlan'
+import {requestedStockAmount} from './lumpsumStock'
 
 type Engine=typeof annualPension
 type Result={rows:PensionLedgerRow[];notes:string[];fundedStockIds:Set<string>;allocations:ReturnType<typeof import('./annualPension').resolvedAllocations>;incomplete:boolean;stockInputs:ReturnType<typeof import('./linkedStocks').linkedStocks>|null;sources:PensionSimPlan['sources']}
@@ -32,7 +33,7 @@ export function monthlyPension(plan:PensionSimPlan,assets:Asset[],from:number,to
   })
   if(new Set(accounts.filter(a=>a.c.role!=='insurance').map(a=>a.key)).size!==accounts.filter(a=>a.c.role!=='insurance').length)throw Error('월별 계획에서 같은 계좌를 중복 연결할 수 없습니다.')
   const managedLumps=new Set(config.deposits.map(d=>d.lumpsumId))
-  const basePlan={...plan,monthlyPlan:undefined,sources:plan.sources.filter(s=>!managed.has(s.id)),irpTransfers:plan.irpTransfers?.filter(t=>!managed.has(t.sourceId)&&!managed.has(t.targetId)),allocations:plan.allocations.map(a=>managedLumps.has(a.lumpsumId)?{...a,irpAmount:0}:a)}
+  const basePlan={...plan,monthlyPlan:undefined,sources:plan.sources.filter(s=>!managed.has(s.id)),irpTransfers:plan.irpTransfers?.filter(t=>!managed.has(t.sourceId)&&!managed.has(t.targetId)),allocations:plan.allocations.map(a=>managedLumps.has(a.lumpsumId)?{...a,irpAmount:0,...(a.destination==='stock'?{destination:'partial' as const,stockAmount:requestedStockAmount(a,opt.lumpsums?.find(l=>l.id===a.lumpsumId)?.amount??0)}:{})}:a)}
   const base=legacy(basePlan,assets.filter(a=>!managed.has(a.id)&&!fundedStockIds.has(a.id)),from,to,opt) as Result
   for(const id of base.fundedStockIds)fundedStockIds.add(id)
   const rows:PensionLedgerRow[]=[]
@@ -98,5 +99,5 @@ export function monthlyPension(plan:PensionSimPlan,assets:Asset[],from:number,to
     rows.push({...row,opening:row.opening+sum('opening'),inflow:row.inflow+sum('inflow'),growth:row.growth+sum('growth'),paid:row.paid+sum('paid'),closing:row.closing+sum('closing'),shortfall:row.shortfall+es.filter(e=>e.funded).reduce((v,e)=>v+e.requested-e.paid,0),benefitAnnual:row.benefitAnnual+benefit,entries:[...row.entries,...es],accounts:[...row.accounts,...rs],pensionByOwner:own,nationalAnnual:own.husband.national+own.wife.national,exemptAnnual:own.husband.exempt+own.wife.exempt,taxableAnnual:own.husband.taxable+own.wife.taxable+own.husband.national+own.wife.national,drawdownAnnual:row.drawdownAnnual+total,totalAnnual:row.totalAnnual+total})
   }
   notes.push('월별 계획: 월초 잔액에 총수익률을 적용하고 월말 납입·이전·지급합니다. 보험 연금은 조회액 가정이며 납입액으로 지급액을 임의 증액하지 않습니다. 연간 금액 ÷ 12는 연평균 월액으로, 첫해 실제 수령월 월액과 다릅니다.')
-  return {...base,rows,notes:[...new Set([...base.notes,...notes])],fundedStockIds,incomplete:base.incomplete||incomplete,sources:plan.sources,allocations:plan.allocations.flatMap(a=>{const l=opt.lumpsums?.find(l=>l.id===a.lumpsumId);return l?[{...a,year:l.receiveYear,name:l.name,taxKind:l.taxKind}]:[]})}
+  return {...base,rows,notes:[...new Set([...base.notes,...notes])],fundedStockIds,incomplete:base.incomplete||incomplete,sources:plan.sources,allocations:plan.allocations.flatMap(a=>{const l=opt.lumpsums?.find(l=>l.id===a.lumpsumId);return l?[{...a,year:l.receiveYear,name:l.name,taxKind:l.taxKind,owner:l.owner}]:[]})}
 }

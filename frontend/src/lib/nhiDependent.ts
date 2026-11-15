@@ -4,6 +4,8 @@
 // 근거(계획 가정): 2022 부과체계 개편 이후 국민건강보험법 시행규칙 별표 1의2 · 제44조 실무 해석.
 //  - 소득: 연 소득(공적연금 100% + 금융소득 + 기타) ≤ 2천만 원
 //  - 재산: 과표 5.4억 이하 → 소득 기준만 / 5.4억 초과~9억 이하 → 소득 1천만 원 이하일 때만 / 9억 초과 → 불가
+// 재배분 대상: 목돈 분배에서 증권 배분 + 명의/배당 비율/행선지를 지정한 일반 목돈(필드 기준).
+//   새 필드가 없는 기존 목돈은 이름 키워드('전세'·'보증금')로 폴백한다.
 // ※ 계획 모형이며 국민건강보험공단의 자격 판정이 아니다. 실제 자격·소득 산정(사업자등록, 근로·사업소득,
 //   소득 확정 시차 등)은 공단 확인이 필요하다. 와이프의 직장가입자 보험료는 계산하지 않는다.
 
@@ -19,6 +21,9 @@ export const DEPENDENT_PROPERTY_LIMIT = 540_000_000
 export const DEPENDENT_PROPERTY_HARD_LIMIT = 900_000_000
 /** 재산 과표 5.4억 초과~9억 이하 구간의 소득 상한(원). */
 export const DEPENDENT_PROPERTY_INCOME_LIMIT = 10_000_000
+
+import type { LumpsumItem, Ownership, PensionAllocation } from '@/types'
+import { dividendShare, hasExplicitStockFields, husbandStockShare, requestedStockAmount } from './lumpsumStock'
 
 export type DependentStatus = 'eligible' | 'ineligible' | 'unknown'
 export type PropertyBand = 'low' | 'mid' | 'high' | 'unknown'
@@ -136,7 +141,42 @@ export function rebalanceJeonse(i: JeonseRebalanceInput): JeonseRebalance {
 }
 
 // ── 연도별 분석 ────────────────────────────────────────────
-export interface JeonseItem { id: string; name: string; receiveYear: number; amount: number; irpAmount: number; stockAmount: number }
+export interface JeonseItem {
+  id: string; name: string; receiveYear: number; amount: number; irpAmount: number; stockAmount: number
+  /** 이 목돈 증권 몫의 남편 귀속 비율(0~1). 미설정이면 analyzeDependent 의 husbandShare. */
+  husbandShare?: number
+  /** 증권 몫 중 배당투자 비율(0~100). 미설정 = 100. */
+  dividendRatio?: number
+  /** 'field': 목돈 분배 필드로 지정 / 'keyword': 기존 데이터 이름(전세·보증금) 폴백 */
+  basis?: 'field' | 'keyword'
+}
+
+/** 피부양자 재배분 대상 목돈 선택 (순수).
+ *  - 퇴직금(severance)은 제외.
+ *  - 명의·배당 비율·행선지 중 하나라도 지정한 일반 목돈은 증권 배분(> 0)이 있으면 이름과 무관하게 대상.
+ *  - 새 필드가 하나도 없는 기존 목돈은 isJeonseLumpsum(이름) 폴백.
+ *  resolved: 실제 반영 배분(연동 꺼짐이면 빈 배열 → 주식 0). */
+export function selectRebalanceLumpsums(
+  lumpsums: LumpsumItem[],
+  allocations: PensionAllocation[],
+  resolved: { lumpsumId: string; irpAmount: number; stockAmount: number }[],
+  ownership: Ownership,
+): JeonseItem[] {
+  return lumpsums.flatMap((l): JeonseItem[] => {
+    if (l.taxKind === 'severance') return []
+    const raw = allocations.find(a => a.lumpsumId === l.id)
+    const explicit = hasExplicitStockFields(l, raw)
+    if (explicit ? !(raw && requestedStockAmount(raw, l.amount) > 0) : !isJeonseLumpsum(l.name)) return []
+    const r = resolved.find(x => x.lumpsumId === l.id)
+    return [{
+      id: l.id, name: l.name, receiveYear: l.receiveYear, amount: l.amount,
+      irpAmount: r?.irpAmount ?? 0, stockAmount: r?.stockAmount ?? 0,
+      husbandShare: husbandStockShare(l.owner, ownership),
+      dividendRatio: raw ? dividendShare(raw) * 100 : 100,
+      basis: explicit ? 'field' : 'keyword',
+    }]
+  })
+}
 export interface DependentRowInput {
   year: number
   /** 남편 공적연금(국민연금 등) 연액. */
@@ -150,9 +190,10 @@ export interface DependentYearResult {
   year: number
   current: DependentResult
   rebalance: JeonseRebalance
+  /** 남편 귀속 대상 주식 원금(배당+일반, 재배분 가능 범위). 와이프 명의 몫 제외. */
   jeonseStock: number
   jeonseCash: number
-  /** 현재 저장 배분에서 전세 주식 몫이 만드는 남편 배당(원금 기준, 성장 미반영). */
+  /** 현재 저장 배분에서 대상 주식의 배당투자 몫이 만드는 남편 배당(원금 기준, 성장 미반영). */
   jeonseDividend: number
 }
 export interface DependentAnalysis {
@@ -174,6 +215,7 @@ export function analyzeDependent(a: {
   propertyBase: (year: number) => number | null
   jeonse: JeonseItem[]
   jeonseFound: boolean
+  /** 명의 미지정 목돈의 남편 귀속 비율(stockOwnership.husband/100). 목돈별 husbandShare 가 우선. */
   husbandShare: number
   dividendYieldPct: number
   /** 연금시뮬 연동(배분 반영) 여부. 아니면 전세 배분은 0으로 본다. */
@@ -190,17 +232,20 @@ export function analyzeDependent(a: {
   for (const r of a.rows) {
     if (r.year < window.start || r.year > window.end) continue
     const items = a.jeonse.filter(j => j.receiveYear <= r.year)
-    const jeonseStock = a.allocationsApplied ? items.reduce((s, j) => s + Math.max(0, j.stockAmount), 0) : 0
+    const shareOf = (j: JeonseItem) => Math.max(0, Math.min(1, j.husbandShare ?? a.husbandShare))
+    const ratioOf = (j: JeonseItem) => Math.max(0, Math.min(100, j.dividendRatio ?? 100)) / 100
+    // 남편 귀속 주식만 재배분 범위. 와이프 명의 몫은 남편 배당으로 보지 않는다.
+    const jeonseStock = a.allocationsApplied ? items.reduce((s, j) => s + Math.max(0, j.stockAmount) * shareOf(j), 0) : 0
     const jeonseCash = items.reduce((s, j) => s + Math.max(0, j.amount - (a.allocationsApplied ? j.irpAmount + j.stockAmount : 0)), 0)
-    const k = Math.max(0, Math.min(1, a.husbandShare)) * Math.max(0, a.dividendYieldPct) / 100
-    const jeonseDividend = jeonseStock * k
+    const yieldK = Math.max(0, a.dividendYieldPct) / 100
+    const jeonseDividend = a.allocationsApplied ? items.reduce((s, j) => s + Math.max(0, j.stockAmount) * shareOf(j) * ratioOf(j), 0) * yieldK : 0
     const fin0 = Math.max(0, r.husbandFinancial - jeonseDividend)
     const pb = a.propertyBase(r.year)
     const common = { publicPension: r.husbandPublicPension, other: a.otherIncome, privatePension: r.husbandPrivatePension }
     years.push({
       year: r.year, jeonseStock, jeonseCash, jeonseDividend,
       current: evaluateDependent({ ...common, financial: r.husbandFinancial }, pb),
-      rebalance: rebalanceJeonse({ ...common, nonJeonseFinancial: fin0, jeonseStock, jeonseCash, husbandShare: a.husbandShare, dividendYieldPct: a.dividendYieldPct, propertyBase: pb }),
+      rebalance: rebalanceJeonse({ ...common, nonJeonseFinancial: fin0, jeonseStock, jeonseCash, husbandShare: 1, dividendYieldPct: a.dividendYieldPct, propertyBase: pb }),
     })
   }
   const notes = [
@@ -210,7 +255,8 @@ export function analyzeDependent(a: {
     '근로·사업소득과 사업자등록은 없다고 가정합니다. 현금 이자는 0%로 보고, 일반투자 몫은 배당 0%로 가정합니다. 전세 몫의 성장은 원금 기준으로 반영하지 않습니다.',
   ]
   if (a.corpLinked) notes.push('법인 연동 소득(급여·배당)은 반영하지 않았습니다. 법인 급여가 있으면 피부양자 자격이 달라질 수 있습니다.')
-  if (!a.jeonseFound) notes.push('이름에 "전세" 또는 "보증금"이 포함된 목돈이 없어 재배분은 하지 않고, 기존 배당·연금 기준으로만 판정했습니다.')
-  else if (!a.allocationsApplied) notes.push('연금 시뮬레이션 연동이 꺼져 있어 전세 목돈의 주식 배분을 알 수 없습니다. 재배분 권고는 연동 후 표시됩니다.')
+  notes.push('재배분 대상: 목돈 분배에서 증권 배분과 명의·배당 비율을 지정한 일반 목돈(이름 무관). 지정하지 않은 기존 목돈은 이름에 "전세"/"보증금"이 있으면 대상으로 봅니다. 퇴직금은 제외하고, 와이프 명의 증권은 남편 배당에서 뺍니다.')
+  if (!a.jeonseFound) notes.push('증권 배분이 있는 일반 목돈(명의·배당 비율 지정)이 없고, 기존 데이터에서도 이름에 "전세"/"보증금"이 포함된 목돈이 없어 재배분은 하지 않고 기존 배당·연금 기준으로만 판정했습니다.')
+  else if (!a.allocationsApplied) notes.push('연금 시뮬레이션 연동이 꺼져 있어 대상 목돈(전세 등)의 주식 배분을 알 수 없습니다. 재배분 권고는 연동 후 표시됩니다.')
   return { status: 'active', window, years, jeonseFound: a.jeonseFound, jeonseItems: a.jeonse, notes }
 }

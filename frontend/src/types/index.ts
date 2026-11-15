@@ -155,7 +155,11 @@ export interface Settings {
 // ── 은퇴 계획 ──────────────────────────────────────────────
 export interface ExpenseItem  { id: string; name: string; amount: number }
 export interface TravelItem   { id: string; name: string; costPerTrip: number; phase1Times: number; phase1Until: number; phase2Times: number }
-export interface LumpsumItem  { id: string; name: string; receiveYear: number; amount: number; taxKind?: 'severance' | 'other' }
+export interface LumpsumItem  {
+  id: string; name: string; receiveYear: number; amount: number; taxKind?: 'severance' | 'other'
+  /** 이 목돈의 증권 몫 명의(선택). 미설정이면 PensionSimPlan.stockOwnership 비율로 분할(기존 동작). */
+  owner?: 'husband' | 'wife'
+}
 export interface EmergencyItem{ id: string; name: string; year: number; amount: number }
 
 export interface HealthInsuranceInputs {
@@ -269,6 +273,10 @@ export interface PensionAllocation {
   irpSourceId?: string    // 합산할 기존 IRP 연금 원천. 여러 후보일 때 명시적으로 선택.
   irpRetirementTaxRate?: number // 이 목돈의 이연퇴직소득세 국세율(%). 기존 계좌 세율과 별개.
   stockAmount: number     // → 일반주식계좌 원금
+  /** 행선지 힌트(선택). 'stock'이면 stockAmount = 목돈 − IRP 전액, 'cash'면 0. 미설정은 stockAmount 그대로(기존). */
+  destination?: 'cash' | 'stock' | 'partial'
+  /** stockAmount 중 배당투자 비율(0~100, 선택). 나머지는 일반투자(배당 0%). 미설정 = 100(기존). */
+  stockDividendRatio?: number
   // 현금 = lumpsum.amount - irpAmount - stockAmount (나머지, 은퇴계획 목돈)
 }
 

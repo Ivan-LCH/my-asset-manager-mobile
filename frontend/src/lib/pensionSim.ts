@@ -3,7 +3,8 @@
 // 기존 연금원천(sources)은 그대로 가정(연금=남편 명의), + 유입 항목의 목적지·명의에
 // 따라 1인별 세금·건보를 산출 → 가구 총계.
 // 모든 수치는 사용자 가정에 기반한 추정치.
-import type { PensionSimPlan, PensionSource, PensionAllocation, Ownership, Settings } from '@/types'
+import type { PensionSimPlan, PensionSource, PensionAllocation, Ownership, Settings, LumpsumItem } from '@/types'
+import { requestedStockAmount, splitLumpsumStock } from './lumpsumStock'
 import { comprehensiveTax, separatedDividendTax } from './taxMath'
 export { comprehensiveTax, separatedDividendTax } from './taxMath'
 import { annualIncomeTax } from './incomeTax'
@@ -164,22 +165,28 @@ export function stockBalanceFromInflows(allocations: PensionAllocation[]): numbe
 }
 
 /** 일반주식계좌(남편/와이프 각각) 잔액·배당기준.
- *  잔액 = (목돈 분배 stock 합 × stockOwnership 지분) + extraAmount.
- *  dividendBase = 잔액 × dividendYield%. */
+ *  잔액 = (목돈 분배 stock — 목돈 명의 owner, 없으면 stockOwnership 지분) + extraAmount.
+ *  dividendBase = (잔액 − 일반투자 원금) × dividendYield%. 일반투자(stockDividendRatio 외) 몫은 배당 0%.
+ *  lumpsums 미제공 시 owner·행선지를 알 수 없어 stockOwnership·저장 stockAmount를 사용한다(기존 동작). */
 export interface StockAccountBalances {
-  husband: { linked: number; extra: number; total: number; dividendBase: number; growthRate: number; dividendYield: number }
-  wife:    { linked: number; extra: number; total: number; dividendBase: number; growthRate: number; dividendYield: number }
+  husband: { linked: number; extra: number; total: number; growthOnly: number; dividendBase: number; growthRate: number; dividendYield: number }
+  wife:    { linked: number; extra: number; total: number; growthOnly: number; dividendBase: number; growthRate: number; dividendYield: number }
 }
-export function stockAccountBalances(plan: PensionSimPlan): StockAccountBalances {
-  const pool = stockBalanceFromInflows(plan.allocations)
+export function stockAccountBalances(plan: PensionSimPlan, lumpsums?: LumpsumItem[]): StockAccountBalances {
   const h = plan.stockAccount.husband, w = plan.stockAccount.wife
-  const hLinked = pool * (plan.stockOwnership.husband / 100)
-  const wLinked = pool * (plan.stockOwnership.wife / 100)
+  let hLinked = 0, wLinked = 0, hGrowthOnly = 0, wGrowthOnly = 0
+  for (const a of plan.allocations) {
+    const l = lumpsums?.find((x) => x.id === a.lumpsumId)
+    const stock = l ? Math.min(Math.max(0, l.amount - Math.max(0, a.irpAmount)), Math.max(0, requestedStockAmount(a, l.amount))) : a.stockAmount
+    const sp = splitLumpsumStock(stock, l?.owner, plan.stockOwnership, a)
+    hLinked += sp.husband.stock; wLinked += sp.wife.stock
+    hGrowthOnly += sp.husband.growthOnly; wGrowthOnly += sp.wife.growthOnly
+  }
   const hTot = hLinked + h.extraAmount
   const wTot = wLinked + w.extraAmount
   return {
-    husband: { linked: hLinked, extra: h.extraAmount, total: hTot, dividendBase: hTot * (h.dividendYield / 100), growthRate: h.growthRate, dividendYield: h.dividendYield },
-    wife:    { linked: wLinked, extra: w.extraAmount, total: wTot, dividendBase: wTot * (w.dividendYield / 100), growthRate: w.growthRate, dividendYield: w.dividendYield },
+    husband: { linked: hLinked, extra: h.extraAmount, total: hTot, growthOnly: hGrowthOnly, dividendBase: (hTot - hGrowthOnly) * (h.dividendYield / 100), growthRate: h.growthRate, dividendYield: h.dividendYield },
+    wife:    { linked: wLinked, extra: w.extraAmount, total: wTot, growthOnly: wGrowthOnly, dividendBase: (wTot - wGrowthOnly) * (w.dividendYield / 100), growthRate: w.growthRate, dividendYield: w.dividendYield },
   }
 }
 
@@ -288,6 +295,7 @@ export interface VehicleOptions {
   scorePerPoint?:    number
   irpGrowthRate?:    number              // IRP 퇴직시점 성장용 연평균 상승률(%)
   currentYear?:      number
+  lumpsums?:         LumpsumItem[]          // 목돈 명의(owner)·행선지 반영용. 없으면 stockOwnership 분할
 }
 
 /** 연도별 연금 스케줄.
@@ -313,7 +321,7 @@ export function pensionSchedule(
   nationals: NationalPension[],
   fromYear: number,
   toYear: number,
-  opts?: { irpGrowthRate?: number; currentYear?: number },
+  opts?: { irpGrowthRate?: number; currentYear?: number; lumpsums?: LumpsumItem[] },
 ): PensionScheduleRow[] {
   const years = plan.withdrawalYears || 1
   const irpGrowth = ((opts?.irpGrowthRate ?? 0)) / 100  // IRP 잔액 성장
@@ -321,7 +329,7 @@ export function pensionSchedule(
   const startYear = plan.startYear
 
   // ── 일반주식계좌 (남편/와이프 각각): 계좌 단위 배당률·상승률 ──
-  const sb = stockAccountBalances(plan)
+  const sb = stockAccountBalances(plan, opts?.lumpsums)
   const hGrowth = sb.husband.growthRate / 100
   const wGrowth = sb.wife.growthRate / 100
 
@@ -474,7 +482,7 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   const irpInflow = plan.allocations.reduce((s, a) => s + a.irpAmount, 0)
 
   // 일반주식계좌 (남편/와이프 각각): 계좌 단위 잔액·배당기준
-  const sb = stockAccountBalances(plan)
+  const sb = stockAccountBalances(plan, opts?.lumpsums)
 
   // 기타소득은 남편 근로 가정(연금시뮬에선 남편에 배정; 은퇴계획에서 1인별 처리)
   const other = { husband: plan.otherIncome, wife: 0 }
@@ -489,6 +497,7 @@ export function computePensionVehiclePerPerson(plan: PensionSimPlan, opts?: Vehi
   const schedule = pensionSchedule(plan, nationals, fromYear, toYear, {
     irpGrowthRate: opts?.irpGrowthRate,
     currentYear: opts?.currentYear,
+    lumpsums: opts?.lumpsums,
   })
   const peakRow = schedule.reduce<PensionScheduleRow | undefined>(
     (max, r) => (!max || r.totalAnnual > max.totalAnnual ? r : max), undefined)
