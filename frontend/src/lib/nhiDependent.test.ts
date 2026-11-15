@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  analyzeDependent, countableIncome, dependentWindow, evaluateDependent, isJeonseLumpsum, rebalanceJeonse,
+  analyzeDependent, countableIncome, dependentWindow, evaluateDependent, isJeonseLumpsum, rebalanceJeonse, selectRebalanceLumpsums,
   DEPENDENT_INCOME_LIMIT, DEPENDENT_PROPERTY_LIMIT, DEPENDENT_PROPERTY_HARD_LIMIT, FINANCIAL_INCOME_EXEMPTION,
 } from '@/lib/nhiDependent'
 
@@ -144,9 +144,65 @@ describe('analyzeDependent', () => {
     expect(a.years[0].rebalance.allocation).toBeNull()
     expect(a.years[0].current.status).toBe('eligible')
     expect(a.notes.some(n => n.includes('전세'))).toBe(true)
+    expect(a.notes.some(n => n.includes('증권 배분이 있는 일반 목돈'))).toBe(true)
   })
   it('부동산 자료 없으면 unknown', () => {
     const a = analyzeDependent({ ...args, propertyBase: () => null, jeonse: [], jeonseFound: false, rows: rows.map(r => ({ ...r, husbandFinancial: 0 })) })
     expect(a.years[0].current.status).toBe('unknown')
+  })
+})
+
+describe('selectRebalanceLumpsums — 필드 기준 + 이름 폴백', () => {
+  const own = { husband: 50, wife: 50 }
+  const L = (id: string, name: string, over: Record<string, unknown> = {}) => ({ id, name, receiveYear: 2035, amount: 600_000_000, taxKind: 'other' as const, ...over })
+  it('신규 필드 없는 기존 목돈은 이름(전세/보증금) 폴백', () => {
+    const items = selectRebalanceLumpsums(
+      [L('a', '전세금 반환'), L('b', '상속금')],
+      [{ lumpsumId: 'a', irpAmount: 0, stockAmount: 500_000_000 }, { lumpsumId: 'b', irpAmount: 0, stockAmount: 500_000_000 }],
+      [{ lumpsumId: 'a', irpAmount: 0, stockAmount: 500_000_000 }], own)
+    expect(items.map(i => [i.id, i.basis])).toEqual([['a', 'keyword']])
+    expect(items[0]).toMatchObject({ stockAmount: 500_000_000, husbandShare: 0.5, dividendRatio: 100 })
+  })
+  it('필드 지정 + 증권 배분이 있으면 이름과 무관하게 대상, 현금이면 제외', () => {
+    const items = selectRebalanceLumpsums(
+      [L('a', '상속금', { owner: 'husband' }), L('b', '전세금', { owner: 'husband' })],
+      [{ lumpsumId: 'a', irpAmount: 0, stockAmount: 0, destination: 'stock', stockDividendRatio: 40 }, { lumpsumId: 'b', irpAmount: 0, stockAmount: 0, destination: 'cash' }],
+      [{ lumpsumId: 'a', irpAmount: 0, stockAmount: 600_000_000 }], own)
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ id: 'a', basis: 'field', husbandShare: 1, dividendRatio: 40, stockAmount: 600_000_000 })
+  })
+  it('퇴직금(severance)은 이름·필드와 무관하게 제외', () => {
+    const items = selectRebalanceLumpsums(
+      [L('s', '전세 퇴직금', { taxKind: 'severance', owner: 'husband' })],
+      [{ lumpsumId: 's', irpAmount: 0, stockAmount: 100_000_000, stockDividendRatio: 50 }],
+      [{ lumpsumId: 's', irpAmount: 0, stockAmount: 100_000_000 }], own)
+    expect(items).toEqual([])
+  })
+})
+
+describe('analyzeDependent — 명의·배당 비율 반영', () => {
+  const rows = [2035].map(year => ({ year, husbandPublicPension: 6_000_000, husbandPrivatePension: 0, husbandFinancial: 22_000_000 }))
+  const base = {
+    hasSpouse: true, husbandRetirementYear: 2035, wifeRetirementYear: 2037, rows, otherIncome: 0,
+    propertyBase: () => 100_000_000 as number | null, jeonseFound: true, husbandShare: 1, dividendYieldPct: 4, allocationsApplied: true,
+  }
+  const item = { id: 'j', name: '상속금', receiveYear: 2035, amount: 600_000_000, irpAmount: 0, stockAmount: 500_000_000 }
+  it('와이프 명의 증권은 남편 배당·재배분 대상에서 제외', () => {
+    const y = analyzeDependent({ ...base, jeonse: [{ ...item, husbandShare: 0, basis: 'field' as const }] }).years[0]
+    expect(y.jeonseStock).toBe(0)
+    expect(y.jeonseDividend).toBe(0)
+    expect(y.rebalance.allocation).toBeNull()
+  })
+  it('기존 배당 비율 50%면 현재 배당은 절반, 권고는 남편 몫 전체에서 다시 나눔', () => {
+    const y = analyzeDependent({ ...base, rows: [{ ...rows[0], husbandFinancial: 12_000_000 }], jeonse: [{ ...item, husbandShare: 1, dividendRatio: 50, basis: 'field' as const }] }).years[0]
+    expect(y.jeonseStock).toBe(500_000_000)
+    expect(y.jeonseDividend).toBe(10_000_000)
+    // 비전세 금융소득 2백만 → (10M−2M)/4% = 2억
+    expect(y.rebalance.allocation).toEqual({ dividendAmount: 200_000_000, growthAmount: 300_000_000, cashAmount: 100_000_000 })
+  })
+  it('명의 미지정 목돈은 공통 husbandShare(stockOwnership)로 남편 몫만', () => {
+    const y = analyzeDependent({ ...base, husbandShare: 0.5, rows: [{ ...rows[0], husbandFinancial: 12_000_000 }], jeonse: [item] }).years[0]
+    expect(y.jeonseStock).toBe(250_000_000)
+    expect(y.jeonseDividend).toBe(10_000_000)
   })
 })

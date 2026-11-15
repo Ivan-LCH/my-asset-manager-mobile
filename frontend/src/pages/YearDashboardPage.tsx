@@ -20,7 +20,7 @@ import { EMPTY_PLAN, normalizeSavedPlan, fmtM, pnlColor } from '@/lib/retirement
 import { SIM_START_YEAR } from '@/lib/pensionCalc'
 import { formatManwon, formatPnlManwon } from '@/lib/utils'
 import { estimateHoldingTax, toHoldingTaxAssets } from '@/lib/holdingTax'
-import { hasSpouse } from '@/lib/people'
+import { ageInYear, ageSummaryText, parseBirthYear, retirementMarkers } from '@/lib/people'
 
 /** 라인 행 — 0원이면 렌더 생략 (지저분함 방지) */
 function Line({ label, monthly, note, tone }: { label: string; monthly: number; note?: string; tone?: string }) {
@@ -53,7 +53,9 @@ export default function YearDashboardPage() {
   const incomeTaxDetail = eng.incomeTaxDetailsByYear.get(year)
   const currentYear = new Date().getFullYear()
   const age = eng.currentAge + (year - currentYear)
-  const withWife = hasSpouse(settings ?? {})
+  // 표시 전용 — 와이프 나이·은퇴 표시 (와이프 은퇴 연도는 retirementInputs 에서 은퇴 입력 > 설정으로 해석됨)
+  const wifeAge = ageInYear(year, parseBirthYear(settings?.birthWife))
+  const marks = retirementMarkers(year, plan.retirementYear, wifeAge != null ? plan.wifeRetirementYear : null)
 
   // 세금 구성 — 표 합계(|taxAnnual|)와 동일 소스: 소득세 + 보유세 + 퇴직소득세
   const incomeTax = row?.incomeTaxAnnual ?? 0
@@ -82,7 +84,12 @@ export default function YearDashboardPage() {
           </button>
           <div className="text-center min-w-[110px]">
             <p className="text-2xl font-bold text-blue-300 leading-tight tabular-nums">{year}년</p>
-            <p className="text-xs text-gray-500">남편 {age}세{withWife ? '' : ' · 미혼(단독)'} · {firstYear}~{lastYear}</p>
+            <p className="text-xs text-gray-500">{ageSummaryText(age, wifeAge)} · {firstYear}~{lastYear}</p>
+            {marks.length > 0 && (
+              <p className="text-xs text-blue-400" data-year-retirement-marks>
+                {marks.map((m) => <span key={m} className="mx-0.5">{m}</span>)}
+              </p>
+            )}
           </div>
           <button
             onClick={() => setYearOverride(clamp(year + 1))}

@@ -2,10 +2,15 @@
 // 세로 모드(기본 폰)는 핵심 6열, 가로 모드에서 전체 열 표시.
 import { fmtM, pnlColor } from '@/lib/retirementPlan'
 import type { CashFlowRow } from '@/lib/retirementCashflow'
+import { ageInYear, retirementMarkers } from '@/lib/people'
 
-export function CashFlowTable({ rows, retirementYear, linkMode }: {
+export function CashFlowTable({ rows, retirementYear, wifeRetirementYear, wifeBirthYear, linkMode }: {
   rows: CashFlowRow[]
   retirementYear: number
+  /** 와이프 은퇴 연도 (은퇴 입력 > 설정으로 이미 해석된 값). 배우자 없거나 미입력이면 null — 표시 안 함 */
+  wifeRetirementYear?: number | null
+  /** 와이프 출생연도 — 있으면 연도 칸에 (남편/와이프) 나이 표시 */
+  wifeBirthYear?: number | null
   linkMode: 'none' | 'corp' | 'pension'
 }) {
   return (
@@ -17,7 +22,7 @@ export function CashFlowTable({ rows, retirementYear, linkMode }: {
         <table className="w-full text-xs">
           <thead>
             <tr className="text-gray-500 border-b border-gray-700">
-              <th className="text-left py-2 pr-2 font-medium whitespace-nowrap">연도(나이)</th>
+              <th className="text-left py-2 pr-2 font-medium whitespace-nowrap">{wifeBirthYear ? '연도(남편/와이프)' : '연도(나이)'}</th>
               {/* 수입 그룹 (연한 초록 배경) */}
               <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">국민/월</th>
               <th className="hidden landscape:table-cell text-right py-2 px-1 font-medium bg-emerald-950/30">연금/월</th>
@@ -40,7 +45,9 @@ export function CashFlowTable({ rows, retirementYear, linkMode }: {
           </thead>
           <tbody>
             {rows.map((row) => {
-              const isRetirementYear = row.year === retirementYear
+              const marks            = retirementMarkers(row.year, retirementYear, wifeRetirementYear)
+              const isRetirementYear = marks.length > 0
+              const wifeAge          = ageInYear(row.year, wifeBirthYear)
               const hasEmergency     = row.emergencyAnnual > 0
               return (
                 <tr
@@ -50,8 +57,8 @@ export function CashFlowTable({ rows, retirementYear, linkMode }: {
                   }`}
                 >
                   <td className={`py-2 pr-2 font-medium whitespace-nowrap ${isRetirementYear ? 'text-blue-400' : 'text-gray-300'}`}>
-                    {row.year}<span className="text-gray-500">({row.age})</span>
-                    {isRetirementYear && <span className="ml-1 text-xs text-blue-500">은퇴</span>}
+                    {row.year}<span className="text-gray-500">({row.age}{wifeAge != null ? `/${wifeAge}` : ''})</span>
+                    {marks.map((m) => <span key={m} className="ml-1 text-xs text-blue-500">{m}</span>)}
                   </td>
                   <td className="hidden landscape:table-cell text-right py-2 px-1 text-blue-300 bg-emerald-950/30">
                     {row.nationalPensionMonthly > 0 ? fmtM(row.nationalPensionMonthly) : '—'}

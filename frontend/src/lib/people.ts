@@ -47,3 +47,21 @@ export function nationalPensionStartYear(birthDate?: string): number | null {
 export function hasSpouse(settings?: Partial<Settings>): boolean {
   return parseBirthYear(settings?.birthWife) !== null
 }
+
+/** 해당 연도의 은퇴 표시 라벨 (표시 전용). 남편 은퇴 연도 → '은퇴', 와이프 은퇴 연도 → '와이프 은퇴'. 같은 해면 둘 다. */
+export function retirementMarkers(year: number, husbandYear?: number | null, wifeYear?: number | null): string[] {
+  const marks: string[] = []
+  if (husbandYear != null && year === husbandYear) marks.push('은퇴')
+  if (wifeYear != null && year === wifeYear) marks.push('와이프 은퇴')
+  return marks
+}
+
+/** 연도별 나이 = 연도 − 출생연도. 출생연도 없으면 null. */
+export function ageInYear(year: number, birthYear?: number | null): number | null {
+  return birthYear ? year - birthYear : null
+}
+
+/** 연도 스위처 나이 문구 — 배우자 있으면 '남편 N세 · 와이프 M세', 없으면 '남편 N세 · 미혼(단독)'. */
+export function ageSummaryText(husbandAge: number, wifeAge: number | null): string {
+  return wifeAge != null ? `남편 ${husbandAge}세 · 와이프 ${wifeAge}세` : `남편 ${husbandAge}세 · 미혼(단독)`
+}

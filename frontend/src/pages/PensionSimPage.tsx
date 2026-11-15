@@ -10,6 +10,7 @@ import {IncomeTaxSettingsEditor} from '@/components/retirement/IncomeTaxSettings
 import {AnalysisNotices} from '@/components/retirement/AnalysisNotices'
 import {PensionLedger} from '@/components/retirement/PensionLedger'
 import {RegisteredPensionPlan} from '@/components/retirement/RegisteredPensionPlan'
+import {GeneralLumpsumCard,type AllocPatch} from '@/components/retirement/GeneralLumpsumCard'
 import { useMemo } from 'react'
 import { useAssets } from '@/hooks/useAssets'
 import { pensionInputs, pensionInputNotes } from '@/lib/analysisInputs'
@@ -19,10 +20,10 @@ import { useStockAccountOwnership } from '@/hooks/useStockAccountOwnership'
 // 일반주식계좌 = 남편/와이프 각 계좌(잔액·배당률·상승률 입력). 종목 단위 입력은 사용 안 함.
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Save, ArrowLeft } from 'lucide-react'
+import { Save, ArrowLeft, Plus } from 'lucide-react'
 import { Expander, AmountInput, NumInput, YearInput, Row, InfoNote } from '@/components/sim'
 import { usePensionSim, useSavePensionSim } from '@/hooks/usePensionSim'
-import { useRetirement } from '@/hooks/useRetirement'
+import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { useAssetsByType } from '@/hooks/useAssets'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import {
@@ -34,7 +35,7 @@ import { realEstatePropertyBases } from '@/lib/healthInsurance'
 import { formatManwon, cn } from '@/lib/utils'
 import {
   type PensionSimPlan, type Ownership, type OwnershipPreset, type StockAccountConfig,
-  type PensionDetail, type PensionAllocation, type PensionSource,
+  type PensionDetail, type PensionAllocation, type PensionSource, type LumpsumItem,
   ownershipFromPreset, presetFromOwnership,
 } from '@/types'
 
@@ -132,6 +133,10 @@ export default function PensionSimPage() {
   const pensionAssets=(assetQuery.data??[]).filter(a=>a.type==='PENSION'&&!a.disposalDate)
   const realEstateAssets=(assetQuery.data??[]).filter(a=>a.type==='REAL_ESTATE')
   const { data: retirement } = useRetirement()
+  const saveRetirementMut = useSaveRetirement()
+  // 목돈 항목(은퇴계획 lumpsum) 편집 초안 — 저장 버튼에서 은퇴계획과 연금시뮬을 함께 저장. null = 저장본 그대로.
+  const [lumpDraft, setLumpDraft] = useState<LumpsumItem[] | null>(null)
+  const lumpsums = lumpDraft ?? retirement?.lumpsum ?? []
   const linkedInputs=useMemo(()=>pensionInputs(saved,assetQuery.data??[],retirement?.retirementYear),[saved,assetQuery.data,retirement?.retirementYear])
   const [plan,setPlan]=useState<PensionSimPlan>(()=>pensionInputs(null,[]))
   const [dirty,setDirty]=useState(false)
@@ -143,7 +148,7 @@ export default function PensionSimPage() {
   }, [])
 
   // 목돈 분배 (lumpsumId 단위 upsert: 퇴직IRP/일반주식계좌 금액)
-  const setAllocation = (lumpsumId: string, patch: Partial<Pick<PensionAllocation,'irpAmount'|'stockAmount'|'irpSourceId'|'irpRetirementTaxRate'>>) => {
+  const setAllocation = (lumpsumId: string, patch: AllocPatch) => {
     setPlan((p) => {
       const exists = p.allocations.some((a) => a.lumpsumId === lumpsumId)
       const allocations = exists
@@ -160,7 +165,30 @@ export default function PensionSimPage() {
     setDirty(true)
   }
 
-  const handleSave = () => saveMut.mutate(pensionInputs(plan,assetQuery.data??[],retirement?.retirementYear), { onSuccess: () => setDirty(false) })
+  // 목돈 항목 추가·수정·삭제 (생활비·목돈 입력 탭과 같은 RetirementPlan.lumpsum)
+  const editLumpsums = (fn: (items: LumpsumItem[]) => LumpsumItem[]) => {
+    setLumpDraft((d) => fn(d ?? retirement?.lumpsum ?? []))
+    setDirty(true)
+  }
+  const patchLumpsum = (id: string, patch: Partial<LumpsumItem>) =>
+    editLumpsums((items) => items.map((l) => l.id === id ? { ...l, ...patch } : l))
+  const addGeneralLumpsum = () => {
+    const id = uid()
+    editLumpsums((items) => [...items, { id, name: '', receiveYear: retirement?.retirementYear ?? new Date().getFullYear(), amount: 0, taxKind: 'other', owner: 'husband' }])
+    setAllocation(id, { destination: 'cash', stockAmount: 0, stockDividendRatio: 100 })
+  }
+  const removeLumpsum = (id: string) => {
+    editLumpsums((items) => items.filter((l) => l.id !== id))
+    setPlan((p) => ({ ...p, allocations: p.allocations.filter((a) => a.lumpsumId !== id) }))
+  }
+
+  const handleSave = async () => {
+    // 목돈 항목은 은퇴계획에 병합 저장(lumpsum 키만) → 분배는 연금시뮬에 저장
+    if (lumpDraft) {
+      try { await saveRetirementMut.mutateAsync({ lumpsum: lumpDraft }) } catch { return } // 실패 시 초안 유지(미저장 상태)
+    }
+    saveMut.mutate(pensionInputs(plan,assetQuery.data??[],retirement?.retirementYear), { onSuccess: () => { setDirty(false); setLumpDraft(null) } })
+  }
 
   // 부동산 명의 가중 → 1인별 건보 재산분
   const prop = realEstatePropertyBases(realEstateAssets, plan.refYear)
@@ -184,7 +212,7 @@ export default function PensionSimPage() {
   // IRP 포트폴리오 상승률 (은퇴준비 IRP 포트폴리오) — IRP 퇴직시점 잔액 성장·수령액 산정용
   const { data: portfolio } = usePortfolio()
   const irpGrowthRate = portfolio?.growthRate ?? 0
-  const projection=annualPension(effectivePlan,assetQuery.data??[],new Date().getFullYear(),Math.max(effectivePlan.refYear,effectivePlan.startYear+Math.max(1,effectivePlan.withdrawalYears)-1,...(effectivePlan.monthlyPlan?.accounts.map(a=>Number(a.end?.slice(0,4)??0))??[])),{simulation:true,growth:irpGrowthRate,dividend:portfolio?.dividendYield??0,lumpsums:retirement?.lumpsum??[],stockLink:{dividends:dividendQuery.data?.items,owners:ownersQuery.data}})
+  const projection=annualPension(effectivePlan,assetQuery.data??[],new Date().getFullYear(),Math.max(effectivePlan.refYear,effectivePlan.startYear+Math.max(1,effectivePlan.withdrawalYears)-1,...(effectivePlan.monthlyPlan?.accounts.map(a=>Number(a.end?.slice(0,4)??0))??[])),{simulation:true,growth:irpGrowthRate,dividend:portfolio?.dividendYield??0,lumpsums,stockLink:{dividends:dividendQuery.data?.items,owners:ownersQuery.data}})
   const schedule=projection.rows
   const selectedRow=schedule.find(r=>r.year===plan.refYear)
   const h=annualVehicle(effectivePlan,selectedRow,prop,settings)
@@ -195,12 +223,10 @@ export default function PensionSimPage() {
   const husbandHI = health?.husbandSeparate??{grandTotal:0,incomeMonthly:0,propertyMonthly:0}
   const wifeHI = health?.wifeSeparate??{grandTotal:0,incomeMonthly:0,propertyMonthly:0}
   const stockBalance = stockBalanceFromInflows(plan.allocations)
-  const sb = stockAccountBalances(plan)
+  const sb = stockAccountBalances(plan, lumpsums)
   const inflowTotal = totalInflows(plan)
   const irpInflow = plan.allocations.reduce((s, a) => s + a.irpAmount, 0)
   const stockInflow = plan.allocations.reduce((s, a) => s + a.stockAmount, 0)
-  // 은퇴계획 목돈수입 (분배 대상, 단일 소스)
-  const lumpsums = retirement?.lumpsum ?? []
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-xl mx-auto">
@@ -213,13 +239,14 @@ export default function PensionSimPage() {
           </button>
           <h2 className="text-lg sm:text-xl font-bold text-gray-100 truncate">🪙 개인투자시뮬 (가족)</h2>
         </div>
-        <button onClick={handleSave} disabled={!dirty || saveMut.isPending}
+        <button onClick={handleSave} disabled={!dirty || saveMut.isPending || saveRetirementMut.isPending}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 shrink-0">
           <Save className="w-4 h-4" />
-          {saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
+          {saveMut.isPending || saveRetirementMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
         </button>
       </div>
 
+      {saveRetirementMut.isError && <p role="alert" className="text-xs text-red-300">목돈 항목 저장 실패 — 변경 내용은 화면에 남아 있습니다. 다시 저장해 주세요.</p>}
       <AnalysisNotices notes={[...projection.notes,...pensionInputNotes(saved,assetQuery.data??[])]} incomplete={projection.incomplete} shortfall={schedule.some(r=>r.shortfall>0)}/>
       <PensionLedger rows={schedule}/>
       <RegisteredPensionPlan plan={plan.monthlyPlan}/>
@@ -237,28 +264,42 @@ export default function PensionSimPage() {
 
 {/* + 목돈 분배 (은퇴계획 목돈수입 → 어디로) */}
       <Expander title="➕ 목돈 분배 (은퇴계획 목돈수입 기준)" badge={`${lumpsums.length}개`} defaultOpen>
-        <InfoNote summary="목돈을 주식계좌·퇴직IRP·현금으로 분배">
+        <InfoNote summary="목돈을 주식계좌·퇴직IRP·현금으로 분배 · 일반 목돈은 여기서 추가/삭제">
           <p>
-            은퇴계획의 <b>목돈수입</b>에 입력한 자금을 <b>어디로 넣을지</b> 정합니다.
-            <b>일반주식계좌</b>는 항상 넣을 수 있고, <b>퇴직IRP</b>는 <b>퇴직금(위로금)일 때만</b> 선택 가능합니다.
-            나누고 남은 금액은 자동으로 <b>현금보유</b>(은퇴계획 목돈 수입)가 됩니다.
+            은퇴계획의 <b>목돈수입</b>을 <b>어디로 넣을지</b> 정합니다. 여기 목록은 <b>분석 → 생활비·목돈 입력</b>의 목돈과 같은 항목이며,
+            여기서 추가·삭제·수정해도 양쪽에 똑같이 보입니다(저장 버튼으로 함께 저장).
           </p>
-          <p>목돈의 수령 연도·금액은 분석 → 생활비·목돈 입력에서 수정합니다. 이체는 계좌 입금이며, 생활비 수입은 실제 연금 인출만 반영합니다.</p>
+          <p>
+            <b>일반 목돈</b>(전세금 반환 등): 행선지(현금 / 일반증권계좌 / 일부만 증권), 증권 몫의 <b>명의</b>(남편·와이프·기존 지분),
+            증권 내 <b>배당투자 비율</b>을 정합니다. 일반투자 몫은 배당 0%로 보고 계좌 상승률로만 성장합니다.
+          </p>
+          <p>
+            <b>퇴직금(위로금)</b>은 퇴직IRP·일반주식계좌로 나누며, 남은 금액은 자동으로 <b>현금보유</b>가 됩니다.
+            퇴직금 항목 추가·과세 구분 변경은 생활비·목돈 입력에서 합니다. 이체는 계좌 입금이며, 생활비 수입은 실제 연금 인출만 반영합니다.
+          </p>
         </InfoNote>
         {lumpsums.length === 0 && (
           <p className="text-center text-xs text-gray-600 py-4">
-            목돈수입이 없습니다. 은퇴계획(/retirement)의 목돈수입에서 먼저 추가하세요.
+            목돈수입이 없습니다. 아래 "일반 목돈 추가"로 여기서 바로 추가하거나, 분석 → 생활비·목돈 입력에서 추가하세요.
           </p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {lumpsums.map((l) => {
-            const alloc = plan.allocations.find((a) => a.lumpsumId === l.id) ?? { irpAmount: 0, stockAmount: 0 }
-            return (
+            const alloc = plan.allocations.find((a) => a.lumpsumId === l.id) ?? { lumpsumId: l.id, irpAmount: 0, stockAmount: 0 }
+            return l.taxKind === 'severance' ? (
               <AllocationCard key={l.id} lumpsum={l} allocation={alloc} sources={irpTargetSources(plan,assetQuery.data??[])}
                 onChange={(patch) => setAllocation(l.id, patch)} />
+            ) : (
+              <GeneralLumpsumCard key={l.id} lumpsum={l} allocation={alloc} ownership={plan.stockOwnership}
+                onLumpsum={(patch) => patchLumpsum(l.id, patch)} onAllocation={(patch) => setAllocation(l.id, patch)}
+                onRemove={() => removeLumpsum(l.id)} />
             )
           })}
         </div>
+        <button type="button" onClick={addGeneralLumpsum} disabled={!retirement}
+          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-40">
+          <Plus className="w-3 h-3" /> 일반 목돈 추가
+        </button>
         <p className="text-xs text-gray-600">
           분배된 투자 원금 — 퇴직IRP {formatManwon(irpInflow)} · 일반주식계좌 {formatManwon(stockInflow)}
         </p>
