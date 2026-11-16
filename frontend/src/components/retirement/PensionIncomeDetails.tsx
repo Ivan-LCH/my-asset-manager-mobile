@@ -1,3 +1,4 @@
+import { hubLink } from '@/components/hub/sections'
 import type {PensionLedgerRow} from '@/lib/annualPension'
 import {formatManwon} from '@/lib/utils'
 import {Link} from 'react-router-dom'
@@ -17,6 +18,6 @@ export function PensionIncomeDetails({row,rows=[row]}:{row:PensionLedgerRow;rows
       <p>월수령액 {formatManwon(c.previousMonthly)} → {formatManwon(c.revisedMonthly)} ({c.startYear}~{c.endYear}년 기준)</p>
       <p className="text-gray-400">{c.method==='proportional'?'기존 월수령액 × (입금 전 잔액 + 추가 입금) ÷ 입금 전 잔액. 미래 수익률·연 증가율은 기존 설정을 사용하며 지급 시 잔액으로 제한합니다.':c.method==='remainingYears'?'기존 지급 비율을 산정할 수 없어, 지급 개시 시점의 예상 합산 잔액을 남은 수령 기간으로 나눈 추정입니다.':'수령 종료 후 입금입니다. 잔액은 보존하지만 수령 기간 확인 전에는 추가 지급하지 않습니다.'}</p>
     </div>)}
-    <Link className="inline-block text-blue-300 underline" to="/analysis?tab=pension-sim">IRP 연결·수령 기준 확인 →</Link>
+    <Link className="inline-block text-blue-300 underline" to={hubLink('lumpsum')}>IRP 연결·수령 기준 확인 →</Link>
   </div>
 }

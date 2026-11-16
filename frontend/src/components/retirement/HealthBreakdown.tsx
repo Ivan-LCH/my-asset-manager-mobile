@@ -1,3 +1,4 @@
+import { hubLink } from '@/components/hub/sections'
 import type {AnnualHealthResult} from '@/lib/annualHealth'
 import {formatManwon} from '@/lib/utils'
 import {Link} from 'react-router-dom'
@@ -12,7 +13,7 @@ export function HealthBreakdown({value,summaryShown=false}:{value:AnnualHealthRe
   ];
   return <div className="space-y-3 text-xs" data-health-breakdown data-monthly-health={v.totalMonthly}>
     {!summaryShown&&<p className="text-lg font-semibold">{formatManwon(v.totalMonthly)}/월 <span className="text-xs text-gray-400">생활비 반영액 · {joint?'같은 지역가입 세대':'각각 지역가입 세대'} · 장기요양 포함</span></p>}
-    {v.assumed&&<p className="text-amber-300">{!summaryShown&&'가입 형태 미확인: 같은 지역가입 세대로 가정했습니다. '}직장가입자·피부양자이면 이 추정액을 사용할 수 없습니다. <Link className="underline" to="/analysis?tab=pension-sim">가입 가정 확인 →</Link></p>}
+    {v.assumed&&<p className="text-amber-300">{!summaryShown&&'가입 형태 미확인: 같은 지역가입 세대로 가정했습니다. '}직장가입자·피부양자이면 이 추정액을 사용할 수 없습니다. <Link className="underline" to={hubLink('tax')}>가입 가정 확인 →</Link></p>}
     <section data-health-individual-reference={joint?'true':'false'} className="space-y-2">
       <h3 className="font-semibold text-gray-200">{joint?'남편·아내 각각 계산하면 (별도 지역가입 세대 가정)':'남편·아내 보험료 구성'} · 월</h3>
       <table className="w-full text-right"><thead><tr><th className="text-left">항목</th><th>남편</th><th>아내</th></tr></thead><tbody>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Save } from 'lucide-react'
-import { Expander, AmountInput, NumInput, Row, Field, Section, InfoNote } from '@/components/sim'
+import { Link } from 'react-router-dom'
+import { Expander, AmountInput, NumInput, Row, Field, Section, InfoNote, MoreInfo } from '@/components/sim'
+import { hubLink } from '@/components/hub/sections'
 import { useCorpSim, useSaveCorpSim } from '@/hooks/useCorpSim'
 import { useAssets } from '@/hooks/useAssets'
 import { useSettings } from '@/hooks/useSettings'
@@ -30,7 +32,10 @@ function Kpi({ label, value, sub, color = 'text-gray-100' }: {
 }
 
 // ── 메인 ───────────────────────────────────────────────────
-export default function CorpSimPage() {
+// mode: 'inputs' = 입력/설정 › ⑤ 세금·건보의 법인 시뮬 입력(저장 버튼 포함)
+//       'results' = 분석 › 고급의 결과만 (입력 없음, 저장본 그대로 표시)
+export default function CorpSimPage({ mode }: { mode: 'inputs' | 'results' }) {
+  const showInputs = mode === 'inputs', showResults = mode === 'results'
   const { data: saved } = useCorpSim()
   const saveMut = useSaveCorpSim()
   const { data: allAssets = [] } = useAssets()
@@ -42,10 +47,10 @@ export default function CorpSimPage() {
   const [sonYears, setSonYears] = useState(10)
   const { data: portfolioData } = usePortfolio()
 
-  // 로드 (최초 1회만, 이후 수동 편집 보존)
+  // 로드 (입력 화면은 최초 1회만 — 이후 수동 편집 보존, 결과 화면은 저장본이 바뀔 때마다)
   const didInit = useRef(false)
   useEffect(() => {
-    if (didInit.current || !saved) return
+    if ((showInputs && didInit.current) || !saved) return
     didInit.current = true
     const oldInvest = (saved as unknown as Record<string, unknown>).investAmount as number | undefined
     setPlan({
@@ -54,7 +59,7 @@ export default function CorpSimPage() {
       loanAmount: saved.loanAmount ?? (oldInvest ?? EMPTY_CORP_PLAN.loanAmount),
       tax: mergeCorpTax(saved.tax),
     })
-  }, [saved])
+  }, [saved, showInputs])
 
   const update = useCallback(<K extends keyof CorpSimPlan>(key: K, val: CorpSimPlan[K]) => {
     setPlan((p) => ({ ...p, [key]: val }))
@@ -110,25 +115,29 @@ export default function CorpSimPage() {
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-xl mx-auto">
       {/* 헤더 */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-100">🏛️ 투자법인 시뮬레이터</h2>
+      {showInputs && <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-base font-bold text-gray-100">🏛️ 투자법인 입력</h2>
         <button
           onClick={handleSave} disabled={!dirty || saveMut.isPending}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 self-start"
         >
           <Save className="w-4 h-4" />
-          {saveMut.isPending ? '저장 중...' : dirty ? '저장' : '저장됨'}
+          {saveMut.isPending ? '저장 중...' : dirty ? '법인 입력 저장' : '저장됨'}
         </button>
-      </div>
+      </div>}
+      {showResults && <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-gray-100">🏛️ 투자법인 시뮬 결과</h2>
+        <Link className="text-sm text-blue-300 underline" to={hubLink('tax', 'corp-inputs')}>입력 수정 →</Link>
+      </div>}
 
       {/* 면책 배너 (기본 접힘 — 탭하면 전문) */}
-      <InfoNote tone="warn" summary="모든 수치는 추정치 — 세무사 확인 필수">
+      {showResults && <InfoNote tone="warn" summary="모든 수치는 추정치 — 세무사 확인 필수">
         본 시뮬레이터의 모든 수치는 <b>입력 가정에 기반한 추정치</b>입니다. 세율·공식은 편집 가능하나,
         실제 세금·건강보험료는 개인 상황과 연도별 규정에 따라 다릅니다. 적용 전 <b>반드시 세무사·노무사에 확인</b>하세요.
-      </InfoNote>
+      </InfoNote>}
 
       {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+      {showResults && <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <Kpi label="연간 법인 배당(세전)" value={formatManwon(corp.grossDividend)} sub={plan.targetDividendTotal > 0 ? '수동 지정' : `원금 × ${plan.dividendYield}%`} />
         <Kpi label="법인세(연)" value={formatManwon(corp.corpTax)} sub="초과누진 적용" color="text-red-400" />
         <Kpi label="아들 수령 배당(연·세후)" value={formatManwon(corp.perShare.son.net)} sub={`지분 ${plan.shareSon}%`} color="text-emerald-400" />
@@ -138,14 +147,14 @@ export default function CorpSimPage() {
           sub={runway.sustainable ? '지속가능(원금 보존)' : '초과인출 → 원금 매도'}
           color={firstNet >= 0 ? 'text-emerald-400' : 'text-red-400'}
         />
-      </div>
+      </div>}
 
       {/* 목돈 분배 → 가수금 */}
-      {(retirementPlan?.lumpsum ?? []).length > 0 && (
+      {showInputs && (retirementPlan?.lumpsum ?? []).length > 0 && (
         <Expander title="➕ 목돈 분배 → 가수금" badge={`${corpInflow > 0 ? formatManwon(corpInflow) : '0'}`}>
-          <InfoNote summary="목돈수입 → 가수금(주주 대여금)으로 넣을 금액">
-            나머지는 현금 수령(은퇴계획 목돈 수입). 목돈 자금 추가는 은퇴계획(/retirement) 목돈수입에서.
-          </InfoNote>
+          <MoreInfo label="가수금 안내">
+            목돈수입 중 가수금(주주 대여금)으로 넣을 금액입니다. 나머지는 현금 수령(은퇴계획 목돈 수입). 목돈 자체의 추가·수정은 ③ 목돈·행선지에서.
+          </MoreInfo>
           <div className="space-y-2">
             {(retirementPlan?.lumpsum ?? []).map((l) => {
               const corp = (plan.lumpsumCorp ?? []).find((c) => c.lumpsumId === l.id)?.corpAmount ?? 0
@@ -171,6 +180,7 @@ export default function CorpSimPage() {
         </Expander>
       )}
 
+      {showInputs && <>
       {/* 입력① 자산·운용 */}
       <Expander title="✏️ 입력 ① 자산 · 운용" badge={`총운용 ${formatManwon(totalInvest(plan))}`} defaultOpen>
         <Section>
@@ -179,7 +189,7 @@ export default function CorpSimPage() {
           {portfolioYield > 0 ? (
             <Row label="배당수익률(공통)">
               <span className="text-sm text-blue-400 text-right w-full block">
-                {portfolioYield}% <span className="text-gray-500 text-xs">→ 📊 투자 포트폴리오에서 설정</span>
+                {portfolioYield}% <Link className="text-blue-300 text-xs underline" to={hubLink('invest')}>④ IRP 계좌 배당률 · 수정</Link>
               </span>
             </Row>
           ) : (
@@ -220,12 +230,14 @@ export default function CorpSimPage() {
               <Row label="연금소득(연·수동)"><AmountInput value={plan.pensionIncomeAnnual} onChange={(v) => update('pensionIncomeAnnual', v)} /></Row>
             )}
           </div>
-          <p className="text-xs text-gray-600 pt-2 border-t border-gray-700">
+          <MoreInfo className="pt-2 border-t border-gray-700">
             비교용 가정(개인명의 건보·승계재산·설립비)는 입력하지 않아도 됨 — 기본값으로 표시. 변경은 아래 <b>'세제 · 비교 파라미터'</b>에서.
-          </p>
+          </MoreInfo>
         </Section>
       </Expander>
+      </>}
 
+      {showResults && <>
       {/* 현금흐름 / 지속가능성 (순서 상향 — 전체 그림 먼저) */}
       <Expander
         title="📊 현금흐름 / 지속가능성"
@@ -329,7 +341,7 @@ export default function CorpSimPage() {
             )
           })()}
 
-          <p className="text-xs text-gray-600 pt-3">아래 주주별 배당 표는 <b>Phase 2</b>(가수금 소진 후) 기준 — 잔여 전액을 지분율로 분배.</p>
+          <MoreInfo className="pt-3">아래 주주별 배당 표는 <b>Phase 2</b>(가수금 소진 후) 기준 — 잔여 전액을 지분율로 분배.</MoreInfo>
           <div className="overflow-x-auto">
             <table className="w-full text-xs mt-2">
               <thead><tr className="text-gray-500 border-b border-gray-700">
@@ -403,7 +415,7 @@ export default function CorpSimPage() {
         </div>
         <p className="text-xs text-gray-600 mt-2">* 지분 증여(자본금 출자분)는 별도 증여세 공제 한도 적용. 승계는 대표직 승계·가업상속공제 등 사례별로 크게 달라짐.</p>
         <div className="mt-2 pt-2 border-t border-gray-700">
-          <InfoNote summary="비교 가정은 자동 — 편집은 아래 파라미터에서">
+          <InfoNote summary="비교 가정은 자동 — 편집은 입력/설정 › ⑤ 법인 시뮬 입력에서">
             {`개인명의 건보 ${formatManwon(plan.personalHealthAnnual)}/년 · 승계 재산액 ${formatManwon(plan.giftTaxBase)} · 설립비 ${formatManwon(plan.setupCost)} — 변경은 '세제 · 비교 파라미터'에서.`}
           </InfoNote>
         </div>
@@ -412,9 +424,9 @@ export default function CorpSimPage() {
       {/* 2상 비용 비교 */}
       <Expander title="📊 2상 비용 비교 (가수금 중 vs 후)" badge={`증가 ${formatManwon(twoPhase.diff)}/연`}>
         <Section>
-          <p className="text-xs text-gray-500 leading-relaxed">
+          <MoreInfo>
             같은 생활비 인출 기준. Phase1(가수금 회수=비과세) → Phase2(가수금 소진 후, 배당=과세) 전환 시 세금 증가분.
-          </p>
+          </MoreInfo>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr className="text-gray-500 border-b border-gray-700">
@@ -494,8 +506,10 @@ export default function CorpSimPage() {
         </Section>
       </Expander>
 
+      </>}
+
       {/* 세제 · 비교 파라미터 (고급) */}
-      <Expander title="⚙️ 세제 · 비교 파라미터 (고급)">
+      {showInputs && <Expander title="⚙️ 세제 · 비교 파라미터 (고급)">
         <Section>
           <InfoNote summary="기본값 그대로 사용 — 필요 시 여기서 편집">
             모든 수치는 추정치.
@@ -522,7 +536,7 @@ export default function CorpSimPage() {
             <p>~1.5억: 35% / 1.5억~: 38% (한국 종합소득세)</p>
           </div>
         </Section>
-      </Expander>
+      </Expander>}
     </div>
   )
 }

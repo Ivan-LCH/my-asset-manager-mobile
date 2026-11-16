@@ -1,13 +1,14 @@
+import type { ReactNode } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { AmountInput, TextInput, YearInput, Section, InfoNote } from '@/components/sim'
+import { AmountInput, TextInput, YearInput, Section, MoreInfo } from '@/components/sim'
 import { GeneralLumpsumCard, type AllocPatch } from '@/components/retirement/GeneralLumpsumCard'
 import { formatManwon } from '@/lib/utils'
 import { uid } from '@/lib/retirementPlan'
 import type { LumpsumItem, Ownership, PensionAllocation } from '@/types'
 
-// ── 목돈 수입 섹션 (분석 → 생활비·목돈 입력) ─────────────────
-// 일반 목돈은 연금 시뮬레이션의 목돈 분배와 같은 카드(행선지·명의·배당주/일반주)를 쓰고,
-// 행선지·비율은 PensionSimPlan.allocations 에 저장한다. 퇴직금은 기존 입력만 두고 분배는 연금 시뮬레이션에서 정한다.
+// ── 목돈 수입 섹션 (입력/설정 › ③ 목돈·행선지) ─────────────────
+// 목돈의 유일한 편집기. 일반 목돈은 행선지·명의·배당주/일반주 카드, 퇴직금은 renderSeverance 로 IRP 분배 카드를 붙인다.
+// 행선지·비율·IRP 분배는 PensionSimPlan.allocations 에 저장한다.
 const TAX_KINDS = [['other', '일반(비과세)'], ['severance', '퇴직소득세 적용']] as const
 
 function TaxKindToggle({ item, onChange }: { item: LumpsumItem; onChange: (v: 'other' | 'severance') => void }) {
@@ -23,12 +24,14 @@ function TaxKindToggle({ item, onChange }: { item: LumpsumItem; onChange: (v: 'o
   )
 }
 
-export function LumpsumSection({ items, allocations, ownership, onChange, onAllocation }: {
+export function LumpsumSection({ items, allocations, ownership, onChange, onAllocation, renderSeverance }: {
   items: LumpsumItem[]
   allocations: PensionAllocation[]
   ownership: Ownership
   onChange: (items: LumpsumItem[]) => void
   onAllocation: (lumpsumId: string, patch: AllocPatch) => void
+  /** 퇴직금 카드 아래에 붙일 분배 입력 (퇴직IRP·일반주식계좌) */
+  renderSeverance?: (item: LumpsumItem) => ReactNode
 }) {
   const patch = (id: string, p: Partial<LumpsumItem>) =>
     onChange(items.map((i) => (i.id === id ? { ...i, ...p } : i)))
@@ -36,10 +39,11 @@ export function LumpsumSection({ items, allocations, ownership, onChange, onAllo
   return (
     <Section>
       <p className="text-xs font-semibold text-gray-400">💎 목돈 수입 (전세금·퇴직금 등)</p>
-      <InfoNote summary="목돈 행선지(현금/일반증권계좌)와 배당주/일반주 비율을 여기서 정합니다">
+      <MoreInfo label="목돈 행선지 안내">
         들어온 목돈을 어디에 넣을지 정하고, 일반증권계좌로 넣으면 계좌 안에서 배당주/일반주 비율을 정합니다.
-        저장하면 연금 시뮬레이션·분석에 반영됩니다.
-      </InfoNote>
+        일반주 몫은 배당 0%로 보고 계좌 상승률로만 성장합니다. 퇴직금은 퇴직IRP·일반주식계좌로 나누고, 남은 금액은 현금보유가 됩니다.
+        저장하면 분석·연금 시뮬레이션에 반영됩니다.
+      </MoreInfo>
       <div className="space-y-2">
         {items.map((item) => item.taxKind === 'severance' ? (
           <div key={item.id} className="bg-gray-750 rounded-lg border border-gray-700 p-3 space-y-2" data-severance-lumpsum={item.id}>
@@ -59,7 +63,7 @@ export function LumpsumSection({ items, allocations, ownership, onChange, onAllo
             </div>
             <TaxKindToggle item={item} onChange={(v) => patch(item.id, { taxKind: v })} />
             <p className="text-xs text-gray-600">{item.receiveYear}년에 {formatManwon(item.amount)} 일회 수령</p>
-            <p className="text-xs text-gray-500">퇴직금의 IRP·주식 분배는 「연금 시뮬레이션」의 목돈 분배에서 정합니다.</p>
+            {renderSeverance ? renderSeverance(item) : <p className="text-xs text-gray-500">퇴직금의 IRP·주식 분배는 아래 퇴직금 분배에서 정합니다.</p>}
           </div>
         ) : (
           <GeneralLumpsumCard key={item.id} lumpsum={item}

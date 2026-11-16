@@ -1,10 +1,12 @@
+import { hubLink } from '@/components/hub/sections'
+import { MoreInfo } from '@/components/sim'
 import { Link } from 'react-router-dom'
 import { AnalysisNotices } from '@/components/retirement/AnalysisNotices'
 import { UnconfirmedTag } from '@/components/retirement/UnconfirmedTag'
 import { PensionLedger } from '@/components/retirement/PensionLedger'
 import { PensionIncomeDetails } from '@/components/retirement/PensionIncomeDetails'
 import { HealthBreakdown } from '@/components/retirement/HealthBreakdown'
-import { DependentPanel } from '@/components/retirement/DependentPanel'
+import { DependentPanel, DependentBadge } from '@/components/retirement/DependentPanel'
 import { FinancialTaxBreakdown } from '@/components/retirement/FinancialTaxBreakdown'
 import { retirementInputs } from '@/lib/analysisInputs'
 import { expenseFactor } from '@/lib/retirementCashflow'
@@ -130,7 +132,7 @@ export default function YearDashboardPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3 text-sm text-blue-300"><a href="#analysis-income" onClick={()=>{const d=document.getElementById('analysis-income') as HTMLDetailsElement|null;if(d)d.open=true}}>수입 내역 보기</a><a href="#analysis-tax" onClick={()=>{const d=document.getElementById('analysis-tax') as HTMLDetailsElement|null;if(d)d.open=true}}>세금 근거 보기</a><Link to="/analysis?tab=prep">생활비 수정 →</Link></div>
+          <div className="flex flex-wrap gap-3 text-sm text-blue-300"><a href="#analysis-income" onClick={()=>{const d=document.getElementById('analysis-income') as HTMLDetailsElement|null;if(d)d.open=true}}>수입 내역 보기</a><a href="#analysis-tax" onClick={()=>{const d=document.getElementById('analysis-tax') as HTMLDetailsElement|null;if(d)d.open=true}}>세금 근거 보기</a><Link to={hubLink('living')}>생활비 수정 →</Link></div>
           <AnalysisNotices holding={holdAuto?holdDetail:undefined} notes={eng.analysisNotes} incomplete={eng.projection.incomplete} shortfall={eng.projection.rows.some(r=>r.shortfall>0)}/>
           {/* ── ② 수입 상세 ── */}
           <details id="analysis-income" className="bg-gray-800 border border-gray-700 rounded-xl p-4">
@@ -215,7 +217,7 @@ export default function YearDashboardPage() {
           {/* ── ④-2 건강보험 피부양자 계획 모형 (와이프가 더 오래 일할 때) ── */}
           <details id="analysis-dependent" className="bg-gray-800 border border-gray-700 rounded-xl p-4">
             <summary className="cursor-pointer text-sm font-semibold text-gray-200">👨‍👩 피부양자 경로 · 전세금 재배분 (계획 모형)
-              <span className="block mt-1 text-xs font-normal text-gray-400">{eng.dependent.status==='active'?`${eng.dependent.window!.start}~${eng.dependent.window!.end}년 · 와이프 직장가입 가정`:eng.dependent.status==='wife-year-missing'?'와이프 은퇴 연도 미입력':eng.dependent.status==='no-spouse'?'미혼(단독) 가정':'적용 안 함'}</span>
+              <span className="block mt-1 text-xs font-normal text-gray-400">{(()=>{const d=eng.dependent.years.find(y=>y.year===year);return eng.dependent.status==='active'&&d?<><DependentBadge status={d.current.status}/> </>:null})()}{eng.dependent.status==='active'?`${eng.dependent.window!.start}~${eng.dependent.window!.end}년 · 와이프 직장가입 가정`:eng.dependent.status==='wife-year-missing'?'와이프 은퇴 연도 미입력':eng.dependent.status==='no-spouse'?'미혼(단독) 가정':'적용 안 함'}</span>
             </summary><div className="mt-3"><DependentPanel value={eng.dependent} year={year}/></div>
           </details>
 
@@ -240,10 +242,10 @@ export default function YearDashboardPage() {
           </div></details>
 
           <PensionLedger rows={eng.projection.rows}/>
-          <p className="text-xs text-gray-400">누적 금액은 올해부터 입력된 현금흐름을 합한 값입니다. 현재 자산 잔액이 아니며, 미입력 소득·미확정 세금은 포함하지 않습니다.</p>
-          <p className="text-xs text-gray-600 text-center leading-relaxed">
-            세금·건보·보유세는 앱에 저장된 간이 모형의 추정입니다 (공시가격=시가×75% 등 가정 포함). 실제 납부액과 다를 수 있으니 세무사 확인 필수.
-          </p>
+          <MoreInfo label="누적·추정 기준">
+            <p>누적 금액은 올해부터 입력된 현금흐름을 합한 값입니다. 현재 자산 잔액이 아니며, 미입력 소득·미확정 세금은 포함하지 않습니다.</p>
+            <p>세금·건보·보유세는 앱에 저장된 간이 모형의 추정입니다 (공시가격=시가×75% 등 가정 포함). 실제 납부액과 다를 수 있으니 세무사 확인 필수.</p>
+          </MoreInfo>
         </>
       )}
     </div>
