@@ -1,3 +1,4 @@
+import { hubLink } from '@/components/hub/sections'
 import type {ReactNode} from 'react'
 import {Link} from 'react-router-dom'
 import {UnconfirmedTag} from './UnconfirmedTag'
@@ -56,6 +57,6 @@ export function FinancialTaxBreakdown({row,plan}:{row:PensionScheduleRow;plan:Pe
     })}</div>
     <p className="mt-3 text-xs text-gray-400 leading-relaxed">국민연금과 종합합산 선택 사적연금은 공제 후 금융·기타소득과 함께 계산합니다. 배당가산·세액공제는 확인된 적격 비율에만 적용합니다. 해외 세액공제는 국가별 한도 검토가 끝난 입력액을 사용하며 자동 한도·이월 계산은 하지 않습니다. 2026년 기준의 미래 추정이며 신고 확정세액은 아닙니다.</p>
     <p className="mt-2 text-xs text-blue-200">이 금액은 소득세 합계에 이미 포함되어 연간 현금흐름에서 한 번만 차감합니다. 배당가산액은 수입에 더하지 않습니다. 실제 원천징수일·다음 해 신고 납부일을 재현한 현금흐름은 아닙니다.</p>
-    <Link className="mt-2 inline-block text-xs text-blue-300 underline" to="/analysis?tab=pension-sim#income-tax-settings">세금 추가정보 확인·수정 →</Link>
+    <Link className="mt-2 inline-block text-xs text-blue-300 underline" to={hubLink('tax','income-tax-settings')}>세금 추가정보 확인·수정 →</Link>
   </details>
 }

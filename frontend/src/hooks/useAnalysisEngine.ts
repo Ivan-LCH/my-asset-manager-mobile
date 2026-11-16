@@ -114,7 +114,7 @@ export function useAnalysisEngine(plan: RetirementPlan) {
     stockDivMonthly=(divSummary?.items??[]).filter(r=>!projection.fundedStockIds.has(r.assetId)).reduce((sum,r)=>sum+r.monthlyKrw,0)
   }
   const analysisNotes=[...projection.notes,...pensionInputNotes(rawPensionSim,assets),...scoped.notes]
-  analysisNotes.push(plan.expenseInflationRate==null?'생활비·여행비·의료비 물가상승률 미설정: 기존 고정 금액으로 계산합니다. 생활비·목돈 입력에서 확인하세요.':`생활비·여행비·의료비는 ${plan.expenseBaseYear??new Date().getFullYear()}년 금액 기준, 연 ${plan.expenseInflationRate}% 증가 가정입니다. 세금·건보·목돈·일회 지출에는 이 비율을 중복 적용하지 않습니다.`)
+  analysisNotes.push(plan.expenseInflationRate==null?'생활비·여행비·의료비 물가상승률 미설정: 기존 고정 금액으로 계산합니다. 입력/설정 › 생활비에서 확인하세요.':`생활비·여행비·의료비는 ${plan.expenseBaseYear??new Date().getFullYear()}년 금액 기준, 연 ${plan.expenseInflationRate}% 증가 가정입니다. 세금·건보·목돈·일회 지출에는 이 비율을 중복 적용하지 않습니다.`)
   if(projection.rows.some(r=>r.opening>0||r.inflow>0))analysisNotes.push(`연금 계좌 운용 가정: 상승률 ${irpGrowthRate}% + 배당률 ${irpDivYield}%. 미저장 기본값은 각각 0%이며 실제 수익을 보장하지 않습니다.`)
   if(!plan.holdingTaxAuto&&realEstateAssets.length)analysisNotes.push('수동 보유세 적용 중입니다. 재건축 날짜와 연동하려면 연도별 현금흐름의 보유세를 자동으로 선택하세요.')
   if(!plan.holdingTaxAuto&&plan.holdingTaxAnnual&&!plan.holdingTaxStartYear)analysisNotes.push('수동 보유세 개시 연도가 없어 은퇴 예정 연도부터 적용했습니다.')

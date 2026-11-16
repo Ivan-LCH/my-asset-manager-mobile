@@ -3,34 +3,24 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Download, Upload, Cloud, CloudOff, History, RefreshCw } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSettings, useSaveSettings } from '@/hooks/useSettings'
-import { useRetirement, useSaveRetirement } from '@/hooks/useRetirement'
 import { exportBackup, importBackup, mergeBackup, previewBackup, restorePreviousImport, clearAllData, previewStockPriceCorrection, applyStockPriceCorrection, undoStockPriceCorrection, getLastBackupImport, type BackupData } from '@/lib/db'
 import {backupFileName,backupSummary} from '@/lib/backupInfo'
-import { resolveAge, nationalPensionStartYear, hasSpouse, validYear } from '@/lib/people'
-import type { Settings } from '@/types'
 import { fmtQty } from '@/lib/utils'
 import { googleSignIn, ensureSignedIn, logout, isLoggedIn, onAuthChange, saveToDrive, listBackupFiles, loadFromDrive, latestBackupFile, BACKUP_FOLDER_NAME, MANUAL_BACKUP_FILE_NAME, type DriveFile } from '@/lib/googleDrive'
 import { recordBackupSuccess } from '@/lib/autoBackup'
 import { usePlanner } from '@/planner/context'
 import RestoreDiffDialog, { type RestoreMode, type RestoreRequest } from '@/components/common/RestoreDiffDialog'
 
+import { MoreInfo } from '@/components/sim'
+
+// 입력/설정 › ⑥ 합산·백업 — 합산 기준 바로가기, Drive·파일 백업, 시세 소급. (인물·은퇴는 ① 인물·은퇴로 옮김)
 export default function Settings() {
-  const { data: settings, isLoading } = useSettings()
   const planner = usePlanner()
   const unconfirmedPolicies = planner.data?.current.positions.filter(p=>!p.confirmed).length ?? 0
-  const saveMut = useSaveSettings()
-  const {data:retirementSaved}=useRetirement()
-  const saveRetirementMut=useSaveRetirement()
   const qc = useQueryClient()
   const {data:lastImport}=useQuery({queryKey:['backup-import-info'],queryFn:getLastBackupImport})
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [birthHusband,   setBirthHusband]   = useState('')
-  const [birthWife,      setBirthWife]      = useState('')
-  const [retirementYear, setRetirementYear] = useState(new Date().getFullYear() + 10)
-  const [wifeRetirementYear, setWifeRetirementYear] = useState('') // 빈 값 = 미입력
-  const [saved,          setSaved]          = useState(false)
   const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
   // Google Drive 상태
   const [gDriveLoggedIn, setGDriveLoggedIn] = useState(isLoggedIn())
@@ -45,31 +35,6 @@ export default function Settings() {
   const [priceBackfill, setPriceBackfill] = useState<{
     running: boolean; done: boolean; ok: boolean; msg: string
   }>({ running: false, done: false, ok: false, msg: '' })
-
-  useEffect(() => {
-    if (settings) {
-      setBirthHusband(settings.birthHusband ?? '')
-      setBirthWife(settings.birthWife ?? '')
-      setRetirementYear(settings.retirementYear ?? new Date().getFullYear() + 10)
-      setWifeRetirementYear(validYear(settings.wifeRetirementYear)?.toString() ?? '')
-    }
-  }, [settings])
-
-  const handleSave = () => {
-    // 와이프 은퇴 연도: 빈 값은 '' 로 저장(미입력). 은퇴 입력에 별도 값이 있으면 같이 맞춰 두 화면이 어긋나지 않게 한다.
-    const wifeYear = validYear(wifeRetirementYear)
-    if (retirementSaved?.wifeRetirementYear != null) saveRetirementMut.mutate({ wifeRetirementYear: wifeYear ?? undefined })
-    saveMut.mutate({ birthHusband, birthWife, retirementYear, wifeRetirementYear: wifeYear ?? '' } as Partial<Settings>, {
-      onSuccess: () => {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 2000)
-      },
-    })
-  }
-
-  const inputCls = 'bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500 w-36'
-  // 미리보기: 현재 나이 · 65세(국민연금 개시) 연도
-  const preview = { birthHusband, birthWife }
 
   // ── 과거 시세 소급 업데이트 — 보유 주식 최근 3개월 실제 종가로 덮어쓰기 ──
   const handleBackfillPrices = async () => {
@@ -130,7 +95,7 @@ export default function Settings() {
         if(!window.confirm('연금 계획만 적용\n'+pensionRegistrationSummary(data)+'\n\n적용할까요?'))return
         const message=await registerPensionPlan(data)
         await qc.invalidateQueries()
-        setBackupMsg({ok:true,text:message+' 분석 → 개인투자시뮬에서 등록한 연금 계획을 확인하세요.'})
+        setBackupMsg({ok:true,text:message+' 분석 › 고급 › 연금 시뮬 결과에서 등록한 연금 계획을 확인하세요.'})
         return
       }
       await startRestore(data, file.name)
@@ -238,110 +203,34 @@ export default function Settings() {
 
   const handleRefreshFiles = () => driveAction(async () => { setDriveFiles(await listBackupFiles()) }, '목록 조회 실패')
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-64 text-gray-400">로딩 중...</div>
-  }
-
   return (
-    <div className="p-6 max-w-lg mx-auto space-y-6">
-      <h2 className="text-xl font-bold text-gray-100">⚙️ 설정</h2>
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-2" data-totals-card>
+    <div className="space-y-4" data-backup-settings>
+      <div className="bg-gray-900/40 border border-gray-700 rounded-xl p-4 space-y-2" data-totals-card>
         <h3 className="text-sm font-semibold text-gray-300">합산 기준</h3>
-        <p className="text-sm text-gray-400">홈·자산 변동 이력·연금 탭 합계와 은퇴 분석에서 제외하거나 중복 연결할 자산을 정합니다.</p>
+        <p className="text-sm text-gray-400">합계·분석에서 뺄 자산과 중복 연결을 정해요.</p>
         {unconfirmedPolicies>0&&<p className="text-xs text-amber-300">분류 미확인 {unconfirmedPolicies}건</p>}
         <Link className="inline-block py-2 text-blue-300 underline" to="/settings/totals">합산 기준 열기 →</Link>
       </div>
-      <details className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-5">
-        <summary className="text-sm font-semibold text-gray-300 cursor-pointer">인물·은퇴 기본값 (은퇴 분석용)</summary>
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs text-gray-400 block mb-1">남편 생년월 (예: 1980.05)</label>
-            <input
-              type="text" inputMode="decimal" placeholder="예: 1980.05"
-              className={inputCls}
-              value={birthHusband}
-              onChange={(e) => setBirthHusband(e.target.value)}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              {birthHusband
-                ? `현재 ${resolveAge(preview)}세 · 65세 가정 참고연도 ${nationalPensionStartYear(birthHusband) ?? '-'}년 (실제 개시일은 계획에서 확인)`
-                : '입력하면 나이·시뮬레이션에 반영됩니다.'}
-            </p>
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 block mb-1">와이프 생년월 (비우면 미혼 가정)</label>
-            <input
-              type="text" inputMode="decimal" placeholder="비우면 미혼"
-              className={inputCls}
-              value={birthWife}
-              onChange={(e) => setBirthWife(e.target.value)}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              {hasSpouse(preview)
-                ? `배우자 65세 가정 참고연도 ${nationalPensionStartYear(birthWife)}년 (실제 수급요건 판정 아님)`
-                : '미혼(단독)으로 가정 — 와이프 연금·명의 없음'}
-            </p>
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 block mb-1">본인(남편) 은퇴 예정 연도</label>
-            <input
-              type="number" inputMode="decimal"
-              className={inputCls}
-              value={retirementYear}
-              onChange={(e) => setRetirementYear(+e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 block mb-1">와이프 은퇴 예정 연도</label>
-            <input
-              type="number" inputMode="decimal" placeholder="비우면 미입력"
-              className={`${inputCls} disabled:opacity-40`}
-              disabled={!hasSpouse(preview)}
-              value={hasSpouse(preview) ? wifeRetirementYear : ''}
-              onChange={(e) => setWifeRetirementYear(e.target.value)}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              {!hasSpouse(preview)
-                ? '미혼(단독)으로 가정 — 와이프 은퇴 연도 없음'
-                : validYear(wifeRetirementYear) === null
-                  ? '와이프 은퇴 연도 미입력 — 건강보험 피부양자 경로를 계산하지 않습니다'
-                  : '본인 은퇴 후에도 와이프가 일하면 피부양자 계획 모형을 분석에 표시합니다 (공단 자격 판정 아님)'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <button
-            onClick={handleSave}
-            disabled={saveMut.isPending}
-            className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50"
-          >
-            저장
-          </button>
-          {saved && <span className="text-xs text-emerald-400">저장되었습니다.</span>}
-        </div>
-      </details>
-
       {/* 시세 자동 가져오기 */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-2">
+      <div className="bg-gray-900/40 border border-gray-700 rounded-xl p-4 space-y-2">
         <h3 className="text-sm font-semibold text-gray-300">📈 시세 자동 가져오기</h3>
-        <p className="text-xs text-gray-500 leading-relaxed">
+        <MoreInfo>
           주식 페이지의 "시세 업데이트" 버튼으로 종목 단가를 자동 반영합니다.
           자동 실패 시 수동 입력란으로 직접 채울 수 있습니다.
-        </p>
+        </MoreInfo>
       </div>
 
       {/* Google Drive 백업 */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-4">
+      <div className="bg-gray-900/40 border border-gray-700 rounded-xl p-4 space-y-4">
         <div>
           <h3 className="text-sm font-semibold text-gray-300">☁️ Google Drive 백업</h3>
-          <p className="text-xs text-gray-500 mt-1">
-            Google 계정으로 로그인 → 본인 Drive에 백업 저장/복원. 폰 교체 시 같은 계정으로 복원.
-          </p>
-          <p className="text-xs text-gray-500 mt-1">
-            자동 백업: 앱을 열 때 마지막 백업 후 3일이 지났고 데이터가 바뀌었으면, 로그인 상태에서 자동 저장합니다(자동 백업은 최근 3개만 유지). 로그인이 풀려 있으면 상단 배너로 알려 드립니다.
-          </p>
+          <p className="text-xs text-gray-500 mt-1">내 Drive에 저장하고, 폰을 바꾸면 같은 계정으로 복원해요.</p>
+          <MoreInfo label="자동 백업·폴더 안내" className="mt-1">
+            <p>Google 계정으로 로그인 → 본인 Drive에 백업 저장/복원. 폰 교체 시 같은 계정으로 복원.</p>
+            <p>자동 백업: 앱을 열 때 마지막 백업 후 3일이 지났고 데이터가 바뀌었으면, 로그인 상태에서 자동 저장합니다(자동 백업은 최근 3개만 유지). 로그인이 풀려 있으면 상단 배너로 알려 드립니다.</p>
+            <p>백업은 내 Drive의 '{BACKUP_FOLDER_NAME}' 폴더에 저장됩니다. 수동 저장은 {MANUAL_BACKUP_FILE_NAME} 하나를 덮어쓰고, 자동 백업은 날짜별 파일로 최근 3개를 유지합니다.
+            이 앱이 만들지 않은 파일(직접 업로드·다른 위치로 옮긴 파일 등)은 앱이 열 수 없으니, 기기에 내려받아 아래 '가져오기'로 여세요.</p>
+          </MoreInfo>
         </div>
         {!gDriveLoggedIn ? (
           <button
@@ -409,10 +298,6 @@ export default function Settings() {
             </button>
           </div>
         )}
-        <p className="text-xs text-gray-500">
-          백업은 내 Drive의 '{BACKUP_FOLDER_NAME}' 폴더에 저장됩니다. 수동 저장은 {MANUAL_BACKUP_FILE_NAME} 하나를 덮어쓰고, 자동 백업은 날짜별 파일로 최근 3개를 유지합니다.
-          이 앱이 만들지 않은 파일(직접 업로드·다른 위치로 옮긴 파일 등)은 앱이 열 수 없으니, 기기에 내려받아 아래 '가져오기'로 여세요.
-        </p>
       </div>
       <RestoreDiffDialog
         request={pendingRestore?.request ?? null}
@@ -422,13 +307,14 @@ export default function Settings() {
       />
 
       {/* 데이터 백업 / 복원 */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-4">
+      <div className="bg-gray-900/40 border border-gray-700 rounded-xl p-4 space-y-4">
         <div>
           <h3 className="text-sm font-semibold text-gray-300">데이터 백업 / 복원</h3>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 mt-1">데이터는 이 폰에만 있어요. 사본을 꼭 만들어 두세요.</p>
+          <MoreInfo className="mt-1">
             데이터는 이 기기(브라우저)에 저장됩니다. 위 Google Drive 백업(수동·자동)으로 본인 Drive에, 아래 내보내기로 파일에 사본을 만들 수 있습니다.
             사본이 없으면 기기 교체·초기화·브라우저 데이터 삭제 시 복구할 수 없습니다.
-          </p>
+          </MoreInfo>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -456,8 +342,10 @@ export default function Settings() {
         {backupMsg && (
           <p className={`text-xs whitespace-pre-wrap break-words ${backupMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{backupMsg.text}</p>
         )}
-        <p className="text-xs text-gray-400">가져오기는 검증 후 덮어쓰기(전체 교체) 또는 병합(없는 자산만 추가) 중 골라 확인한 뒤 적용합니다. 샘플은 별도 저장소에서 열립니다. 소스 ZIP에는 이 브라우저의 개인 자산이 포함되지 않습니다.</p>
-        <p className="text-xs text-gray-400">저장된 IRP 재원·합산·목돈 연결, 개인별/연도별 세금 추가정보, 소급 시세와 수량 추정 근거도 백업에 포함됩니다. 편집 중인 값은 해당 화면에서 먼저 저장하세요. 내보낸 파일을 만드는 것만으로 다른 브라우저에 적용되지는 않습니다.</p>
+        <MoreInfo label="가져오기·백업 범위">
+          <p>가져오기는 검증 후 덮어쓰기(전체 교체) 또는 병합(없는 자산만 추가) 중 골라 확인한 뒤 적용합니다. 샘플은 별도 저장소에서 열립니다. 소스 ZIP에는 이 브라우저의 개인 자산이 포함되지 않습니다.</p>
+          <p>저장된 IRP 재원·합산·목돈 연결, 개인별/연도별 세금 추가정보, 소급 시세와 수량 추정 근거도 백업에 포함됩니다. 편집 중인 값은 해당 섹션에서 먼저 저장하세요. 내보낸 파일을 만드는 것만으로 다른 브라우저에 적용되지는 않습니다.</p>
+        </MoreInfo>
         {lastImport&&<details className="rounded border border-gray-700 p-3 text-xs" data-last-backup-import><summary className="cursor-pointer text-blue-300">이 브라우저에 마지막으로 가져온 백업</summary><p className="mt-2 break-words">파일: {lastImport.sourceName}</p><p>가져온 시각: {new Date(lastImport.importedAt).toLocaleString()}</p><p className="mt-2 whitespace-pre-wrap break-words">{lastImport.summary}</p><p className="mt-2 text-gray-400">가져올 당시의 기록입니다. 이후 저장한 변경은 다음 내보내기에 포함됩니다. 복구용 사본·가져오기 기록 자체는 다른 브라우저로 옮기지 않습니다.</p></details>}
         <button className="text-sm text-blue-300 underline p-3" onClick={() => { if (window.confirm('마지막 복원 직전 사본으로 되돌릴까요? 현재 데이터도 직전 사본으로 교체 보관됩니다.')) void restorePreviousImport().then(() => qc.invalidateQueries()).then(() => setBackupMsg({ok:true,text:'직전 사본 복구 완료'})).catch(e => setBackupMsg({ok:false,text:String(e)})) }}>마지막 복원 직전으로 되돌리기</button>
         <button className="text-sm text-blue-300 underline p-3" onClick={() => {if(window.confirm('마지막 과거 시세 보정만 되돌릴까요?'))void undoStockPriceCorrection().then(()=>qc.invalidateQueries()).then(()=>setBackupMsg({ok:true,text:'시세 보정 되돌리기 완료'})).catch(e=>setBackupMsg({ok:false,text:String(e)}))}}>마지막 과거 시세 보정 되돌리기</button>
@@ -466,9 +354,9 @@ export default function Settings() {
         <details className="border-t border-gray-700 pt-3 space-y-2" data-price-correction><summary className="cursor-pointer text-sm text-gray-300 py-3">과거 기록 보정 · 필요한 경우에만</summary>
           <div>
             <h4 className="text-sm font-semibold text-gray-300">🕒 과거 시세 소급 업데이트</h4>
-            <p className="text-xs text-gray-500 mt-1">
+            <MoreInfo className="mt-1">
               최근 3개월의 빈 거래일을 채우고 기존 가격도 보정합니다. 추가 날짜의 수량은 직전 기록 유지 가정으로 표시합니다. 휴장일·취득 전·수량 근거 없는 날은 만들지 않습니다. 외화·계좌합계·오늘은 제외하며 현재 평가액은 그대로 유지합니다.
-            </p>
+            </MoreInfo>
           </div>
           <button
             onClick={handleBackfillPrices}

@@ -4,3 +4,4 @@ export { AmountInput, NumInput, TextInput, YearInput, TimesInput, numFmt, parseN
 export { Section, Row, Field } from './layout'
 export { InfoTooltip } from './InfoTooltip'
 export { InfoNote } from './InfoNote'
+export { MoreInfo } from './MoreInfo'

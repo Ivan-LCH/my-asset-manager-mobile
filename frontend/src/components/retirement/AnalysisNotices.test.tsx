@@ -39,7 +39,7 @@ describe('AnalysisNotices', () => {
   it('IRP 미연결 → 펼침 + 연결 링크, 가정이 없으면 안쪽 details 없음', () => {
     const html = render({ notes: [], incomplete: true })
     expect(outerTag(html)).toMatch(/\sopen/)
-    expect(html).toContain('href="/analysis?tab=pension-sim"')
+    expect(html).toContain('href="/settings?section=lumpsum"')
     expect(inner(html)).toBeUndefined()
   })
 

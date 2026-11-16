@@ -1,13 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, BarChart3, Settings, CalendarDays } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, BarChart3, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// 간소화된 4개 메뉴 (자산/분석 상세는 각 통합 페이지 안의 칩·탭에서)
+// 4개 메뉴 — 하단 탭과 같은 구성: 홈 | 자산 | 분석(결과) | 입력/설정
 export const NAV_ITEMS = [
   { to: '/',        icon: LayoutDashboard, label: '홈',   end: true },
   { to: '/assets',  icon: FolderOpen,      label: '자산' },
   { to: '/analysis',icon: BarChart3,       label: '분석' },
-  { to: '/settings',icon: Settings,        label: '설정' },
+  { to: '/settings',icon: SlidersHorizontal, label: '입력/설정' },
 ]
 
 const navItemClass = (isActive: boolean) =>

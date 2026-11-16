@@ -5,7 +5,8 @@ import AppLayout from '@/components/layout/AppLayout'
 import Dashboard from '@/pages/Dashboard'
 import AssetsPage from '@/pages/AssetsPage'
 import AnalysisPage from '@/pages/AnalysisPage'
-import Settings from '@/pages/Settings'
+import InputHubPage from '@/pages/InputHubPage'
+import { advancedLink, hubLink, legacyAnalysisRedirect } from '@/components/hub/sections'
 import { getAllAssets, seedSampleData, isDemoDatabase } from '@/lib/db'
 import { PlannerProvider } from '@/planner/context'
 import UpdatePrompt from '@/components/common/UpdatePrompt'
@@ -32,7 +33,13 @@ function LegacyAnalysis() {
 function LegacyPlannerRedirect() {
   const location=useLocation(); return <Navigate replace to={legacyPlannerRedirect(location.pathname,location.search)}/>
 }
-function AnalysisEntry() { const [params]=useSearchParams(); return params.has('run')?<LegacyPlannerRedirect/>:<AnalysisPage/> }
+// 옛 분석 탭(?tab=prep·pension-sim·corp-sim) → 입력/설정 허브 섹션 또는 분석 › 고급
+function AnalysisEntry() {
+  const [params]=useSearchParams(), location=useLocation()
+  if(params.has('run'))return <LegacyPlannerRedirect/>
+  const moved=legacyAnalysisRedirect(location.search,location.hash)
+  return moved?<Navigate replace to={moved}/>:<AnalysisPage/>
+}
 export default function App() {
   // 앱 높이 = 보이는 뷰포트(dvh). 100vh는 모바일 브라우저 탭에서 주소창만큼 길어 하단 탭이 화면 밖으로 밀리고,
   // 샘플 배너도 이 열 안에 둬야 배너 높이만큼 하단 탭이 잘리지 않는다.
@@ -45,20 +52,20 @@ export default function App() {
       <Route path="analysis" element={<AnalysisEntry/>}/>
       <Route path="analysis/archive" element={<ArchivedMonthlyAnalysis/>}/>
       <Route path="advanced-analysis" element={<LegacyPlannerRedirect/>}/>
-      <Route path="settings" element={<Settings/>}/>
+      <Route path="settings" element={<InputHubPage/>}/>
       <Route path="settings/totals" element={<TotalsPolicyPage/>}/>
       <Route path="history" element={<Dashboard/>}/>
       <Route path="legacy-analysis" element={<LegacyAnalysis/>}/>
       <Route path="real-estate" element={<Navigate to="/assets?type=REAL_ESTATE" replace/>}/>
       <Route path="stock" element={<Navigate to="/assets?type=STOCK" replace/>}/>
       <Route path="pension" element={<Navigate to="/assets?type=PENSION" replace/>}/>
-      <Route path="pension/sim" element={<Navigate to="/analysis?tab=pension-sim" replace/>}/>
-      <Route path="prep" element={<Navigate to="/analysis?tab=prep" replace/>}/>
+      <Route path="pension/sim" element={<Navigate to={advancedLink('pension')} replace/>}/>
+      <Route path="prep" element={<Navigate to={hubLink('living')} replace/>}/>
       <Route path="savings" element={<Navigate to="/assets?type=SAVINGS" replace/>}/>
       <Route path="physical" element={<Navigate to="/assets?type=ETC" replace/>}/>
       <Route path="etc" element={<Navigate to="/assets?type=ETC" replace/>}/>
       <Route path="retirement" element={<Navigate to="/analysis?tab=cashflow" replace/>}/>
-      <Route path="corp-sim" element={<Navigate to="/legacy-analysis?tab=corp-sim" replace/>}/>
+      <Route path="corp-sim" element={<Navigate to={advancedLink('corp')} replace/>}/>
       <Route path="portfolio" element={<Navigate to="/analysis" replace/>}/>
       <Route path="*" element={<Navigate to="/" replace/>}/>
     </Route></Routes></BrowserRouter></div></PlannerProvider></QueryClientProvider>
